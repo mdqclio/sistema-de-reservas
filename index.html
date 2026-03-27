@@ -3,103 +3,132 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Reservas - Alula</title>
+    <title>Gestión de Reservas - Alula</title>
     <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f4f7f6;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
+        :root {
+            --primary: #2c3e50;
+            --accent: #3498db;
+            --bg: #f8f9fa;
         }
-        .container {
-            background-color: white;
-            padding: 2rem;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            width: 100%;
-            max-width: 400px;
-        }
-        h2 {
-            color: #2c3e50;
-            text-align: center;
-            margin-bottom: 1.5rem;
-            font-weight: 600;
-        }
-        .form-group {
-            margin-bottom: 1rem;
-        }
-        label {
-            display: block;
-            margin-bottom: 0.5rem;
-            color: #666;
-        }
-        input, select {
-            width: 100%;
-            padding: 0.75rem;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            box-sizing: border-box;
-        }
-        button {
-            width: 100%;
-            padding: 0.75rem;
-            background-color: #3498db;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 1rem;
-            transition: background-color 0.3s;
-        }
-        button:hover {
-            background-color: #2980b9;
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; display: flex; flex-direction: column; min-height: 100vh; }
+        header { background: var(--primary); color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
+        
+        .main-container { display: grid; grid-template-columns: 350px 1fr; gap: 20px; padding: 20px; flex-grow: 1; }
+        
+        /* Panel Lateral - Formulario */
+        .sidebar { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); height: fit-content; }
+        .sidebar h3 { margin-top: 0; color: var(--primary); border-bottom: 2px solid var(--bg); padding-bottom: 10px; }
+        
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-size: 0.9rem; color: #555; margin-bottom: 5px; }
+        input, select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
+        
+        button { width: 100%; padding: 12px; background: var(--accent); color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        button:hover { background: #2980b9; }
+
+        /* Panel Principal - Tabla */
+        .content { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th { text-align: left; background: var(--bg); padding: 12px; color: var(--primary); border-bottom: 2px solid #ddd; }
+        td { padding: 12px; border-bottom: 1px solid #eee; font-size: 0.95rem; }
+        
+        .status-badge { padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; }
+        .confirmed { background: #d4edda; color: #155724; }
+        
+        @media (max-width: 900px) {
+            .main-container { grid-template-columns: 1fr; }
         }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h2>Sistema de Reservas</h2>
-    <form id="reservationForm">
-        <div class="form-group">
-            <label for="name">Nombre del Huésped</label>
-            <input type="text" id="name" name="name" placeholder="Ej: Juan Pérez" required>
-        </div>
-        <div class="form-group">
-            <label for="checkin">Fecha de Ingreso</label>
-            <input type="date" id="checkin" name="checkin" required>
-        </div>
-        <div class="form-group">
-            <label for="checkout">Fecha de Egreso</label>
-            <input type="date" id="checkout" name="checkout" required>
-        </div>
-        <div class="form-group">
-            <label for="roomType">Tipo de Habitación</label>
-            <select id="roomType" name="roomType">
-                <option value="single">Individual</option>
-                <option value="double">Doble</option>
-                <option value="suite">Suite Histórica</option>
-                <option value="pod">Cápsula (Pod)</option>
-            </select>
-        </div>
-        <button type="submit">Confirmar Reserva</button>
-    </form>
+<header>
+    <div style="font-size: 1.5rem; font-weight: bold;">Sistema Alula</div>
+    <div id="current-date"></div>
+</header>
+
+<div class="main-container">
+    <div class="sidebar">
+        <h3>Nueva Reserva</h3>
+        <form id="reservaForm">
+            <div class="form-group">
+                <label>Huésped / Cliente</label>
+                <input type="text" id="guestName" required placeholder="Nombre completo">
+            </div>
+            <div class="form-group">
+                <label>Ingreso (Check-in)</label>
+                <input type="date" id="checkIn" required>
+            </div>
+            <div class="form-group">
+                <label>Salida (Check-out)</label>
+                <input type="date" id="checkOut" required>
+            </div>
+            <div class="form-group">
+                <label>Tipo de Unidad</label>
+                <select id="roomType">
+                    <option value="Hab. Doble">Habitación Doble</option>
+                    <option value="Cápsula Pod">Cápsula (Pod)</option>
+                    <option value="Suite Heritage">Suite Heritage</option>
+                    <option value="Coworking Day">Coworking Day</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Monto Total ($)</label>
+                <input type="number" id="price" placeholder="0.00">
+            </div>
+            <button type="submit">Registrar en Sistema</button>
+        </form>
+    </div>
+
+    <div class="content">
+        <h3>Listado de Ocupación</h3>
+        <table id="reservaTable">
+            <thead>
+                <tr>
+                    <th>Huésped</th>
+                    <th>Entrada</th>
+                    <th>Salida</th>
+                    <th>Unidad</th>
+                    <th>Estado</th>
+                </tr>
+            </thead>
+            <tbody>
+                </tbody>
+        </table>
+    </div>
 </div>
 
 <script>
-    document.getElementById('reservationForm').addEventListener('submit', function(e) {
+    // Mostrar fecha actual en el header
+    document.getElementById('current-date').innerText = new Date().toLocaleDateString();
+
+    const form = document.getElementById('reservaForm');
+    const tableBody = document.querySelector('#reservaTable tbody');
+
+    form.addEventListener('submit', function(e) {
         e.preventDefault();
-        
-        // Aquí podrías conectar luego con tu Google Sheets mediante Apps Script
-        const formData = new FormData(this);
-        const data = Object.fromEntries(formData.entries());
-        
-        console.log("Datos de la reserva:", data);
-        alert('Reserva enviada con éxito para ' + data.name);
-        this.reset();
+
+        // Captura de datos
+        const guest = document.getElementById('guestName').value;
+        const inDate = document.getElementById('checkIn').value;
+        const outDate = document.getElementById('checkOut').value;
+        const type = document.getElementById('roomType').value;
+
+        // Crear fila en la tabla
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td><strong>${guest}</strong></td>
+            <td>${inDate}</td>
+            <td>${outDate}</td>
+            <td>${type}</td>
+            <td><span class="status-badge confirmed">Confirmada</span></td>
+        `;
+
+        tableBody.appendChild(row);
+
+        // Limpiar formulario
+        form.reset();
+        alert('Reserva registrada localmente.');
     });
 </script>
 
