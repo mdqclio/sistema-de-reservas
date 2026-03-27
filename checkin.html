@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pre Check-in — Puerto Delfín</title>
+
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+  import { getFirestore, collection, query, where, getDocs, updateDoc, doc, serverTimestamp }
+    from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBO6nDGdYWHWd5CQiYnbNojq8Yi7i1YJRc",
+    authDomain: "sistema-de-reservas-d9e54.firebaseapp.com",
+    projectId: "sistema-de-reservas-d9e54",
+    storageBucket: "sistema-de-reservas-d9e54.firebasestorage.app",
+    messagingSenderId: "461330609922",
+    appId: "1:461330609922:web:70c6726069e21cf810341b"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db  = getFirestore(app);
+
+  const $ = id => document.getElementById(id);
+
+  // Leer token de la URL
+  const params = new URLSearchParams(window.location.search);
+  const token  = params.get('token');
+
+  let reservationId = null;
+  let reservationData = null;
+
+  async function init() {
+    if (!token) { showError('Link inválido. Pedile a la cabaña un nuevo link.'); return; }
+
+    // Buscar la reserva por token
+    const snap = await getDocs(query(collection(db, 'reservations'), where('checkinToken', '==', token)));
+    if (snap.empty) { showError('Link inválido o expirado.'); return; }
+
+    const d = snap.docs[0];
+    reservationId   = d.id;
+    reservationData = d.data();
+
+    // Si ya completó los datos
+    if (reservationData.guestCheckinDone) {
+      showDone();
+      return;
+    }
+
+    renderForm();
+  }
+
+  function showError(msg) {
+    $('loader').style.display = 'none';
+    $('errorBox').style.display = 'block';
+    $('errorMsg').textContent = msg;
+  }
+
+  function showDone() {
+    $('loader').style.display = 'none';
+    $('doneBox').style.display = 'block';
+  }
+
+  function renderForm() {
+    $('loader').style.display = 'none';
+
+    const r = reservationData;
+    // Pre-llenar con datos que ya tiene la reserva
+    $('fName').value    = r.guestName    || '';
+    $('fPhone').value   = r.guestPhone   || '';
+    $('fEmail').value   = r.guestEmail   || '';
+    $('fDoc').value     = r.guestDoc     || '';
+    $('fAddress').value = r.guestAddress || '';
+    $('fCity').value    = r.guestCity    || '';
+    $('fPets').value    = r.guestPets    || '';
+    $('fPlate').value   = r.guestPlate   || '';
+    $('fGuests').value  = r.guests       || 1;
+
+    // Info de la reserva
+    const fmtDate = d => d ? new Date(d+'T00:00:00').toLocaleDateString('es-AR') : '';
+    $('resInfo').innerHTML = `
+      <div class="res-badge">
+        <span>🏡 ${r.unitId ? r.unitId.replace('c','Cabaña ') : ''}</span>
+        <span>📅 ${fmtDate(r.checkIn)} → ${fmtDate(r.checkOut)}</span>
+        <span>👥 ${r.guests || ''} personas</span>
+      </div>`;
+
+    $('formBox').style.display = 'block';
+  }
+
+  // Convertir imagen a base64
+  function fileToBase64(file) {
+    return new Promise((res, rej) => {
+      const reader = new FileReader();
+      reader.onload  = () => res(reader.result);
+      reader.onerror = rej;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Preview foto DNI
+  $('fDniPhoto').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 3 * 1024 * 1024) { alert('La foto no puede superar 3MB'); e.target.value=''; return; }
+    const b64 = await fileToBase64(file);
+    $('dniPreview').src = b64;
+    $('dniPreview').style.display = 'block';
+    $('dniPreviewWrap').style.display = 'block';
+  });
+
+  window.submitForm = async () => {
+    const btn = $('submitBtn');
+    btn.disabled = true;
+    btn.textContent = 'Enviando...';
+
+    const name    = $('fName').value.trim();
+    const phone   = $('fPhone').value.trim();
+    const email   = $('fEmail').value.trim();
+    const dni     = $('fDoc').value.trim();
+    const address = $('fAddress').value.trim();
+    const city    = $('fCity').value.trim();
+
+    if (!name || !dni || !address) {
+      alert('Completá al menos nombre, DNI y dirección.');
+      btn.disabled = false;
+      btn.textContent = 'Confirmar datos';
+      return;
+    }
+
+    let dniPhotoBase64 = '';
+    const file = $('fDniPhoto').files[0];
+    if (file) {
+      try { dniPhotoBase64 = await fileToBase64(file); }
+      catch(e) { console.warn('Error foto DNI', e); }
+    }
+
+    try {
+      await updateDoc(doc(db, 'reservations', reservationId), {
+        guestName:       name,
+        guestPhone:      phone,
+        guestEmail:      email,
+        guestDni:        dni,
+        guestDoc:        dni,
+        guestAddress:    address,
+        guestCity:       city,
+        guestPets:       $('fPets').value.trim(),
+        guestPlate:      $('fPlate').value.trim(),
+        guests:          parseInt($('fGuests').value) || 1,
+        guestDniPhoto:   dniPhotoBase64,
+        guestCheckinDone: true,
+        checkinDoneAt:   serverTimestamp()
+      });
+      $('formBox').style.display = 'none';
+      showDone();
+    } catch(e) {
+      alert('Error al enviar: ' + e.message);
+      btn.disabled = false;
+      btn.textContent = 'Confirmar datos';
+    }
+  };
+
+  init();
+</script>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:       #0f1714;
+  --bg2:      #162019;
+  --surface:  #243329;
+  --border:   #354c3a;
+  --accent:   #6dbf7e;
+  --accent2:  #4a9e5c;
+  --text:     #e8f0ea;
+  --muted:    #7a9b80;
+  --radius:   14px;
+}
+html, body { min-height: 100vh; background: var(--bg); color: var(--text);
+  font-family: 'DM Sans', sans-serif; }
+
+.wrap { max-width: 520px; margin: 0 auto; padding: 24px 16px 60px; }
+
+/* HEADER */
+.header { text-align: center; margin-bottom: 28px; }
+.logo { width: 60px; height: 60px; border-radius: 16px;
+  background: linear-gradient(135deg, var(--accent2), var(--accent));
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'DM Serif Display', serif; font-size: 22px; color: #fff;
+  margin: 0 auto 14px; }
+.header h1 { font-family: 'DM Serif Display', serif; font-size: 24px; }
+.header p  { color: var(--muted); font-size: 14px; margin-top: 4px; }
+
+/* CARD */
+.card { background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 24px; margin-bottom: 16px; }
+.card-title { font-size: 13px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.8px; color: var(--accent); margin-bottom: 16px; }
+
+/* RES BADGE */
+.res-badge { display: flex; flex-wrap: wrap; gap: 10px; }
+.res-badge span { background: var(--surface); border-radius: 20px; padding: 6px 14px;
+  font-size: 13px; color: var(--text); }
+
+/* FIELDS */
+.field { margin-bottom: 16px; }
+.field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; font-weight: 500; }
+.field input, .field select, .field textarea {
+  width: 100%; background: var(--surface); border: 1px solid var(--border);
+  color: var(--text); border-radius: 10px; padding: 12px 14px;
+  font-family: 'DM Sans', sans-serif; font-size: 15px; transition: border-color 0.15s;
+}
+.field input:focus, .field select:focus { outline: none; border-color: var(--accent); }
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.required::after { content: ' *'; color: var(--accent); }
+
+/* DNI UPLOAD */
+.upload-area { border: 2px dashed var(--border); border-radius: 10px; padding: 20px;
+  text-align: center; cursor: pointer; transition: border-color 0.15s; }
+.upload-area:hover { border-color: var(--accent); }
+.upload-area input { display: none; }
+.upload-icon { font-size: 32px; margin-bottom: 8px; }
+.upload-label { font-size: 13px; color: var(--muted); }
+#dniPreviewWrap { display: none; margin-top: 12px; }
+#dniPreview { width: 100%; border-radius: 10px; border: 1px solid var(--border); display: none; }
+
+/* SUBMIT */
+.btn-submit {
+  width: 100%; background: var(--accent2); color: #fff; border: none;
+  border-radius: 12px; padding: 16px; font-family: 'DM Sans', sans-serif;
+  font-size: 16px; font-weight: 700; cursor: pointer; transition: background 0.15s;
+  margin-top: 8px;
+}
+.btn-submit:hover { background: var(--accent); }
+.btn-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* LOADER */
+#loader { text-align: center; padding: 80px 20px; color: var(--muted); }
+.spinner { width: 36px; height: 36px; border: 3px solid var(--border);
+  border-top-color: var(--accent); border-radius: 50%;
+  animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ERROR / DONE */
+#errorBox, #doneBox { display: none; text-align: center; padding: 60px 20px; }
+.done-icon { font-size: 60px; margin-bottom: 16px; }
+.done-title { font-family: 'DM Serif Display', serif; font-size: 26px; margin-bottom: 10px; }
+.done-sub { color: var(--muted); font-size: 15px; line-height: 1.6; }
+.err-icon { font-size: 48px; margin-bottom: 12px; }
+
+/* FOOTER NOTE */
+.footer-note { text-align: center; color: var(--muted); font-size: 12px; margin-top: 20px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="logo">PD</div>
+    <h1>Puerto Delfín</h1>
+    <p>Pre check-in de huéspedes</p>
+  </div>
+
+  <!-- LOADER -->
+  <div id="loader">
+    <div class="spinner"></div>
+    Verificando tu reserva...
+  </div>
+
+  <!-- ERROR -->
+  <div id="errorBox">
+    <div class="err-icon">⚠️</div>
+    <div class="done-title" style="color:#e05555">Link inválido</div>
+    <p class="done-sub" id="errorMsg"></p>
+  </div>
+
+  <!-- DONE -->
+  <div id="doneBox">
+    <div class="done-icon">🎉</div>
+    <div class="done-title">¡Datos recibidos!</div>
+    <p class="done-sub">Gracias por completar tu pre check-in.<br>¡Los esperamos en Puerto Delfín! 🌊🐬</p>
+  </div>
+
+  <!-- FORM -->
+  <div id="formBox" style="display:none">
+
+    <!-- Info reserva -->
+    <div class="card">
+      <div class="card-title">Tu reserva</div>
+      <div id="resInfo"></div>
+    </div>
+
+    <!-- Datos personales -->
+    <div class="card">
+      <div class="card-title">Titular de la reserva</div>
+      <div class="field">
+        <label class="required">Nombre y apellido</label>
+        <input id="fName" type="text" placeholder="Juan Pérez">
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label class="required">DNI / CUIL</label>
+          <input id="fDoc" type="text" placeholder="12.345.678" inputmode="numeric">
+        </div>
+        <div class="field">
+          <label>Cantidad de personas</label>
+          <input id="fGuests" type="number" min="1" max="20" value="1">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Teléfono</label>
+          <input id="fPhone" type="tel" placeholder="+54 9 223..." inputmode="tel">
+        </div>
+        <div class="field">
+          <label>Email</label>
+          <input id="fEmail" type="email" placeholder="correo@...">
+        </div>
+      </div>
+    </div>
+
+    <!-- Domicilio -->
+    <div class="card">
+      <div class="card-title">Domicilio</div>
+      <div class="field">
+        <label class="required">Dirección</label>
+        <input id="fAddress" type="text" placeholder="Av. Siempreviva 742">
+      </div>
+      <div class="field">
+        <label>Localidad / Ciudad</label>
+        <input id="fCity" type="text" placeholder="Buenos Aires">
+      </div>
+    </div>
+
+    <!-- Estadía -->
+    <div class="card">
+      <div class="card-title">Datos de la estadía</div>
+      <div class="field-row">
+        <div class="field">
+          <label>Mascotas (raza y tamaño)</label>
+          <input id="fPets" type="text" placeholder="Ej: labrador mediano">
+        </div>
+        <div class="field">
+          <label>Patente del vehículo</label>
+          <input id="fPlate" type="text" placeholder="AB 123 CD" style="text-transform:uppercase">
+        </div>
+      </div>
+    </div>
+
+    <!-- Foto DNI -->
+    <div class="card">
+      <div class="card-title">Foto del DNI</div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Sacá una foto del frente de tu DNI (o subí una imagen). Máximo 3MB.</p>
+      <label class="upload-area" for="fDniPhoto">
+        <input type="file" id="fDniPhoto" accept="image/*" capture="environment">
+        <div class="upload-icon">📷</div>
+        <div class="upload-label">Tocá para sacar foto o elegir imagen</div>
+      </label>
+      <div id="dniPreviewWrap">
+        <img id="dniPreview" alt="Vista previa DNI">
+        <p style="font-size:12px;color:var(--muted);margin-top:6px;text-align:center">
+          ✅ Foto cargada — podés cambiarla tocando arriba
+        </p>
+      </div>
+    </div>
+
+    <button class="btn-submit" id="submitBtn" onclick="submitForm()">
+      ✅ Confirmar datos
+    </button>
+
+    <p class="footer-note">
+      Tus datos son confidenciales y se usan únicamente para el registro de tu estadía.<br>
+      🌊 Puerto Delfín — Primera línea de playa, Mar del Plata
+    </p>
+  </div>
+
+</div>
+</body>
+</html>

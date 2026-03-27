@@ -432,6 +432,8 @@
   function resRow(r) {
     const nights = nightsBetween(r.checkIn || '', r.checkOut || '');
     const balance = (r.totalAmount || 0) - (r.paid || 0);
+    const hasGuest = r.guestDni || r.guestAddress;
+    const dniIcon = hasGuest ? '🪪✅' : (r.checkinToken ? '🔗⏳' : '🔗');
     return `<tr id="row-${r.id}">
       <td><strong>${r.guestName}</strong><br><small>${r.guestPhone || ''}</small></td>
       <td>${unitName(r.unitId)}</td>
@@ -445,7 +447,8 @@
       <td>${statusBadge(r.status)}</td>
       <td>
         <button class="btn-icon" onclick="window._editRes('${r.id}')" title="Editar">✏️</button>
-        <button class="btn-icon" onclick="window._changeStatus('${r.id}')" title="Estado">🔄</button>
+        <button class="btn-icon" onclick="window._changeStatus('${r.id}')" title="Cambiar estado">🔄</button>
+        <button class="btn-icon" onclick="window._guestLink('${r.id}')" title="${hasGuest ? 'Ver datos del huésped' : 'Generar link pre check-in'}">${dniIcon}</button>
         <button class="btn-icon danger" onclick="window._deleteRes('${r.id}')" title="Eliminar">🗑️</button>
       </td>
     </tr>`;
@@ -459,6 +462,77 @@
     window._changeStatus = changeStatus;
     window._deleteRes = deleteRes;
     window._saveRes = saveRes;
+    window._guestLink = async (id) => {
+      const r = reservations.find(x => x.id === id);
+      if (!r) return;
+
+      // Si ya tiene datos del huésped, mostrarlos
+      if (r.guestDni || r.guestAddress) {
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.style.display = 'flex';
+        modal.innerHTML = `
+        <div class="modal">
+          <div class="modal-header">
+            <h3>🪪 Datos del huésped — ${r.guestName}</h3>
+            <button onclick="this.closest('.modal-overlay').remove()" class="modal-close">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="guest-data-grid">
+              <div class="guest-data-item"><span class="gd-label">Nombre</span><span class="gd-val">${r.guestName||'—'}</span></div>
+              <div class="guest-data-item"><span class="gd-label">DNI / CUIL</span><span class="gd-val">${r.guestDni||r.guestDoc||'—'}</span></div>
+              <div class="guest-data-item"><span class="gd-label">Teléfono</span><span class="gd-val">${r.guestPhone||'—'}</span></div>
+              <div class="guest-data-item"><span class="gd-label">Email</span><span class="gd-val">${r.guestEmail||'—'}</span></div>
+              <div class="guest-data-item"><span class="gd-label">Dirección</span><span class="gd-val">${r.guestAddress||'—'}</span></div>
+              <div class="guest-data-item"><span class="gd-label">Localidad</span><span class="gd-val">${r.guestCity||'—'}</span></div>
+              <div class="guest-data-item"><span class="gd-label">Mascotas</span><span class="gd-val">${r.guestPets||'—'}</span></div>
+              <div class="guest-data-item"><span class="gd-label">Patente</span><span class="gd-val">${r.guestPlate||'—'}</span></div>
+            </div>
+            ${r.guestDniPhoto ? `
+            <div style="margin-top:16px">
+              <div class="gd-label" style="margin-bottom:8px">Foto DNI</div>
+              <img src="${r.guestDniPhoto}" style="max-width:100%;border-radius:8px;border:1px solid var(--border)">
+            </div>` : ''}
+            <div class="modal-footer" style="margin-top:16px">
+              <button class="btn-secondary" onclick="this.closest('.modal-overlay').remove()">Cerrar</button>
+            </div>
+          </div>
+        </div>`;
+        document.body.appendChild(modal);
+        return;
+      }
+
+      // Generar token si no existe
+      let token = r.checkinToken;
+      if (!token) {
+        token = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+        await updateDoc(doc(db, 'reservations', id), { checkinToken: token });
+        reservations = reservations.map(x => x.id === id ? { ...x, checkinToken: token } : x);
+      }
+
+      const baseUrl = window.location.href.replace(/\/[^/]*$/, '').replace(/\/$/, '');
+      const link = `${baseUrl}/checkin.html?token=${token}`;
+
+      const modal = document.createElement('div');
+      modal.className = 'modal-overlay';
+      modal.style.display = 'flex';
+      modal.innerHTML = `
+      <div class="modal">
+        <div class="modal-header">
+          <h3>🔗 Link de pre check-in</h3>
+          <button onclick="this.closest('.modal-overlay').remove()" class="modal-close">✕</button>
+        </div>
+        <div class="modal-body">
+          <p style="color:var(--text-muted);margin-bottom:16px">Enviá este link a <strong>${r.guestName}</strong> para que complete sus datos antes de llegar:</p>
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;word-break:break-all;font-size:12px;color:var(--accent);margin-bottom:16px">${link}</div>
+          <div class="modal-footer">
+            <button class="btn-secondary" onclick="this.closest('.modal-overlay').remove()">Cerrar</button>
+            <button class="btn-primary" onclick="navigator.clipboard.writeText('${link}');this.textContent='✅ Copiado!'">📋 Copiar link</button>
+          </div>
+        </div>
+      </div>`;
+      document.body.appendChild(modal);
+    };
   }
 
   function resForm(r) {
@@ -1457,6 +1531,12 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 }
 .info-text { font-size: 13px; color: var(--text-muted); }
 code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+
+/* ---- GUEST DATA ---- */
+.guest-data-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.guest-data-item { background: var(--surface); border-radius: var(--radius-sm); padding: 10px 14px; }
+.gd-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 3px; }
+.gd-val { font-size: 14px; color: var(--text); font-weight: 500; }
 
 /* ---- SCROLLBARS ---- */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
