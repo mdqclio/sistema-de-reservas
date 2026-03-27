@@ -8,7 +8,7 @@
 <!-- Firebase SDK -->
 <script type="module">
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-  import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged }
+  import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged }
     from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
   import { getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc,
     updateDoc, deleteDoc, query, where, orderBy, onSnapshot, serverTimestamp }
@@ -735,40 +735,157 @@
     $('tabContent').innerHTML = `
     <div class="tab-header">
       <h2>Usuarios</h2>
-      <button class="btn-primary" onclick="window._openUserModal()">+ Agregar usuario</button>
+      <button class="btn-primary" onclick="window._openUserModal()">+ Nuevo usuario</button>
     </div>
     <div class="card">
       <table class="res-table">
-        <thead><tr><th>Email</th><th>Rol</th><th>Acciones</th></tr></thead>
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Email</th>
+            <th>Rol</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
         <tbody>
-          ${users.map(u=>`<tr>
-            <td>${u.email}</td>
-            <td><select onchange="window._changeRole('${u.uid}',this.value)">
-              ${['admin','reception','sales','cleaning'].map(r=>`<option ${u.role===r?'selected':''}>${r}</option>`).join('')}
-            </select></td>
-            <td><button class="btn-icon danger" onclick="window._deleteUser('${u.uid}')">🗑️</button></td>
-          </tr>`).join('')}
+          ${users.length === 0 ? '<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:20px">Sin usuarios registrados</td></tr>' :
+            users.map(u=>`<tr>
+              <td><strong>${u.nombre || '—'}</strong></td>
+              <td>${u.email}</td>
+              <td>
+                <select onchange="window._changeRole('${u.uid}',this.value)" ${u.uid === currentUser.uid ? 'disabled title="No podés cambiar tu propio rol"' : ''}>
+                  ${['admin','reception','sales','cleaning'].map(r=>`<option value="${r}" ${u.role===r?'selected':''}>${r}</option>`).join('')}
+                </select>
+              </td>
+              <td>
+                <span style="color:${u.estado==='inactivo'?'var(--danger)':'var(--accent)'}">
+                  ${u.estado==='inactivo' ? '● Inactivo' : '● Activo'}
+                </span>
+              </td>
+              <td>
+                <button class="btn-icon" onclick="window._openUserModal('${u.uid}')" title="Editar">✏️</button>
+                ${u.uid !== currentUser.uid ? `<button class="btn-icon danger" onclick="window._deleteUser('${u.uid}')" title="Eliminar">🗑️</button>` : ''}
+              </td>
+            </tr>`).join('')}
         </tbody>
       </table>
     </div>
+
     <div class="info-box">
       <strong>ℹ️ Roles:</strong><br>
-      <b>admin</b>: acceso total + correcciones al bot<br>
-      <b>reception</b>: reservas + check-in/out<br>
+      <b>admin</b>: acceso total + modo corrección del bot<br>
+      <b>reception</b>: reservas + check-in/out + chatbot<br>
       <b>sales</b>: reservas + facturación<br>
-      <b>cleaning</b>: solo panel de limpieza
+      <b>cleaning</b>: solo panel de limpieza del día
+    </div>
+
+    <!-- MODAL usuario -->
+    <div class="modal-overlay" id="userModal" style="display:none">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 id="userModalTitle">Nuevo Usuario</h3>
+          <button onclick="window._closeModal('userModal')" class="modal-close">✕</button>
+        </div>
+        <div class="modal-body" id="userModalBody"></div>
+      </div>
     </div>`;
+
     window._changeRole = async (uid, role) => {
       await updateDoc(doc(db, 'users', uid), { role });
     };
+
     window._deleteUser = async (uid) => {
-      if (confirm('¿Eliminar usuario?')) {
-        await deleteDoc(doc(db, 'users', uid));
-        await buildUsers();
-      }
+      const u = users.find(x => x.uid === uid);
+      if (!confirm(`¿Eliminar el usuario ${u?.email}?\n\nNota: se elimina del sistema pero sigue existiendo en Firebase Auth. Para borrar completamente usá la consola de Firebase.`)) return;
+      await deleteDoc(doc(db, 'users', uid));
+      await buildUsers();
     };
-    window._openUserModal = () => {
-      alert('Para agregar usuarios, usá Firebase Authentication en la consola de Firebase y luego asignales el rol en esta pantalla.');
+
+    window._openUserModal = (uid) => {
+      const u = uid ? users.find(x => x.uid === uid) : null;
+      const isEdit = !!u;
+      $('userModalTitle').textContent = isEdit ? 'Editar Usuario' : 'Nuevo Usuario';
+      $('userModalBody').innerHTML = `
+        <div class="field-group">
+          <label>Nombre</label>
+          <input id="uNombre" value="${u?.nombre||''}" placeholder="Nombre y apellido">
+        </div>
+        <div class="field-group">
+          <label>Email *</label>
+          <input id="uEmail" type="email" value="${u?.email||''}" placeholder="usuario@email.com" ${isEdit?'disabled':''}>
+        </div>
+        <div class="field-group">
+          <label>${isEdit ? 'Nueva contraseña (dejar vacío para no cambiar)' : 'Contraseña *'}</label>
+          <input id="uPass" type="password" placeholder="Mínimo 6 caracteres">
+        </div>
+        <div class="field-group">
+          <label>Rol</label>
+          <select id="uRol">
+            ${['admin','reception','sales','cleaning'].map(r=>`<option value="${r}" ${(u?.role||'reception')===r?'selected':''}>${r}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field-group">
+          <label>Estado</label>
+          <select id="uEstado">
+            <option value="activo" ${(u?.estado||'activo')==='activo'?'selected':''}>Activo</option>
+            <option value="inactivo" ${u?.estado==='inactivo'?'selected':''}>Inactivo</option>
+          </select>
+        </div>
+        ${!isEdit ? `<div class="info-box" style="margin-bottom:12px">
+          ⚠️ Al crear un usuario nuevo, Firebase te deslogueará brevemente y volverá a loguearte como admin automáticamente.
+        </div>` : ''}
+        <div class="modal-footer">
+          <button class="btn-secondary" onclick="window._closeModal('userModal')">Cancelar</button>
+          <button class="btn-primary" onclick="window._saveUser('${uid||''}')">Guardar</button>
+        </div>`;
+      $('userModal').style.display = 'flex';
+    };
+
+    window._saveUser = async (uid) => {
+      const nombre = $('uNombre').value.trim();
+      const email  = $('uEmail').value.trim();
+      const pass   = $('uPass').value;
+      const role   = $('uRol').value;
+      const estado = $('uEstado').value;
+      const isEdit = !!uid;
+
+      if (!isEdit && (!email || !pass)) { alert('Email y contraseña son obligatorios'); return; }
+      if (!isEdit && pass.length < 6)   { alert('La contraseña debe tener al menos 6 caracteres'); return; }
+
+      try {
+        if (isEdit) {
+          // Solo actualizar datos en Firestore
+          await updateDoc(doc(db, 'users', uid), { nombre, role, estado });
+          $('userModal').style.display = 'none';
+          await buildUsers();
+        } else {
+          // Crear en Firebase Auth
+          const adminEmail = currentUser.email;
+          const adminPass  = prompt('Para crear el usuario, necesitamos tu contraseña de admin:');
+          if (!adminPass) return;
+
+          await createUserWithEmailAndPassword(auth, email, pass);
+          const newUid = auth.currentUser.uid;
+
+          // Guardar en Firestore
+          await setDoc(doc(db, 'users', newUid), {
+            nombre, email, role, estado,
+            creadoEn: serverTimestamp()
+          });
+
+          // Volver a logear como admin
+          await signInWithEmailAndPassword(auth, adminEmail, adminPass);
+
+          $('userModal').style.display = 'none';
+          await buildUsers();
+        }
+      } catch(e) {
+        const msg = e.code === 'auth/email-already-in-use' ? 'Ese email ya existe en Firebase Auth'
+          : e.code === 'auth/invalid-email' ? 'Email inválido'
+          : 'Error: ' + e.message;
+        alert('❌ ' + msg);
+      }
     };
   }
 
