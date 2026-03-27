@@ -1,0 +1,2228 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2580
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;\f1\fnil\fcharset134 PingFangSC-Regular;\f2\fnil\fcharset0 LucidaGrande;
+\f3\fnil\fcharset77 ZapfDingbatsITC;\f4\fnil\fcharset0 AppleSymbols;\f5\fnil\fcharset0 STIXGeneral-Regular;
+\f6\fnil\fcharset0 AppleColorEmoji;\f7\fnil\fcharset0 Menlo-Regular;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx566\tx1133\tx1700\tx2267\tx2834\tx3401\tx3968\tx4535\tx5102\tx5669\tx6236\tx6803\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 <!DOCTYPE html>\
+\
+<html lang="es">\
+<head>\
+<meta charset="UTF-8">\
+<meta name="viewport" content="width=device-width, initial-scale=1.0">\
+<title>Sistema de Gesti\'f3n \'b7 Alojamiento</title>\
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">\
+<style>\
+/* ============================================================\
+   CONFIG-DRIVEN LODGE MANAGEMENT SYSTEM\
+   Aesthetic: Coastal refined \'97 deep navy, sand, warm white\
+   ============================================================ */\
+:root \{\
+  --navy: #0d1b2a;\
+  --navy-mid: #1a2e42;\
+  --navy-light: #243b55;\
+  --sand: #c9a96e;\
+  --sand-light: #e8d5b0;\
+  --sand-pale: #f5ede0;\
+  --white: #faf8f4;\
+  --text: #1a1a1a;\
+  --text-muted: #6b7a8d;\
+  --success: #2e7d5e;\
+  --danger: #c0392b;\
+  --warning: #d4850a;\
+  --radius: 10px;\
+  --shadow: 0 4px 24px rgba(13,27,42,0.12);\
+  --shadow-lg: 0 8px 40px rgba(13,27,42,0.18);\
+\}\
+\
+- \{ box-sizing: border-box; margin: 0; padding: 0; \}\
+\
+body \{\
+font-family: \'91DM Sans\'92, sans-serif;\
+background: var(\'96navy);\
+color: var(\'96white);\
+min-height: 100vh;\
+overflow-x: hidden;\
+\}\
+\
+/* \uc0\u9472 \u9472  BACKGROUND TEXTURE \u9472 \u9472  */\
+body::before \{\
+content: \'91\'92;\
+position: fixed;\
+inset: 0;\
+background:\
+radial-gradient(ellipse at 20% 0%, rgba(201,169,110,0.08) 0%, transparent 50%),\
+radial-gradient(ellipse at 80% 100%, rgba(36,59,85,0.6) 0%, transparent 50%);\
+pointer-events: none;\
+z-index: 0;\
+\}\
+\
+/* \uc0\u9472 \u9472  SIDEBAR \u9472 \u9472  */\
+#sidebar \{\
+position: fixed;\
+left: 0; top: 0; bottom: 0;\
+width: 220px;\
+background: var(\'96navy-mid);\
+border-right: 1px solid rgba(201,169,110,0.15);\
+display: flex;\
+flex-direction: column;\
+z-index: 100;\
+padding: 0;\
+\}\
+\
+.sidebar-logo \{\
+padding: 28px 24px 20px;\
+border-bottom: 1px solid rgba(201,169,110,0.1);\
+\}\
+\
+.sidebar-logo .prop-name \{\
+font-family: \'91Playfair Display\'92, serif;\
+font-size: 1.1rem;\
+color: var(\'96sand);\
+line-height: 1.2;\
+\}\
+\
+.sidebar-logo .prop-subtitle \{\
+font-size: 0.7rem;\
+color: var(\'96text-muted);\
+text-transform: uppercase;\
+letter-spacing: 0.1em;\
+margin-top: 3px;\
+\}\
+\
+.sidebar-nav \{\
+flex: 1;\
+padding: 16px 0;\
+overflow-y: auto;\
+\}\
+\
+.nav-section \{\
+padding: 8px 16px 4px;\
+font-size: 0.65rem;\
+text-transform: uppercase;\
+letter-spacing: 0.12em;\
+color: var(\'96text-muted);\
+\}\
+\
+.nav-item \{\
+display: flex;\
+align-items: center;\
+gap: 10px;\
+padding: 10px 24px;\
+cursor: pointer;\
+font-size: 0.85rem;\
+color: rgba(250,248,244,0.6);\
+transition: all 0.2s;\
+border-left: 3px solid transparent;\
+\}\
+\
+.nav-item:hover \{ color: var(\'96white); background: rgba(201,169,110,0.06); \}\
+.nav-item.active \{\
+color: var(\'96sand);\
+background: rgba(201,169,110,0.08);\
+border-left-color: var(\'96sand);\
+font-weight: 500;\
+\}\
+\
+.nav-item .icon \{ font-size: 1rem; width: 20px; text-align: center; \}\
+\
+.sidebar-footer \{\
+padding: 16px 24px;\
+border-top: 1px solid rgba(201,169,110,0.1);\
+font-size: 0.72rem;\
+color: var(\'96text-muted);\
+\}\
+\
+/* \uc0\u9472 \u9472  MAIN CONTENT \u9472 \u9472  */\
+#main \{\
+margin-left: 220px;\
+min-height: 100vh;\
+position: relative;\
+z-index: 1;\
+\}\
+\
+.topbar \{\
+display: flex;\
+align-items: center;\
+justify-content: space-between;\
+padding: 20px 32px;\
+border-bottom: 1px solid rgba(201,169,110,0.1);\
+background: rgba(13,27,42,0.6);\
+backdrop-filter: blur(8px);\
+position: sticky;\
+top: 0;\
+z-index: 50;\
+\}\
+\
+.topbar-title \{\
+font-family: \'91Playfair Display\'92, serif;\
+font-size: 1.3rem;\
+color: var(\'96white);\
+\}\
+\
+.topbar-date \{\
+font-size: 0.8rem;\
+color: var(\'96text-muted);\
+\}\
+\
+.content \{\
+padding: 32px;\
+\}\
+\
+/* \uc0\u9472 \u9472  CARDS \u9472 \u9472  */\
+.card \{\
+background: rgba(26,46,66,0.7);\
+border: 1px solid rgba(201,169,110,0.12);\
+border-radius: var(\'96radius);\
+padding: 24px;\
+backdrop-filter: blur(4px);\
+\}\
+\
+.card-title \{\
+font-family: \'91Playfair Display\'92, serif;\
+font-size: 1rem;\
+color: var(\'96sand);\
+margin-bottom: 16px;\
+\}\
+\
+/* \uc0\u9472 \u9472  STATS ROW \u9472 \u9472  */\
+.stats-grid \{\
+display: grid;\
+grid-template-columns: repeat(4, 1fr);\
+gap: 16px;\
+margin-bottom: 28px;\
+\}\
+\
+.stat-card \{\
+background: rgba(26,46,66,0.7);\
+border: 1px solid rgba(201,169,110,0.12);\
+border-radius: var(\'96radius);\
+padding: 20px 22px;\
+position: relative;\
+overflow: hidden;\
+\}\
+\
+.stat-card::after \{\
+content: \'91\'92;\
+position: absolute;\
+bottom: 0; left: 0; right: 0;\
+height: 2px;\
+background: linear-gradient(90deg, var(\'96sand), transparent);\
+\}\
+\
+.stat-label \{\
+font-size: 0.72rem;\
+text-transform: uppercase;\
+letter-spacing: 0.1em;\
+color: var(\'96text-muted);\
+margin-bottom: 6px;\
+\}\
+\
+.stat-value \{\
+font-size: 2rem;\
+font-weight: 600;\
+color: var(\'96white);\
+line-height: 1;\
+\}\
+\
+.stat-value.sand \{ color: var(\'96sand); \}\
+.stat-value.success \{ color: #4caf8a; \}\
+.stat-value.danger \{ color: #e57373; \}\
+\
+.stat-sub \{\
+font-size: 0.72rem;\
+color: var(\'96text-muted);\
+margin-top: 4px;\
+\}\
+\
+/* \uc0\u9472 \u9472  MAP GRID \u9472 \u9472  */\
+.map-grid \{\
+display: grid;\
+gap: 12px;\
+\}\
+\
+.unit-type-section \{ margin-bottom: 20px; \}\
+\
+.unit-type-label \{\
+font-size: 0.72rem;\
+text-transform: uppercase;\
+letter-spacing: 0.12em;\
+color: var(\'96text-muted);\
+margin-bottom: 10px;\
+padding-bottom: 6px;\
+border-bottom: 1px solid rgba(201,169,110,0.1);\
+\}\
+\
+.units-row \{\
+display: flex;\
+gap: 10px;\
+flex-wrap: wrap;\
+\}\
+\
+.unit-card \{\
+background: rgba(13,27,42,0.8);\
+border: 1.5px solid rgba(201,169,110,0.2);\
+border-radius: 8px;\
+padding: 14px 16px;\
+cursor: pointer;\
+transition: all 0.2s;\
+min-width: 130px;\
+position: relative;\
+\}\
+\
+.unit-card:hover \{\
+border-color: var(\'96sand);\
+transform: translateY(-2px);\
+box-shadow: var(\'96shadow);\
+\}\
+\
+.unit-card.occupied \{\
+background: rgba(192,57,43,0.15);\
+border-color: rgba(192,57,43,0.4);\
+\}\
+\
+.unit-card.reserved \{\
+background: rgba(212,133,10,0.12);\
+border-color: rgba(212,133,10,0.35);\
+\}\
+\
+.unit-card.maintenance \{\
+background: rgba(107,122,141,0.15);\
+border-color: rgba(107,122,141,0.3);\
+\}\
+\
+.unit-card.available \{\
+background: rgba(46,125,94,0.1);\
+border-color: rgba(46,125,94,0.3);\
+\}\
+\
+.unit-number \{\
+font-size: 0.65rem;\
+text-transform: uppercase;\
+letter-spacing: 0.1em;\
+color: var(\'96text-muted);\
+margin-bottom: 2px;\
+\}\
+\
+.unit-name \{\
+font-weight: 600;\
+font-size: 0.88rem;\
+color: var(\'96white);\
+\}\
+\
+.unit-status-badge \{\
+display: inline-block;\
+font-size: 0.62rem;\
+padding: 2px 7px;\
+border-radius: 20px;\
+margin-top: 6px;\
+font-weight: 500;\
+text-transform: uppercase;\
+letter-spacing: 0.05em;\
+\}\
+\
+.badge-available \{ background: rgba(46,125,94,0.25); color: #4caf8a; \}\
+.badge-occupied \{ background: rgba(192,57,43,0.25); color: #e57373; \}\
+.badge-reserved \{ background: rgba(212,133,10,0.25); color: #ffb74d; \}\
+.badge-maintenance \{ background: rgba(107,122,141,0.2); color: #90a4ae; \}\
+\
+.unit-guest \{\
+font-size: 0.72rem;\
+color: var(\'96text-muted);\
+margin-top: 4px;\
+white-space: nowrap;\
+overflow: hidden;\
+text-overflow: ellipsis;\
+max-width: 110px;\
+\}\
+\
+/* \uc0\u9472 \u9472  LEGEND \u9472 \u9472  */\
+.legend \{\
+display: flex;\
+gap: 16px;\
+margin-bottom: 16px;\
+flex-wrap: wrap;\
+\}\
+\
+.legend-item \{\
+display: flex;\
+align-items: center;\
+gap: 6px;\
+font-size: 0.75rem;\
+color: var(\'96text-muted);\
+\}\
+\
+.legend-dot \{\
+width: 10px; height: 10px;\
+border-radius: 3px;\
+\}\
+\
+/* \uc0\u9472 \u9472  RESERVAS TABLE \u9472 \u9472  */\
+.table-wrap \{ overflow-x: auto; \}\
+\
+table \{\
+width: 100%;\
+border-collapse: collapse;\
+font-size: 0.83rem;\
+\}\
+\
+thead th \{\
+text-align: left;\
+padding: 10px 14px;\
+font-size: 0.68rem;\
+text-transform: uppercase;\
+letter-spacing: 0.1em;\
+color: var(\'96text-muted);\
+border-bottom: 1px solid rgba(201,169,110,0.12);\
+font-weight: 500;\
+\}\
+\
+tbody tr \{\
+border-bottom: 1px solid rgba(255,255,255,0.04);\
+transition: background 0.15s;\
+cursor: pointer;\
+\}\
+\
+tbody tr:hover \{ background: rgba(201,169,110,0.05); \}\
+\
+tbody td \{\
+padding: 11px 14px;\
+color: rgba(250,248,244,0.85);\
+vertical-align: middle;\
+\}\
+\
+.tag \{\
+display: inline-block;\
+padding: 3px 9px;\
+border-radius: 20px;\
+font-size: 0.68rem;\
+font-weight: 600;\
+text-transform: uppercase;\
+letter-spacing: 0.05em;\
+\}\
+\
+.tag-confirmada \{ background: rgba(46,125,94,0.2); color: #4caf8a; \}\
+.tag-pendiente \{ background: rgba(212,133,10,0.2); color: #ffb74d; \}\
+.tag-checkin \{ background: rgba(33,150,243,0.2); color: #64b5f6; \}\
+.tag-checkout \{ background: rgba(156,39,176,0.2); color: #ce93d8; \}\
+.tag-cancelada \{ background: rgba(192,57,43,0.15); color: #e57373; \}\
+\
+/* \uc0\u9472 \u9472  BTN \u9472 \u9472  */\
+.btn \{\
+display: inline-flex;\
+align-items: center;\
+gap: 6px;\
+padding: 9px 18px;\
+border-radius: 8px;\
+font-size: 0.83rem;\
+font-weight: 500;\
+cursor: pointer;\
+transition: all 0.18s;\
+border: none;\
+font-family: \'91DM Sans\'92, sans-serif;\
+\}\
+\
+.btn-primary \{\
+background: var(\'96sand);\
+color: var(\'96navy);\
+\}\
+\
+.btn-primary:hover \{ background: #d4b07a; transform: translateY(-1px); \}\
+\
+.btn-ghost \{\
+background: transparent;\
+color: var(\'96sand);\
+border: 1px solid rgba(201,169,110,0.3);\
+\}\
+\
+.btn-ghost:hover \{ background: rgba(201,169,110,0.08); \}\
+\
+.btn-danger \{\
+background: rgba(192,57,43,0.15);\
+color: #e57373;\
+border: 1px solid rgba(192,57,43,0.3);\
+\}\
+\
+.btn-danger:hover \{ background: rgba(192,57,43,0.25); \}\
+\
+.btn-sm \{ padding: 5px 12px; font-size: 0.76rem; \}\
+\
+/* \uc0\u9472 \u9472  MODAL \u9472 \u9472  */\
+.modal-backdrop \{\
+position: fixed;\
+inset: 0;\
+background: rgba(13,27,42,0.85);\
+backdrop-filter: blur(6px);\
+z-index: 500;\
+display: flex;\
+align-items: center;\
+justify-content: center;\
+animation: fadeIn 0.2s ease;\
+\}\
+\
+@keyframes fadeIn \{ from \{ opacity: 0; \} to \{ opacity: 1; \} \}\
+@keyframes slideUp \{ from \{ transform: translateY(20px); opacity: 0; \} to \{ transform: translateY(0); opacity: 1; \} \}\
+\
+.modal \{\
+background: var(\'96navy-mid);\
+border: 1px solid rgba(201,169,110,0.2);\
+border-radius: 14px;\
+padding: 32px;\
+width: 90%;\
+max-width: 560px;\
+max-height: 90vh;\
+overflow-y: auto;\
+animation: slideUp 0.25s ease;\
+box-shadow: var(\'96shadow-lg);\
+\}\
+\
+.modal-title \{\
+font-family: \'91Playfair Display\'92, serif;\
+font-size: 1.3rem;\
+color: var(\'96sand);\
+margin-bottom: 24px;\
+\}\
+\
+.modal-footer \{\
+display: flex;\
+gap: 10px;\
+justify-content: flex-end;\
+margin-top: 24px;\
+padding-top: 20px;\
+border-top: 1px solid rgba(201,169,110,0.1);\
+\}\
+\
+/* \uc0\u9472 \u9472  FORM \u9472 \u9472  */\
+.form-grid \{ display: grid; grid-template-columns: 1fr 1fr; gap: 16px; \}\
+.form-grid.full \{ grid-template-columns: 1fr; \}\
+\
+.field \{ display: flex; flex-direction: column; gap: 6px; \}\
+.field.span2 \{ grid-column: span 2; \}\
+\
+label \{\
+font-size: 0.72rem;\
+text-transform: uppercase;\
+letter-spacing: 0.08em;\
+color: var(\'96text-muted);\
+font-weight: 500;\
+\}\
+\
+input, select, textarea \{\
+background: rgba(13,27,42,0.6);\
+border: 1px solid rgba(201,169,110,0.2);\
+border-radius: 7px;\
+padding: 10px 13px;\
+color: var(\'96white);\
+font-family: \'91DM Sans\'92, sans-serif;\
+font-size: 0.85rem;\
+transition: border-color 0.15s;\
+width: 100%;\
+\}\
+\
+input:focus, select:focus, textarea:focus \{\
+outline: none;\
+border-color: var(\'96sand);\
+\}\
+\
+select option \{ background: var(\'96navy-mid); \}\
+\
+/* \uc0\u9472 \u9472  TABS \u9472 \u9472  */\
+.tabs \{\
+display: flex;\
+gap: 4px;\
+border-bottom: 1px solid rgba(201,169,110,0.12);\
+margin-bottom: 24px;\
+\}\
+\
+.tab \{\
+padding: 10px 18px;\
+cursor: pointer;\
+font-size: 0.82rem;\
+color: var(\'96text-muted);\
+border-bottom: 2px solid transparent;\
+margin-bottom: -1px;\
+transition: all 0.15s;\
+\}\
+\
+.tab:hover \{ color: var(\'96white); \}\
+.tab.active \{ color: var(\'96sand); border-bottom-color: var(\'96sand); font-weight: 500; \}\
+\
+/* \uc0\u9472 \u9472  PAGO INFO \u9472 \u9472  */\
+.pago-box \{\
+background: rgba(13,27,42,0.5);\
+border: 1px solid rgba(201,169,110,0.15);\
+border-radius: 8px;\
+padding: 16px;\
+margin-top: 8px;\
+\}\
+\
+.pago-row \{\
+display: flex;\
+justify-content: space-between;\
+align-items: center;\
+padding: 6px 0;\
+font-size: 0.83rem;\
+border-bottom: 1px solid rgba(255,255,255,0.05);\
+\}\
+\
+.pago-row:last-child \{ border-bottom: none; \}\
+.pago-label \{ color: var(\'96text-muted); \}\
+.pago-value \{ font-weight: 600; \}\
+.pago-value.sand \{ color: var(\'96sand); \}\
+.pago-value.success \{ color: #4caf8a; \}\
+\
+/* \uc0\u9472 \u9472  CHATBOT \u9472 \u9472  */\
+#chatbot-panel \{\
+position: fixed;\
+right: 24px;\
+bottom: 24px;\
+z-index: 200;\
+\}\
+\
+.chat-bubble \{\
+width: 52px; height: 52px;\
+background: var(\'96sand);\
+border-radius: 50%;\
+display: flex;\
+align-items: center;\
+justify-content: center;\
+cursor: pointer;\
+font-size: 1.3rem;\
+box-shadow: var(\'96shadow-lg);\
+transition: transform 0.2s;\
+margin-left: auto;\
+\}\
+\
+.chat-bubble:hover \{ transform: scale(1.08); \}\
+\
+.chat-window \{\
+display: none;\
+flex-direction: column;\
+width: 340px;\
+height: 440px;\
+background: var(\'96navy-mid);\
+border: 1px solid rgba(201,169,110,0.2);\
+border-radius: 14px;\
+box-shadow: var(\'96shadow-lg);\
+margin-bottom: 12px;\
+overflow: hidden;\
+\}\
+\
+.chat-window.open \{ display: flex; \}\
+\
+.chat-header \{\
+padding: 14px 18px;\
+background: rgba(13,27,42,0.8);\
+border-bottom: 1px solid rgba(201,169,110,0.1);\
+display: flex;\
+align-items: center;\
+gap: 10px;\
+\}\
+\
+.chat-avatar \{\
+width: 32px; height: 32px;\
+background: var(\'96sand);\
+border-radius: 50%;\
+display: flex;\
+align-items: center;\
+justify-content: center;\
+font-size: 0.9rem;\
+color: var(\'96navy);\
+font-weight: 700;\
+\}\
+\
+.chat-name \{ font-size: 0.88rem; font-weight: 600; \}\
+.chat-status \{ font-size: 0.7rem; color: #4caf8a; \}\
+\
+.chat-messages \{\
+flex: 1;\
+overflow-y: auto;\
+padding: 16px;\
+display: flex;\
+flex-direction: column;\
+gap: 10px;\
+\}\
+\
+.msg \{\
+max-width: 80%;\
+padding: 9px 13px;\
+border-radius: 10px;\
+font-size: 0.82rem;\
+line-height: 1.4;\
+\}\
+\
+.msg-bot \{\
+background: rgba(13,27,42,0.6);\
+border: 1px solid rgba(201,169,110,0.1);\
+align-self: flex-start;\
+color: rgba(250,248,244,0.9);\
+\}\
+\
+.msg-user \{\
+background: rgba(201,169,110,0.2);\
+border: 1px solid rgba(201,169,110,0.2);\
+align-self: flex-end;\
+color: var(\'96white);\
+\}\
+\
+.chat-input-row \{\
+padding: 12px 14px;\
+border-top: 1px solid rgba(201,169,110,0.1);\
+display: flex;\
+gap: 8px;\
+\}\
+\
+.chat-input-row input \{\
+flex: 1;\
+padding: 8px 12px;\
+font-size: 0.82rem;\
+\}\
+\
+.chat-send \{\
+background: var(\'96sand);\
+color: var(\'96navy);\
+border: none;\
+border-radius: 7px;\
+width: 34px;\
+height: 34px;\
+cursor: pointer;\
+font-size: 1rem;\
+display: flex;\
+align-items: center;\
+justify-content: center;\
+transition: background 0.15s;\
+\}\
+\
+.chat-send:hover \{ background: #d4b07a; \}\
+\
+/* \uc0\u9472 \u9472  SECTION visibility \u9472 \u9472  */\
+.section \{ display: none; \}\
+.section.active \{ display: block; \}\
+\
+/* \uc0\u9472 \u9472  GRID LAYOUTS \u9472 \u9472  */\
+.two-col \{ display: grid; grid-template-columns: 1fr 1fr; gap: 20px; \}\
+.three-col \{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; \}\
+\
+.flex-between \{\
+display: flex;\
+align-items: center;\
+justify-content: space-between;\
+margin-bottom: 16px;\
+\}\
+\
+/* \uc0\u9472 \u9472  SETTINGS \u9472 \u9472  */\
+.settings-section \{\
+margin-bottom: 28px;\
+\}\
+\
+.settings-title \{\
+font-family: \'91Playfair Display\'92, serif;\
+font-size: 1rem;\
+color: var(\'96sand);\
+margin-bottom: 16px;\
+padding-bottom: 8px;\
+border-bottom: 1px solid rgba(201,169,110,0.12);\
+\}\
+\
+.unit-type-config \{\
+background: rgba(13,27,42,0.5);\
+border: 1px solid rgba(201,169,110,0.12);\
+border-radius: 8px;\
+padding: 16px;\
+margin-bottom: 12px;\
+\}\
+\
+.unit-type-config .type-header \{\
+display: flex;\
+justify-content: space-between;\
+align-items: center;\
+margin-bottom: 12px;\
+\}\
+\
+.type-name-badge \{\
+background: rgba(201,169,110,0.15);\
+color: var(\'96sand);\
+padding: 4px 12px;\
+border-radius: 20px;\
+font-size: 0.78rem;\
+font-weight: 600;\
+\}\
+\
+/* \uc0\u9472 \u9472  SCROLLBAR \u9472 \u9472  */\
+::-webkit-scrollbar \{ width: 5px; height: 5px; \}\
+::-webkit-scrollbar-track \{ background: transparent; \}\
+::-webkit-scrollbar-thumb \{ background: rgba(201,169,110,0.2); border-radius: 3px; \}\
+\
+/* \uc0\u9472 \u9472  TOAST \u9472 \u9472  */\
+.toast \{\
+position: fixed;\
+bottom: 90px;\
+right: 24px;\
+background: var(\'96navy-mid);\
+border: 1px solid rgba(201,169,110,0.2);\
+border-radius: 8px;\
+padding: 12px 18px;\
+font-size: 0.83rem;\
+color: var(\'96white);\
+box-shadow: var(\'96shadow-lg);\
+z-index: 999;\
+animation: slideUp 0.25s ease;\
+display: flex;\
+align-items: center;\
+gap: 10px;\
+max-width: 320px;\
+\}\
+\
+.toast.success \{ border-left: 3px solid #4caf8a; \}\
+.toast.error \{ border-left: 3px solid #e57373; \}\
+.toast.info \{ border-left: 3px solid var(\'96sand); \}\
+\
+.conflict-banner \{\
+background: rgba(192,57,43,0.15);\
+border: 1px solid rgba(192,57,43,0.3);\
+border-radius: 8px;\
+padding: 12px 16px;\
+font-size: 0.83rem;\
+color: #e57373;\
+margin-bottom: 16px;\
+display: flex;\
+align-items: center;\
+gap: 8px;\
+\}\
+\
+.availability-grid \{\
+display: grid;\
+grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));\
+gap: 8px;\
+margin-top: 12px;\
+\}\
+\
+.avail-cell \{\
+padding: 8px 10px;\
+border-radius: 6px;\
+font-size: 0.75rem;\
+text-align: center;\
+border: 1px solid rgba(201,169,110,0.15);\
+\}\
+\
+.avail-cell.free \{ background: rgba(46,125,94,0.12); color: #4caf8a; border-color: rgba(46,125,94,0.25); \}\
+.avail-cell.busy \{ background: rgba(192,57,43,0.12); color: #e57373; border-color: rgba(192,57,43,0.25); \}\
+\
+.empty-state \{\
+text-align: center;\
+padding: 40px;\
+color: var(\'96text-muted);\
+font-size: 0.88rem;\
+\}\
+\
+.empty-state .icon \{ font-size: 2.5rem; margin-bottom: 12px; \}\
+\
+/* Checkin workflow */\
+.checkin-steps \{\
+display: flex;\
+gap: 8px;\
+margin-bottom: 20px;\
+\}\
+\
+.step-dot \{\
+width: 28px; height: 28px;\
+border-radius: 50%;\
+background: rgba(201,169,110,0.1);\
+border: 1.5px solid rgba(201,169,110,0.2);\
+display: flex;\
+align-items: center;\
+justify-content: center;\
+font-size: 0.75rem;\
+color: var(\'96text-muted);\
+\}\
+\
+.step-dot.done \{\
+background: rgba(46,125,94,0.2);\
+border-color: #4caf8a;\
+color: #4caf8a;\
+\}\
+\
+.step-dot.active \{\
+background: rgba(201,169,110,0.2);\
+border-color: var(\'96sand);\
+color: var(\'96sand);\
+\}\
+\
+/* Cajita de detalles al clickar una unidad */\
+.unit-detail-row \{\
+display: grid;\
+grid-template-columns: 1fr 1fr;\
+gap: 8px;\
+font-size: 0.82rem;\
+\}\
+\
+.detail-item \{ display: flex; flex-direction: column; gap: 2px; \}\
+.detail-item .dl \{ font-size: 0.68rem; color: var(\'96text-muted); text-transform: uppercase; letter-spacing: 0.07em; \}\
+.detail-item .dv \{ color: var(\'96white); font-weight: 500; \}\
+\
+</style>\
+</head>\
+<body>\
+\
+<!-- 
+\f1 \'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54
+\f0 \
+     CONFIGURACI\'d3N \'97 solo editar esta secci\'f3n\
+     para adaptar el sistema a otro alojamiento\
+
+\f1 \'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54
+\f0  -->\
+\
+<script>\
+const CONFIG = \{\
+  nombre: "Caba\'f1as Puerto Delf\'edn",\
+  subtitulo: "Sistema de Gesti\'f3n",\
+  chatbotNombre: "Marina",\
+  chatbotAvatar: "M",\
+  horarioCheckin: "15:00",\
+  horarioCheckout: "10:00",\
+  moneda: "ARS",\
+  // \uc0\u9472 \u9472  TIPOS DE UNIDADES \u9472 \u9472 \
+  tipos: [\
+    \{\
+      id: "monoambiente",\
+      nombre: "Monoambiente",\
+      capacidad: 3,\
+      cantidad: 4,\
+      color: "#4caf8a",\
+      precioPorNoche: 170000,\
+      precioPorNocheCard: 212500,\
+    \},\
+    \{\
+      id: "dos_ambientes",\
+      nombre: "Dos Ambientes",\
+      capacidad: 4,\
+      cantidad: 4,\
+      color: "#64b5f6",\
+      precioPorNoche: 125000,\
+      precioPorNocheCard: 156250,\
+    \},\
+    \{\
+      id: "loft",\
+      nombre: "Loft",\
+      capacidad: 6,\
+      cantidad: 4,\
+      color: "#ce93d8",\
+      precioPorNoche: 166000,\
+      precioPorNocheCard: 207500,\
+    \}\
+  ],\
+  // \uc0\u9472 \u9472  PAGOS \u9472 \u9472 \
+  seniaPorcentaje: 30,\
+  cuentaBancaria: \{\
+    banco: "Banco Galicia",\
+    cbu: "0070340420000004575717",\
+    alias: "nomadpoint.sa",\
+    razonSocial: "NOMAD POINT ARGENTINA S.A.",\
+  \},\
+  // \uc0\u9472 \u9472  MASCOTAS \u9472 \u9472 \
+  admiteMascotas: true,\
+  maxMascotas: 2,\
+  // \uc0\u9472 \u9472  PILETA \u9472 \u9472 \
+  piletaDesde: "15/11",\
+  piletaHasta: "05/04",\
+  // \uc0\u9472 \u9472  ROLES \u9472 \u9472 \
+  roles: ["admin", "recepcion", "limpieza"],\
+\};\
+\
+// 
+\f1 \'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54
+\f0 \
+// ESTADO DE LA APP \'97 se almacena en memoria\
+// 
+\f1 \'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54
+\f0 \
+let state = \{\
+  currentUser: \{ nombre: "Admin", rol: "admin" \},\
+  reservas: [],\
+  unidades: [],\
+  chatHistory: [],\
+  activeSection: "dashboard",\
+  groqKey: localStorage.getItem("lodge_groq_key") || "",\
+\};\
+\
+// \uc0\u9472 \u9472  Generar unidades desde config \u9472 \u9472 \
+function initUnidades() \{\
+  state.unidades = [];\
+  let n = 1;\
+  CONFIG.tipos.forEach(tipo => \{\
+    for (let i = 0; i < tipo.cantidad; i++) \{\
+      state.unidades.push(\{\
+        id: `$\{tipo.id\}_$\{i+1\}`,\
+        numero: n++,\
+        tipo: tipo.id,\
+        nombre: `$\{tipo.nombre\} $\{i+1\}`,\
+        capacidad: tipo.capacidad,\
+        status: "disponible", // disponible | ocupada | reservada | mantenimiento\
+        huesped: null,\
+        reservaId: null,\
+      \});\
+    \}\
+  \});\
+\}\
+\
+// \uc0\u9472 \u9472  Datos demo \u9472 \u9472 \
+function loadDemoData() \{\
+  state.reservas = [\
+    \{\
+      id: "R001",\
+      unidadId: "monoambiente_1",\
+      titular: "Cecilia Luis",\
+      cuil: "27294618304",\
+      email: "ceci_luis@hotmail.com",\
+      direccion: "Patricios 336, Bernal",\
+      pasajeros: 2,\
+      mascotas: "1 mestizo chiquito",\
+      patente: "AF059LG",\
+      ingreso: "2026-03-21",\
+      egreso: "2026-03-24",\
+      noches: 3,\
+      tipoPago: "efectivo",\
+      totalBruto: 510000,\
+      senia: 99000,\
+      saldoPendiente: 411000,\
+      estado: "confirmada",\
+      notas: "",\
+      creadaEn: "2026-03-17T13:13:00",\
+    \},\
+    \{\
+      id: "R002",\
+      unidadId: "loft_1",\
+      titular: "Mart\'edn Garc\'eda",\
+      cuil: "",\
+      email: "",\
+      direccion: "",\
+      pasajeros: 2,\
+      mascotas: "2 perros",\
+      patente: "",\
+      ingreso: "2026-03-21",\
+      egreso: "2026-03-24",\
+      noches: 3,\
+      tipoPago: "efectivo",\
+      totalBruto: 375000,\
+      senia: 112500,\
+      saldoPendiente: 262500,\
+      estado: "pendiente",\
+      notas: "Tiene perros, confirm\'f3 fotos",\
+      creadaEn: "2026-03-20T17:56:00",\
+    \},\
+    \{\
+      id: "R003",\
+      unidadId: "dos_ambientes_1",\
+      titular: "Luc\'eda Fern\'e1ndez",\
+      cuil: "",\
+      email: "",\
+      direccion: "",\
+      pasajeros: 4,\
+      mascotas: "No",\
+      patente: "",\
+      ingreso: "2026-03-27",\
+      egreso: "2026-03-29",\
+      noches: 2,\
+      tipoPago: "tarjeta",\
+      totalBruto: 312500,\
+      senia: 93750,\
+      saldoPendiente: 218750,\
+      estado: "confirmada",\
+      notas: "",\
+      creadaEn: "2026-03-20T16:36:00",\
+    \},\
+  ];\
+\
+  // Aplicar estados a unidades\
+  state.unidades.forEach(u => \{\
+    const r = state.reservas.find(r => r.unidadId === u.id && r.estado !== "cancelada");\
+    if (r) \{\
+      const hoy = new Date().toISOString().split("T")[0];\
+      if (r.ingreso <= hoy && r.egreso > hoy) \{\
+        u.status = "ocupada";\
+        u.huesped = r.titular;\
+        u.reservaId = r.id;\
+      \} else if (r.ingreso > hoy) \{\
+        u.status = "reservada";\
+        u.huesped = r.titular;\
+        u.reservaId = r.id;\
+      \}\
+    \}\
+  \});\
+\}\
+\
+// 
+\f1 \'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54
+\f0 \
+// UTILIDADES\
+// 
+\f1 \'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54
+\f0 \
+function formatARS(n) \{\
+  return "$" + Number(n).toLocaleString("es-AR");\
+\}\
+\
+function formatDate(s) \{\
+  if (!s) return "\'97";\
+  const [y,m,d] = s.split("-");\
+  return `$\{d\}/$\{m\}/$\{y\}`;\
+\}\
+\
+function diffDays(from, to) \{\
+  return Math.round((new Date(to) - new Date(from)) / 86400000);\
+\}\
+\
+function genId() \{\
+  return "R" + Date.now().toString().slice(-6);\
+\}\
+\
+function toast(msg, type="info") \{\
+  const t = document.createElement("div");\
+  t.className = `toast $\{type\}`;\
+  const icons = \{ success: "
+\f2 \uc0\u10003 
+\f0 ", error: "
+\f3 \uc0\u10005 
+\f0 ", info: "
+\f4 \uc0\u8505 
+\f0 " \};\
+  t.innerHTML = `<span>$\{icons[type]||"
+\f4 \uc0\u8505 
+\f0 "\}</span><span>$\{msg\}</span>`;\
+  document.body.appendChild(t);\
+  setTimeout(() => t.remove(), 3000);\
+\}\
+\
+function getUnidad(id) \{\
+  return state.unidades.find(u => u.id === id);\
+\}\
+\
+function getUnidadesByTipo(tipoId) \{\
+  return state.unidades.filter(u => u.tipo === tipoId);\
+\}\
+\
+function getTipo(id) \{\
+  return CONFIG.tipos.find(t => t.id === id);\
+\}\
+\
+// Verificar conflictos de reserva\
+function checkConflict(unidadId, ingreso, egreso, excludeId=null) \{\
+  return state.reservas.some(r => \{\
+    if (r.id === excludeId) return false;\
+    if (r.unidadId !== unidadId) return false;\
+    if (r.estado === "cancelada") return false;\
+    return r.ingreso < egreso && r.egreso > ingreso;\
+  \});\
+\}\
+\
+// Stats\
+function getStats() \{\
+  const total = state.unidades.length;\
+  const ocupadas = state.unidades.filter(u => u.status === "ocupada").length;\
+  const reservadas = state.unidades.filter(u => u.status === "reservada").length;\
+  const disponibles = state.unidades.filter(u => u.status === "disponible").length;\
+  const hoy = new Date().toISOString().split("T")[0];\
+  const checkinsHoy = state.reservas.filter(r => r.ingreso === hoy && r.estado !== "cancelada").length;\
+  const checkoutsHoy = state.reservas.filter(r => r.egreso === hoy && r.estado !== "cancelada").length;\
+  const pendientes = state.reservas.filter(r => r.estado === "pendiente").length;\
+  const ingresosMes = state.reservas\
+    .filter(r => r.estado !== "cancelada")\
+    .reduce((s,r) => s + r.senia, 0);\
+  return \{ total, ocupadas, reservadas, disponibles, checkinsHoy, checkoutsHoy, pendientes, ingresosMes \};\
+\}\
+</script>\
+\
+<!-- 
+\f1 \'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54
+\f0 \
+     HTML SHELL\
+
+\f1 \'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54
+\f0  -->\
+\
+<!-- SIDEBAR -->\
+\
+<div id="sidebar">\
+  <div class="sidebar-logo">\
+    <div class="prop-name" id="sb-prop-name"></div>\
+    <div class="prop-subtitle" id="sb-prop-sub"></div>\
+  </div>\
+  <nav class="sidebar-nav">\
+    <div class="nav-section">Principal</div>\
+    <div class="nav-item active" onclick="navigate('dashboard')">\
+      <span class="icon">
+\f5 \uc0\u11041 
+\f0 </span> Dashboard\
+    </div>\
+    <div class="nav-item" onclick="navigate('mapa')">\
+      <span class="icon">
+\f4 \uc0\u8862 
+\f0 </span> Mapa de unidades\
+    </div>\
+    <div class="nav-item" onclick="navigate('reservas')">\
+      <span class="icon">
+\f6 \uc0\u55357 \u56523 
+\f0 </span> Reservas\
+    </div>\
+    <div class="nav-item" onclick="navigate('checkin')">\
+      <span class="icon">
+\f2 \uc0\u10003 
+\f0 </span> Check-in / out\
+    </div>\
+    <div class="nav-section">Finanzas</div>\
+    <div class="nav-item" onclick="navigate('pagos')">\
+      <span class="icon">$</span> Pagos y se\'f1as\
+    </div>\
+    <div class="nav-section">Sistema</div>\
+    <div class="nav-item" onclick="navigate('config')">\
+      <span class="icon">
+\f7 \uc0\u9881 
+\f0 </span> Configuraci\'f3n\
+    </div>\
+  </nav>\
+  <div class="sidebar-footer">\
+    <div id="sb-user"></div>\
+    <div style="margin-top:2px;font-size:0.65rem;opacity:0.5">v1.0 \'b7 Lodge Manager</div>\
+  </div>\
+</div>\
+\
+<!-- MAIN -->\
+\
+<div id="main">\
+  <div class="topbar">\
+    <div class="topbar-title" id="topbar-title">Dashboard</div>\
+    <div style="display:flex;align-items:center;gap:16px">\
+      <div class="topbar-date" id="topbar-date"></div>\
+      <button class="btn btn-primary btn-sm" onclick="openModalNuevaReserva()">+ Nueva reserva</button>\
+    </div>\
+  </div>\
+\
+  <div class="content">\
+\
+```\
+<!-- \uc0\u9472 \u9472  DASHBOARD \u9472 \u9472  -->\
+<div id="section-dashboard" class="section active">\
+  <div class="stats-grid" id="stats-grid"></div>\
+  <div class="two-col">\
+    <div class="card">\
+      <div class="card-title">Llegadas y salidas hoy</div>\
+      <div id="hoy-list"></div>\
+    </div>\
+    <div class="card">\
+      <div class="card-title">Reservas pendientes de confirmaci\'f3n</div>\
+      <div id="pendientes-list"></div>\
+    </div>\
+  </div>\
+  <div style="margin-top:20px" class="card">\
+    <div class="card-title">Vista r\'e1pida de unidades</div>\
+    <div id="mini-map"></div>\
+  </div>\
+</div>\
+\
+<!-- \uc0\u9472 \u9472  MAPA \u9472 \u9472  -->\
+<div id="section-mapa" class="section">\
+  <div class="flex-between">\
+    <div class="legend" id="map-legend"></div>\
+    <button class="btn btn-primary btn-sm" onclick="openModalNuevaReserva()">+ Nueva reserva</button>\
+  </div>\
+  <div id="mapa-grid"></div>\
+</div>\
+\
+<!-- \uc0\u9472 \u9472  RESERVAS \u9472 \u9472  -->\
+<div id="section-reservas" class="section">\
+  <div class="flex-between">\
+    <div style="display:flex;gap:8px">\
+      <input type="text" id="search-reservas" placeholder="Buscar por nombre, unidad..." oninput="renderReservas()" style="width:240px;">\
+      <select id="filter-estado" onchange="renderReservas()" style="width:140px;">\
+        <option value="">Todos los estados</option>\
+        <option value="confirmada">Confirmadas</option>\
+        <option value="pendiente">Pendientes</option>\
+        <option value="cancelada">Canceladas</option>\
+      </select>\
+    </div>\
+    <button class="btn btn-primary btn-sm" onclick="openModalNuevaReserva()">+ Nueva reserva</button>\
+  </div>\
+  <div class="card" style="margin-top:16px">\
+    <div class="table-wrap">\
+      <table>\
+        <thead>\
+          <tr>\
+            <th>ID</th>\
+            <th>Titular</th>\
+            <th>Unidad</th>\
+            <th>Ingreso</th>\
+            <th>Egreso</th>\
+            <th>Noches</th>\
+            <th>Total</th>\
+            <th>Se\'f1a</th>\
+            <th>Estado</th>\
+            <th></th>\
+          </tr>\
+        </thead>\
+        <tbody id="reservas-tbody"></tbody>\
+      </table>\
+    </div>\
+  </div>\
+</div>\
+\
+<!-- \uc0\u9472 \u9472  CHECKIN \u9472 \u9472  -->\
+<div id="section-checkin" class="section">\
+  <div class="two-col">\
+    <div class="card">\
+      <div class="card-title">Check-in pendientes hoy</div>\
+      <div id="checkin-list"></div>\
+    </div>\
+    <div class="card">\
+      <div class="card-title">Check-out pendientes hoy</div>\
+      <div id="checkout-list"></div>\
+    </div>\
+  </div>\
+</div>\
+\
+<!-- \uc0\u9472 \u9472  PAGOS \u9472 \u9472  -->\
+<div id="section-pagos" class="section">\
+  <div class="stats-grid" id="pagos-stats"></div>\
+  <div class="card" style="margin-top:20px">\
+    <div class="card-title">Se\'f1as registradas</div>\
+    <div class="table-wrap">\
+      <table>\
+        <thead>\
+          <tr>\
+            <th>Reserva</th>\
+            <th>Titular</th>\
+            <th>Unidad</th>\
+            <th>Se\'f1a</th>\
+            <th>Saldo</th>\
+            <th>Tipo pago</th>\
+            <th>Estado</th>\
+          </tr>\
+        </thead>\
+        <tbody id="pagos-tbody"></tbody>\
+      </table>\
+    </div>\
+  </div>\
+  <div class="card" style="margin-top:16px">\
+    <div class="card-title">Datos bancarios para se\'f1as</div>\
+    <div class="pago-box" id="banco-info"></div>\
+  </div>\
+</div>\
+\
+<!-- \uc0\u9472 \u9472  CONFIG \u9472 \u9472  -->\
+<div id="section-config" class="section">\
+  <div class="two-col">\
+    <div>\
+      <div class="settings-section">\
+        <div class="settings-title">Propiedad</div>\
+        <div class="form-grid">\
+          <div class="field">\
+            <label>Nombre</label>\
+            <input id="cfg-nombre" type="text">\
+          </div>\
+          <div class="field">\
+            <label>Nombre del chatbot</label>\
+            <input id="cfg-chatbot" type="text">\
+          </div>\
+          <div class="field">\
+            <label>Check-in</label>\
+            <input id="cfg-checkin" type="time">\
+          </div>\
+          <div class="field">\
+            <label>Check-out</label>\
+            <input id="cfg-checkout" type="time">\
+          </div>\
+        </div>\
+        <div style="margin-top:16px">\
+          <button class="btn btn-primary btn-sm" onclick="saveConfig()">Guardar cambios</button>\
+        </div>\
+      </div>\
+      <div class="settings-section">\
+        <div class="settings-title">API Key Groq (chatbot)</div>\
+        <div class="field">\
+          <label>Groq API Key</label>\
+          <input id="cfg-groq" type="password" placeholder="gsk_...">\
+        </div>\
+        <div style="margin-top:12px">\
+          <button class="btn btn-ghost btn-sm" onclick="saveGroqKey()">Guardar key</button>\
+        </div>\
+      </div>\
+    </div>\
+    <div>\
+      <div class="settings-section">\
+        <div class="settings-title">Tipos de unidades</div>\
+        <div id="tipos-config"></div>\
+      </div>\
+      <div class="settings-section">\
+        <div class="settings-title">Datos bancarios</div>\
+        <div class="form-grid">\
+          <div class="field">\
+            <label>Banco</label>\
+            <input id="cfg-banco" type="text">\
+          </div>\
+          <div class="field">\
+            <label>Alias</label>\
+            <input id="cfg-alias" type="text">\
+          </div>\
+          <div class="field span2">\
+            <label>CBU</label>\
+            <input id="cfg-cbu" type="text">\
+          </div>\
+          <div class="field span2">\
+            <label>Raz\'f3n social</label>\
+            <input id="cfg-razon" type="text">\
+          </div>\
+        </div>\
+        <div style="margin-top:12px">\
+          <button class="btn btn-ghost btn-sm" onclick="saveBanco()">Guardar datos bancarios</button>\
+        </div>\
+      </div>\
+    </div>\
+  </div>\
+</div>\
+```\
+\
+  </div>\
+</div>\
+\
+<!-- \uc0\u9472 \u9472  CHATBOT FLOTANTE \u9472 \u9472  -->\
+\
+<div id="chatbot-panel">\
+  <div class="chat-window" id="chat-window">\
+    <div class="chat-header">\
+      <div class="chat-avatar" id="chat-avatar"></div>\
+      <div>\
+        <div class="chat-name" id="chat-name"></div>\
+        <div class="chat-status">\uc0\u9679  En l\'ednea</div>\
+      </div>\
+    </div>\
+    <div class="chat-messages" id="chat-messages"></div>\
+    <div class="chat-input-row">\
+      <input type="text" id="chat-input" placeholder="Escrib\'ed tu consulta..." onkeydown="if(event.key==='Enter')sendChat()">\
+      <button class="chat-send" onclick="sendChat()">
+\f2 \uc0\u8593 
+\f0 </button>\
+    </div>\
+  </div>\
+  <div class="chat-bubble" onclick="toggleChat()">
+\f6 \uc0\u55357 \u56364 
+\f0 </div>\
+</div>\
+\
+<!-- 
+\f1 \'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54
+\f0 \
+     MODALES\
+
+\f1 \'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54
+\f0  -->\
+\
+<!-- Modal Nueva Reserva -->\
+\
+<div id="modal-reserva" style="display:none">\
+  <div class="modal-backdrop" onclick="closeModal('modal-reserva')">\
+    <div class="modal" onclick="event.stopPropagation()">\
+      <div class="modal-title">Nueva reserva</div>\
+      <div id="conflict-banner" style="display:none" class="conflict-banner">\
+        
+\f6 \uc0\u9888 \u65039 
+\f0  <span id="conflict-msg"></span>\
+      </div>\
+      <div class="form-grid">\
+        <div class="field">\
+          <label>Tipo de unidad</label>\
+          <select id="r-tipo" onchange="onTipoChange()">\
+            <option value="">\'97 Seleccionar \'97</option>\
+          </select>\
+        </div>\
+        <div class="field">\
+          <label>Unidad espec\'edfica</label>\
+          <select id="r-unidad"></select>\
+        </div>\
+        <div class="field">\
+          <label>Fecha ingreso</label>\
+          <input type="date" id="r-ingreso" onchange="calcReserva()">\
+        </div>\
+        <div class="field">\
+          <label>Fecha egreso</label>\
+          <input type="date" id="r-egreso" onchange="calcReserva()">\
+        </div>\
+        <div class="field span2" style="display:flex;flex-direction:row;gap:8px;align-items:flex-end">\
+          <div style="flex:1">\
+            <label>Noches</label>\
+            <input type="number" id="r-noches" readonly style="background:rgba(201,169,110,0.05)">\
+          </div>\
+          <div style="flex:1">\
+            <label>Tipo de pago</label>\
+            <select id="r-pago" onchange="calcReserva()">\
+              <option value="efectivo">Efectivo (con descuento)</option>\
+              <option value="tarjeta">Tarjeta (3/6 cuotas s/i)</option>\
+            </select>\
+          </div>\
+        </div>\
+      </div>\
+\
+```\
+  <div class="pago-box" id="r-calculo" style="margin:16px 0">\
+    <div class="pago-row"><span class="pago-label">Total</span><span class="pago-value" id="r-total">\'97</span></div>\
+    <div class="pago-row"><span class="pago-label">Se\'f1a (30%)</span><span class="pago-value sand" id="r-senia">\'97</span></div>\
+    <div class="pago-row"><span class="pago-label">Saldo al ingreso</span><span class="pago-value" id="r-saldo">\'97</span></div>\
+  </div>\
+\
+  <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:12px;text-transform:uppercase;letter-spacing:0.08em">Datos del titular</div>\
+  <div class="form-grid">\
+    <div class="field">\
+      <label>Nombre y apellido</label>\
+      <input type="text" id="r-titular">\
+    </div>\
+    <div class="field">\
+      <label>CUIL</label>\
+      <input type="text" id="r-cuil">\
+    </div>\
+    <div class="field">\
+      <label>Email</label>\
+      <input type="email" id="r-email">\
+    </div>\
+    <div class="field">\
+      <label>Localidad</label>\
+      <input type="text" id="r-localidad">\
+    </div>\
+    <div class="field">\
+      <label>Pasajeros</label>\
+      <input type="number" id="r-pasajeros" min="1" value="2">\
+    </div>\
+    <div class="field">\
+      <label>Mascotas</label>\
+      <input type="text" id="r-mascotas" placeholder="No / descripci\'f3n">\
+    </div>\
+    <div class="field">\
+      <label>Patente veh\'edculo</label>\
+      <input type="text" id="r-patente">\
+    </div>\
+    <div class="field">\
+      <label>Notas</label>\
+      <input type="text" id="r-notas">\
+    </div>\
+  </div>\
+\
+  <div class="modal-footer">\
+    <button class="btn btn-ghost" onclick="closeModal('modal-reserva')">Cancelar</button>\
+    <button class="btn btn-primary" onclick="guardarReserva()">Guardar reserva</button>\
+  </div>\
+</div>\
+```\
+\
+  </div>\
+</div>\
+\
+<!-- Modal Detalle Reserva -->\
+\
+<div id="modal-detalle" style="display:none">\
+  <div class="modal-backdrop" onclick="closeModal('modal-detalle')">\
+    <div class="modal" onclick="event.stopPropagation()">\
+      <div class="modal-title" id="detalle-title">Reserva</div>\
+      <div id="detalle-body"></div>\
+      <div class="modal-footer" id="detalle-footer"></div>\
+    </div>\
+  </div>\
+</div>\
+\
+<!-- Modal Unidad -->\
+\
+<div id="modal-unidad" style="display:none">\
+  <div class="modal-backdrop" onclick="closeModal('modal-unidad')">\
+    <div class="modal" onclick="event.stopPropagation()">\
+      <div class="modal-title" id="unidad-title">Unidad</div>\
+      <div id="unidad-body"></div>\
+      <div class="modal-footer" id="unidad-footer"></div>\
+    </div>\
+  </div>\
+</div>\
+\
+<!-- 
+\f1 \'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54
+\f0 \
+     L\'d3GICA DE LA APP\
+
+\f1 \'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54\'a8\'54
+\f0  -->\
+\
+<script>\
+// \uc0\u9472 \u9472  INIT \u9472 \u9472 \
+window.addEventListener("DOMContentLoaded", () => \{\
+  initUnidades();\
+  loadDemoData();\
+  renderSidebar();\
+  renderDashboard();\
+  renderMapa();\
+  renderReservas();\
+  renderCheckin();\
+  renderPagos();\
+  renderConfig();\
+  updateTopbarDate();\
+  initChatbot();\
+\});\
+\
+function renderSidebar() \{\
+  document.getElementById("sb-prop-name").textContent = CONFIG.nombre;\
+  document.getElementById("sb-prop-sub").textContent = CONFIG.subtitulo;\
+  document.getElementById("sb-user").textContent = state.currentUser.nombre + " \'b7 " + state.currentUser.rol;\
+\}\
+\
+function updateTopbarDate() \{\
+  const now = new Date();\
+  document.getElementById("topbar-date").textContent = now.toLocaleDateString("es-AR", \{ weekday:"long", day:"numeric", month:"long" \});\
+\}\
+\
+function navigate(section) \{\
+  state.activeSection = section;\
+  document.querySelectorAll(".section").forEach(s => s.classList.remove("active"));\
+  document.getElementById("section-" + section).classList.add("active");\
+  document.querySelectorAll(".nav-item").forEach(n => n.classList.remove("active"));\
+  event.currentTarget.classList.add("active");\
+  const titles = \{ dashboard:"Dashboard", mapa:"Mapa de unidades", reservas:"Reservas", checkin:"Check-in / out", pagos:"Pagos y se\'f1as", config:"Configuraci\'f3n" \};\
+  document.getElementById("topbar-title").textContent = titles[section] || section;\
+  if (section === "dashboard") renderDashboard();\
+  if (section === "mapa") renderMapa();\
+  if (section === "reservas") renderReservas();\
+  if (section === "checkin") renderCheckin();\
+  if (section === "pagos") renderPagos();\
+\}\
+\
+// \uc0\u9472 \u9472  DASHBOARD \u9472 \u9472 \
+function renderDashboard() \{\
+  const s = getStats();\
+  document.getElementById("stats-grid").innerHTML = `\
+    <div class="stat-card">\
+      <div class="stat-label">Ocupaci\'f3n actual</div>\
+      <div class="stat-value sand">$\{Math.round(s.ocupadas/s.total*100)\}%</div>\
+      <div class="stat-sub">$\{s.ocupadas\} de $\{s.total\} unidades</div>\
+    </div>\
+    <div class="stat-card">\
+      <div class="stat-label">Disponibles</div>\
+      <div class="stat-value success">$\{s.disponibles\}</div>\
+      <div class="stat-sub">unidades libres</div>\
+    </div>\
+    <div class="stat-card">\
+      <div class="stat-label">Hoy</div>\
+      <div class="stat-value">$\{s.checkinsHoy\} <span style="font-size:1rem;color:var(--text-muted)">
+\f2 \uc0\u10003 
+\f0  / $\{s.checkoutsHoy\} 
+\f3 \uc0\u10007 
+\f0 </span></div>\
+      <div class="stat-sub">check-in / check-out</div>\
+    </div>\
+    <div class="stat-card">\
+      <div class="stat-label">Se\'f1as cobradas</div>\
+      <div class="stat-value sand" style="font-size:1.4rem">$\{formatARS(s.ingresosMes)\}</div>\
+      <div class="stat-sub">$\{s.pendientes\} reservas pendientes</div>\
+    </div>\
+  `;\
+\
+  const hoy = new Date().toISOString().split("T")[0];\
+  const llegadas = state.reservas.filter(r => r.ingreso === hoy && r.estado !== "cancelada");\
+  const salidas = state.reservas.filter(r => r.egreso === hoy && r.estado !== "cancelada");\
+\
+  document.getElementById("hoy-list").innerHTML = llegadas.length === 0 && salidas.length === 0\
+    ? `<div class="empty-state"><div>Sin movimientos hoy</div></div>`\
+    : [...llegadas.map(r => itemRow("
+\f2 \uc0\u10003 
+\f0  IN", r, "success")), ...salidas.map(r => itemRow("
+\f3 \uc0\u10007 
+\f0  OUT", r, "warning"))].join("");\
+\
+  const pendientes = state.reservas.filter(r => r.estado === "pendiente");\
+  document.getElementById("pendientes-list").innerHTML = pendientes.length === 0\
+    ? `<div class="empty-state"><div>Sin pendientes</div></div>`\
+    : pendientes.map(r => itemRow("
+\f6 \uc0\u9203 
+\f0 ", r, "warning")).join("");\
+\
+  // Mini mapa\
+  let miniHtml = `<div style="display:flex;gap:8px;flex-wrap:wrap;">`;\
+  state.unidades.forEach(u => \{\
+    const colors = \{ disponible:"rgba(46,125,94,0.3)", ocupada:"rgba(192,57,43,0.4)", reservada:"rgba(212,133,10,0.4)", mantenimiento:"rgba(107,122,141,0.3)" \};\
+    miniHtml += `<div onclick="openModalUnidad('$\{u.id\}')" style="width:42px;height:42px;border-radius:6px;background:$\{colors[u.status]\};border:1.5px solid $\{colors[u.status]\};display:flex;align-items:center;justify-content:center;font-size:0.7rem;cursor:pointer;font-weight:600;color:var(--white);transition:transform 0.15s" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'" title="$\{u.nombre\}">$\{u.numero\}</div>`;\
+  \});\
+  miniHtml += "</div>";\
+  document.getElementById("mini-map").innerHTML = miniHtml;\
+\}\
+\
+function itemRow(label, r, type) \{\
+  const u = getUnidad(r.unidadId);\
+  return `<div onclick="openModalDetalle('$\{r.id\}')" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:7px;cursor:pointer;margin-bottom:6px;background:rgba(13,27,42,0.4);border:1px solid rgba(255,255,255,0.05)" onmouseover="this.style.background='rgba(201,169,110,0.06)'" onmouseout="this.style.background='rgba(13,27,42,0.4)'">\
+    <div>\
+      <span class="tag tag-$\{type==='success'?'checkin':type==='warning'?'pendiente':'checkout'\}" style="margin-right:8px">$\{label\}</span>\
+      <span style="font-size:0.85rem">$\{r.titular\}</span>\
+    </div>\
+    <span style="font-size:0.75rem;color:var(--text-muted)">$\{u ? u.nombre : r.unidadId\}</span>\
+  </div>`;\
+\}\
+\
+// \uc0\u9472 \u9472  MAPA \u9472 \u9472 \
+function renderMapa() \{\
+  const legend = `\
+    <div class="legend-item"><div class="legend-dot" style="background:rgba(46,125,94,0.5)"></div> Disponible</div>\
+    <div class="legend-item"><div class="legend-dot" style="background:rgba(192,57,43,0.5)"></div> Ocupada</div>\
+    <div class="legend-item"><div class="legend-dot" style="background:rgba(212,133,10,0.5)"></div> Reservada</div>\
+    <div class="legend-item"><div class="legend-dot" style="background:rgba(107,122,141,0.4)"></div> Mantenimiento</div>\
+  `;\
+  document.getElementById("map-legend").innerHTML = legend;\
+\
+  let html = "";\
+  CONFIG.tipos.forEach(tipo => \{\
+    const unidades = getUnidadesByTipo(tipo.id);\
+    html += `<div class="unit-type-section">\
+      <div class="unit-type-label">$\{tipo.nombre\} \'b7 Cap. $\{tipo.capacidad\} pers.</div>\
+      <div class="units-row">`;\
+    unidades.forEach(u => \{\
+      const badges = \{ disponible:"available", ocupada:"occupied", reservada:"reserved", mantenimiento:"maintenance" \};\
+      const badgeLabels = \{ disponible:"Disponible", ocupada:"Ocupada", reservada:"Reservada", mantenimiento:"Mantenimiento" \};\
+      html += `<div class="unit-card $\{badges[u.status]\}" onclick="openModalUnidad('$\{u.id\}')">\
+        <div class="unit-number">$\{tipo.nombre\} #$\{u.id.split("_").pop()\}</div>\
+        <div class="unit-name">$\{u.nombre\}</div>\
+        <span class="unit-status-badge badge-$\{badges[u.status]\}">$\{badgeLabels[u.status]\}</span>\
+        $\{u.huesped ? `<div class="unit-guest">
+\f6 \uc0\u55357 \u56420 
+\f0  $\{u.huesped\}</div>` : ""\}\
+      </div>`;\
+    \});\
+    html += `</div></div>`;\
+  \});\
+  document.getElementById("mapa-grid").innerHTML = html;\
+\}\
+\
+// \uc0\u9472 \u9472  RESERVAS \u9472 \u9472 \
+function renderReservas() \{\
+  const q = (document.getElementById("search-reservas")?.value || "").toLowerCase();\
+  const estado = document.getElementById("filter-estado")?.value || "";\
+  let reservas = state.reservas;\
+  if (q) reservas = reservas.filter(r => r.titular.toLowerCase().includes(q) || r.id.toLowerCase().includes(q) || (getUnidad(r.unidadId)?.nombre||"").toLowerCase().includes(q));\
+  if (estado) reservas = reservas.filter(r => r.estado === estado);\
+  reservas = [...reservas].sort((a,b) => new Date(b.creadaEn) - new Date(a.creadaEn));\
+\
+  const tbody = document.getElementById("reservas-tbody");\
+  if (!tbody) return;\
+  if (reservas.length === 0) \{\
+    tbody.innerHTML = `<tr><td colspan="10"><div class="empty-state">Sin reservas</div></td></tr>`;\
+    return;\
+  \}\
+  tbody.innerHTML = reservas.map(r => \{\
+    const u = getUnidad(r.unidadId);\
+    const tagClass = \{ confirmada:"tag-confirmada", pendiente:"tag-pendiente", cancelada:"tag-cancelada" \};\
+    return `<tr onclick="openModalDetalle('$\{r.id\}')">\
+      <td><code style="font-size:0.75rem;opacity:0.6">$\{r.id\}</code></td>\
+      <td><strong>$\{r.titular\}</strong></td>\
+      <td>$\{u ? u.nombre : r.unidadId\}</td>\
+      <td>$\{formatDate(r.ingreso)\}</td>\
+      <td>$\{formatDate(r.egreso)\}</td>\
+      <td>$\{r.noches\}</td>\
+      <td>$\{formatARS(r.totalBruto)\}</td>\
+      <td><span style="color:$\{r.senia>0?'#4caf8a':'#e57373'\}">$\{formatARS(r.senia)\}</span></td>\
+      <td><span class="tag $\{tagClass[r.estado]||''\}">$\{r.estado\}</span></td>\
+      <td><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openModalDetalle('$\{r.id\}')">Ver</button></td>\
+    </tr>`;\
+  \}).join("");\
+\}\
+\
+// \uc0\u9472 \u9472  CHECKIN \u9472 \u9472 \
+function renderCheckin() \{\
+  const hoy = new Date().toISOString().split("T")[0];\
+  const llegadas = state.reservas.filter(r => r.ingreso === hoy && r.estado !== "cancelada");\
+  const salidas = state.reservas.filter(r => r.egreso === hoy && r.estado !== "cancelada");\
+\
+  const mkList = (arr, tipo) => arr.length === 0\
+    ? `<div class="empty-state"><div>Sin $\{tipo === "in" ? "llegadas" : "salidas"\} hoy</div></div>`\
+    : arr.map(r => \{\
+        const u = getUnidad(r.unidadId);\
+        return `<div style="padding:14px;border-radius:8px;background:rgba(13,27,42,0.5);border:1px solid rgba(201,169,110,0.1);margin-bottom:10px">\
+          <div style="display:flex;justify-content:space-between;margin-bottom:8px">\
+            <strong>$\{r.titular\}</strong>\
+            <span style="font-size:0.78rem;color:var(--text-muted)">$\{u?.nombre\}</span>\
+          </div>\
+          <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px">\
+            $\{r.pasajeros\} pasajeros \'b7 $\{r.mascotas !== "No" ? "
+\f6 \uc0\u55357 \u56382 
+\f0  " + r.mascotas : "Sin mascotas"\} \'b7 Saldo: $\{formatARS(r.saldoPendiente)\}\
+          </div>\
+          <button class="btn btn-primary btn-sm" onclick="doCheckin('$\{r.id\}','$\{tipo\}')">Registrar check-$\{tipo\}</button>\
+        </div>`;\
+      \}).join("");\
+\
+  document.getElementById("checkin-list").innerHTML = mkList(llegadas, "in");\
+  document.getElementById("checkout-list").innerHTML = mkList(salidas, "out");\
+\}\
+\
+function doCheckin(reservaId, tipo) \{\
+  const r = state.reservas.find(x => x.id === reservaId);\
+  if (!r) return;\
+  if (tipo === "in") \{\
+    r.estado = "confirmada";\
+    const u = getUnidad(r.unidadId);\
+    if (u) \{ u.status = "ocupada"; u.huesped = r.titular; u.reservaId = r.id; \}\
+    toast(`Check-in registrado: $\{r.titular\}`, "success");\
+  \} else \{\
+    const u = getUnidad(r.unidadId);\
+    if (u) \{ u.status = "disponible"; u.huesped = null; u.reservaId = null; \}\
+    toast(`Check-out registrado: $\{r.titular\}`, "success");\
+  \}\
+  renderCheckin();\
+  renderMapa();\
+  renderDashboard();\
+\}\
+\
+// \uc0\u9472 \u9472  PAGOS \u9472 \u9472 \
+function renderPagos() \{\
+  const activas = state.reservas.filter(r => r.estado !== "cancelada");\
+  const totalSenias = activas.reduce((s,r) => s + r.senia, 0);\
+  const totalSaldos = activas.reduce((s,r) => s + r.saldoPendiente, 0);\
+  const sinSenia = activas.filter(r => r.senia === 0).length;\
+\
+  const pg = document.getElementById("pagos-stats");\
+  if (pg) pg.innerHTML = `\
+    <div class="stat-card"><div class="stat-label">Se\'f1as cobradas</div><div class="stat-value sand" style="font-size:1.3rem">$\{formatARS(totalSenias)\}</div></div>\
+    <div class="stat-card"><div class="stat-label">Saldos pendientes</div><div class="stat-value" style="font-size:1.3rem">$\{formatARS(totalSaldos)\}</div></div>\
+    <div class="stat-card"><div class="stat-label">Sin se\'f1a</div><div class="stat-value danger">$\{sinSenia\}</div></div>\
+    <div class="stat-card"><div class="stat-label">Total proyectado</div><div class="stat-value" style="font-size:1.3rem">$\{formatARS(totalSenias+totalSaldos)\}</div></div>\
+  `;\
+\
+  const tb = document.getElementById("pagos-tbody");\
+  if (tb) tb.innerHTML = activas.map(r => \{\
+    const u = getUnidad(r.unidadId);\
+    return `<tr onclick="openModalDetalle('$\{r.id\}')">\
+      <td><code style="font-size:0.75rem;opacity:0.6">$\{r.id\}</code></td>\
+      <td>$\{r.titular\}</td>\
+      <td>$\{u?.nombre || "\'97"\}</td>\
+      <td><span style="color:#4caf8a">$\{formatARS(r.senia)\}</span></td>\
+      <td><span style="color:#ffb74d">$\{formatARS(r.saldoPendiente)\}</span></td>\
+      <td>$\{r.tipoPago === "tarjeta" ? "
+\f6 \uc0\u55357 \u56499 
+\f0  Tarjeta" : "
+\f6 \uc0\u55357 \u56501 
+\f0  Efectivo"\}</td>\
+      <td><span class="tag tag-$\{r.estado === 'confirmada'?'confirmada':'pendiente'\}">$\{r.estado\}</span></td>\
+    </tr>`;\
+  \}).join("");\
+\
+  const banco = document.getElementById("banco-info");\
+  if (banco) banco.innerHTML = `\
+    <div class="pago-row"><span class="pago-label">Banco</span><span class="pago-value">$\{CONFIG.cuentaBancaria.banco\}</span></div>\
+    <div class="pago-row"><span class="pago-label">Raz\'f3n social</span><span class="pago-value">$\{CONFIG.cuentaBancaria.razonSocial\}</span></div>\
+    <div class="pago-row"><span class="pago-label">CBU</span><span class="pago-value">$\{CONFIG.cuentaBancaria.cbu\}</span></div>\
+    <div class="pago-row"><span class="pago-label">Alias</span><span class="pago-value sand">$\{CONFIG.cuentaBancaria.alias\}</span></div>\
+    <div class="pago-row"><span class="pago-label">Se\'f1a requerida</span><span class="pago-value">$\{CONFIG.seniaPorcentaje\}% del total</span></div>\
+  `;\
+\}\
+\
+// \uc0\u9472 \u9472  CONFIG \u9472 \u9472 \
+function renderConfig() \{\
+  document.getElementById("cfg-nombre").value = CONFIG.nombre;\
+  document.getElementById("cfg-chatbot").value = CONFIG.chatbotNombre;\
+  document.getElementById("cfg-checkin").value = CONFIG.horarioCheckin;\
+  document.getElementById("cfg-checkout").value = CONFIG.horarioCheckout;\
+  document.getElementById("cfg-groq").value = state.groqKey ? "\'95\'95\'95\'95\'95\'95\'95\'95\'95\'95\'95\'95\'95\'95\'95\'95" : "";\
+  document.getElementById("cfg-banco").value = CONFIG.cuentaBancaria.banco;\
+  document.getElementById("cfg-alias").value = CONFIG.cuentaBancaria.alias;\
+  document.getElementById("cfg-cbu").value = CONFIG.cuentaBancaria.cbu;\
+  document.getElementById("cfg-razon").value = CONFIG.cuentaBancaria.razonSocial;\
+\
+  let tiposHtml = "";\
+  CONFIG.tipos.forEach(t => \{\
+    tiposHtml += `<div class="unit-type-config">\
+      <div class="type-header">\
+        <span class="type-name-badge">$\{t.nombre\}</span>\
+        <span style="font-size:0.78rem;color:var(--text-muted)">$\{t.cantidad\} unidades \'b7 $\{t.capacidad\} pers. max</span>\
+      </div>\
+      <div class="form-grid">\
+        <div class="field">\
+          <label>Precio/noche (efectivo)</label>\
+          <input type="number" value="$\{t.precioPorNoche\}" onchange="CONFIG.tipos.find(x=>x.id==='$\{t.id\}').precioPorNoche=+this.value">\
+        </div>\
+        <div class="field">\
+          <label>Precio/noche (tarjeta)</label>\
+          <input type="number" value="$\{t.precioPorNocheCard\}" onchange="CONFIG.tipos.find(x=>x.id==='$\{t.id\}').precioPorNocheCard=+this.value">\
+        </div>\
+      </div>\
+    </div>`;\
+  \});\
+  document.getElementById("tipos-config").innerHTML = tiposHtml;\
+\}\
+\
+function saveConfig() \{\
+  CONFIG.nombre = document.getElementById("cfg-nombre").value;\
+  CONFIG.chatbotNombre = document.getElementById("cfg-chatbot").value;\
+  CONFIG.horarioCheckin = document.getElementById("cfg-checkin").value;\
+  CONFIG.horarioCheckout = document.getElementById("cfg-checkout").value;\
+  renderSidebar();\
+  document.getElementById("chat-name").textContent = CONFIG.chatbotNombre;\
+  toast("Configuraci\'f3n guardada", "success");\
+\}\
+\
+function saveGroqKey() \{\
+  const v = document.getElementById("cfg-groq").value;\
+  if (v && v !== "\'95\'95\'95\'95\'95\'95\'95\'95\'95\'95\'95\'95\'95\'95\'95\'95") \{\
+    state.groqKey = v;\
+    localStorage.setItem("lodge_groq_key", v);\
+    toast("API key guardada", "success");\
+  \}\
+\}\
+\
+function saveBanco() \{\
+  CONFIG.cuentaBancaria.banco = document.getElementById("cfg-banco").value;\
+  CONFIG.cuentaBancaria.alias = document.getElementById("cfg-alias").value;\
+  CONFIG.cuentaBancaria.cbu = document.getElementById("cfg-cbu").value;\
+  CONFIG.cuentaBancaria.razonSocial = document.getElementById("cfg-razon").value;\
+  renderPagos();\
+  toast("Datos bancarios guardados", "success");\
+\}\
+\
+// \uc0\u9472 \u9472  MODAL NUEVA RESERVA \u9472 \u9472 \
+function openModalNuevaReserva(prefillUnidadId=null) \{\
+  const m = document.getElementById("modal-reserva");\
+  m.style.display = "flex";\
+\
+  // Poblar tipo select\
+  const ts = document.getElementById("r-tipo");\
+  ts.innerHTML = `<option value="">\'97 Seleccionar \'97</option>` + CONFIG.tipos.map(t => `<option value="$\{t.id\}">$\{t.nombre\} (cap. $\{t.capacidad\})</option>`).join("");\
+\
+  if (prefillUnidadId) \{\
+    const u = getUnidad(prefillUnidadId);\
+    if (u) \{\
+      ts.value = u.tipo;\
+      onTipoChange(prefillUnidadId);\
+    \}\
+  \} else \{\
+    document.getElementById("r-unidad").innerHTML = `<option value="">Primero seleccion\'e1 tipo</option>`;\
+  \}\
+\
+  document.getElementById("conflict-banner").style.display = "none";\
+  ["r-ingreso","r-egreso","r-titular","r-cuil","r-email","r-localidad","r-notas","r-patente","r-mascotas"].forEach(id => \{\
+    const el = document.getElementById(id);\
+    if (el) el.value = "";\
+  \});\
+  document.getElementById("r-pasajeros").value = 2;\
+  document.getElementById("r-pago").value = "efectivo";\
+  calcReserva();\
+\}\
+\
+function onTipoChange(forceUnidadId=null) \{\
+  const tipoId = document.getElementById("r-tipo").value;\
+  const us = document.getElementById("r-unidad");\
+  if (!tipoId) \{ us.innerHTML = `<option>Primero seleccion\'e1 tipo</option>`; return; \}\
+  const unidades = getUnidadesByTipo(tipoId);\
+  us.innerHTML = unidades.map(u => \{\
+    const ok = u.status === "disponible" || u.status === "reservada";\
+    return `<option value="$\{u.id\}" $\{forceUnidadId===u.id?'selected':''\} $\{!ok?'style="color:#e57373"':''\}>\
+      $\{u.nombre\} \'b7 $\{u.status\}\
+    </option>`;\
+  \}).join("");\
+  calcReserva();\
+\}\
+\
+function calcReserva() \{\
+  const ingreso = document.getElementById("r-ingreso").value;\
+  const egreso = document.getElementById("r-egreso").value;\
+  const tipoId = document.getElementById("r-tipo").value;\
+  const unidadId = document.getElementById("r-unidad").value;\
+  const pago = document.getElementById("r-pago").value;\
+\
+  const noches = (ingreso && egreso) ? diffDays(ingreso, egreso) : 0;\
+  document.getElementById("r-noches").value = noches > 0 ? noches : "";\
+\
+  // Conflict check\
+  const cb = document.getElementById("conflict-banner");\
+  if (unidadId && ingreso && egreso && noches > 0) \{\
+    const conflict = checkConflict(unidadId, ingreso, egreso);\
+    cb.style.display = conflict ? "flex" : "none";\
+    document.getElementById("conflict-msg").textContent = conflict ? "Esta unidad ya tiene una reserva en ese per\'edodo." : "";\
+  \} else \{\
+    cb.style.display = "none";\
+  \}\
+\
+  const tipo = tipoId ? getTipo(tipoId) : null;\
+  if (!tipo || noches <= 0) \{\
+    document.getElementById("r-total").textContent = "\'97";\
+    document.getElementById("r-senia").textContent = "\'97";\
+    document.getElementById("r-saldo").textContent = "\'97";\
+    return;\
+  \}\
+  const precioNoche = pago === "tarjeta" ? tipo.precioPorNocheCard : tipo.precioPorNoche;\
+  const total = precioNoche * noches;\
+  const senia = Math.round(total * CONFIG.seniaPorcentaje / 100);\
+  document.getElementById("r-total").textContent = formatARS(total);\
+  document.getElementById("r-senia").textContent = formatARS(senia);\
+  document.getElementById("r-saldo").textContent = formatARS(total - senia);\
+\}\
+\
+function guardarReserva() \{\
+  const ingreso = document.getElementById("r-ingreso").value;\
+  const egreso = document.getElementById("r-egreso").value;\
+  const unidadId = document.getElementById("r-unidad").value;\
+  const titular = document.getElementById("r-titular").value;\
+\
+  if (!ingreso || !egreso || !unidadId || !titular) \{\
+    toast("Complet\'e1 los campos obligatorios", "error"); return;\
+  \}\
+  const noches = diffDays(ingreso, egreso);\
+  if (noches <= 0) \{ toast("Las fechas no son v\'e1lidas", "error"); return; \}\
+  if (checkConflict(unidadId, ingreso, egreso)) \{ toast("Conflicto de fechas en esa unidad", "error"); return; \}\
+\
+  const tipoId = document.getElementById("r-tipo").value;\
+  const tipo = getTipo(tipoId);\
+  const pago = document.getElementById("r-pago").value;\
+  const precioNoche = pago === "tarjeta" ? tipo.precioPorNocheCard : tipo.precioPorNoche;\
+  const total = precioNoche * noches;\
+  const senia = Math.round(total * CONFIG.seniaPorcentaje / 100);\
+\
+  const reserva = \{\
+    id: genId(),\
+    unidadId,\
+    titular,\
+    cuil: document.getElementById("r-cuil").value,\
+    email: document.getElementById("r-email").value,\
+    direccion: "",\
+    localidad: document.getElementById("r-localidad").value,\
+    pasajeros: +document.getElementById("r-pasajeros").value,\
+    mascotas: document.getElementById("r-mascotas").value || "No",\
+    patente: document.getElementById("r-patente").value,\
+    ingreso, egreso, noches,\
+    tipoPago: pago,\
+    totalBruto: total,\
+    senia,\
+    saldoPendiente: total - senia,\
+    estado: "pendiente",\
+    notas: document.getElementById("r-notas").value,\
+    creadaEn: new Date().toISOString(),\
+  \};\
+\
+  state.reservas.push(reserva);\
+\
+  // Actualizar estado unidad\
+  const u = getUnidad(unidadId);\
+  if (u) \{\
+    u.status = "reservada";\
+    u.huesped = titular;\
+    u.reservaId = reserva.id;\
+  \}\
+\
+  closeModal("modal-reserva");\
+  renderDashboard();\
+  renderMapa();\
+  renderReservas();\
+  toast(`Reserva $\{reserva.id\} creada para $\{titular\}`, "success");\
+\}\
+\
+// \uc0\u9472 \u9472  MODAL DETALLE RESERVA \u9472 \u9472 \
+function openModalDetalle(reservaId) \{\
+  const r = state.reservas.find(x => x.id === reservaId);\
+  if (!r) return;\
+  const u = getUnidad(r.unidadId);\
+  document.getElementById("detalle-title").textContent = `Reserva $\{r.id\} \'b7 $\{r.titular\}`;\
+\
+  const tagClass = \{ confirmada:"tag-confirmada", pendiente:"tag-pendiente", cancelada:"tag-cancelada" \};\
+\
+  document.getElementById("detalle-body").innerHTML = `\
+    <div class="unit-detail-row" style="margin-bottom:16px">\
+      <div class="detail-item"><div class="dl">Unidad</div><div class="dv">$\{u?.nombre||r.unidadId\}</div></div>\
+      <div class="detail-item"><div class="dl">Estado</div><div class="dv"><span class="tag $\{tagClass[r.estado]||''\}">$\{r.estado\}</span></div></div>\
+      <div class="detail-item"><div class="dl">Ingreso</div><div class="dv">$\{formatDate(r.ingreso)\} \'b7 $\{CONFIG.horarioCheckin\}hs</div></div>\
+      <div class="detail-item"><div class="dl">Egreso</div><div class="dv">$\{formatDate(r.egreso)\} \'b7 $\{CONFIG.horarioCheckout\}hs</div></div>\
+      <div class="detail-item"><div class="dl">Noches</div><div class="dv">$\{r.noches\}</div></div>\
+      <div class="detail-item"><div class="dl">Pasajeros</div><div class="dv">$\{r.pasajeros\}</div></div>\
+      <div class="detail-item"><div class="dl">Mascotas</div><div class="dv">$\{r.mascotas||"No"\}</div></div>\
+      <div class="detail-item"><div class="dl">Patente</div><div class="dv">$\{r.patente||"\'97"\}</div></div>\
+      <div class="detail-item"><div class="dl">CUIL</div><div class="dv">$\{r.cuil||"\'97"\}</div></div>\
+      <div class="detail-item"><div class="dl">Email</div><div class="dv">$\{r.email||"\'97"\}</div></div>\
+    </div>\
+    <div class="pago-box">\
+      <div class="pago-row"><span class="pago-label">Total ($\{r.tipoPago\})</span><span class="pago-value">$\{formatARS(r.totalBruto)\}</span></div>\
+      <div class="pago-row"><span class="pago-label">Se\'f1a cobrada</span><span class="pago-value success">$\{formatARS(r.senia)\}</span></div>\
+      <div class="pago-row"><span class="pago-label">Saldo pendiente</span><span class="pago-value sand">$\{formatARS(r.saldoPendiente)\}</span></div>\
+    </div>\
+    $\{r.notas ? `<div style="margin-top:12px;font-size:0.82rem;color:var(--text-muted)">
+\f6 \uc0\u55357 \u56541 
+\f0  $\{r.notas\}</div>` : ""\}\
+  `;\
+\
+  document.getElementById("detalle-footer").innerHTML = `\
+    <button class="btn btn-ghost" onclick="closeModal('modal-detalle')">Cerrar</button>\
+    $\{r.estado !== "cancelada" ? `<button class="btn btn-danger btn-sm" onclick="cancelarReserva('$\{r.id\}')">Cancelar reserva</button>` : ""\}\
+    $\{r.estado === "pendiente" ? `<button class="btn btn-primary btn-sm" onclick="confirmarReserva('$\{r.id\}')">Confirmar reserva</button>` : ""\}\
+  `;\
+\
+  document.getElementById("modal-detalle").style.display = "flex";\
+\}\
+\
+function confirmarReserva(id) \{\
+  const r = state.reservas.find(x => x.id === id);\
+  if (r) \{ r.estado = "confirmada"; renderAll(); closeModal("modal-detalle"); toast("Reserva confirmada", "success"); \}\
+\}\
+\
+function cancelarReserva(id) \{\
+  if (!confirm("\'bfCancelar esta reserva?")) return;\
+  const r = state.reservas.find(x => x.id === id);\
+  if (r) \{\
+    r.estado = "cancelada";\
+    const u = getUnidad(r.unidadId);\
+    if (u && u.reservaId === id) \{ u.status = "disponible"; u.huesped = null; u.reservaId = null; \}\
+    renderAll();\
+    closeModal("modal-detalle");\
+    toast("Reserva cancelada", "info");\
+  \}\
+\}\
+\
+// \uc0\u9472 \u9472  MODAL UNIDAD \u9472 \u9472 \
+function openModalUnidad(unidadId) \{\
+  const u = getUnidad(unidadId);\
+  if (!u) return;\
+  const tipo = getTipo(u.tipo);\
+  document.getElementById("unidad-title").textContent = u.nombre;\
+\
+  const reservasU = state.reservas.filter(r => r.unidadId === unidadId && r.estado !== "cancelada").sort((a,b) => new Date(a.ingreso)-new Date(b.ingreso));\
+\
+  document.getElementById("unidad-body").innerHTML = `\
+    <div class="unit-detail-row" style="margin-bottom:16px">\
+      <div class="detail-item"><div class="dl">Tipo</div><div class="dv">$\{tipo?.nombre||u.tipo\}</div></div>\
+      <div class="detail-item"><div class="dl">Capacidad</div><div class="dv">$\{u.capacidad\} personas</div></div>\
+      <div class="detail-item"><div class="dl">Estado</div><div class="dv">$\{u.status\}</div></div>\
+      <div class="detail-item"><div class="dl">Precio/noche (ef.)</div><div class="dv">$\{formatARS(tipo?.precioPorNoche||0)\}</div></div>\
+    </div>\
+    <div style="margin-top:16px">\
+      <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:8px">Reservas activas / pr\'f3ximas</div>\
+      $\{reservasU.length === 0 ? `<div class="empty-state"><div>Sin reservas</div></div>` :\
+        reservasU.map(r => `<div style="padding:10px 12px;background:rgba(13,27,42,0.5);border-radius:7px;border:1px solid rgba(201,169,110,0.1);margin-bottom:6px;cursor:pointer" onclick="closeModal('modal-unidad');openModalDetalle('$\{r.id\}')">\
+          <div style="display:flex;justify-content:space-between">\
+            <strong style="font-size:0.85rem">$\{r.titular\}</strong>\
+            <span class="tag tag-$\{r.estado==='confirmada'?'confirmada':'pendiente'\}">$\{r.estado\}</span>\
+          </div>\
+          <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px">$\{formatDate(r.ingreso)\} 
+\f2 \uc0\u8594 
+\f0  $\{formatDate(r.egreso)\} \'b7 $\{r.noches\} noches</div>\
+        </div>`).join("")\
+      \}\
+    </div>\
+  `;\
+\
+  document.getElementById("unidad-footer").innerHTML = `\
+    <button class="btn btn-ghost" onclick="closeModal('modal-unidad')">Cerrar</button>\
+    <select onchange="changeUnitStatus('$\{u.id\}',this.value)" style="background:rgba(13,27,42,0.6);border:1px solid rgba(201,169,110,0.2);color:var(--white);padding:8px 12px;border-radius:7px;font-size:0.82rem">\
+      <option value="">Cambiar estado...</option>\
+      <option value="disponible">Disponible</option>\
+      <option value="mantenimiento">Mantenimiento</option>\
+    </select>\
+    <button class="btn btn-primary btn-sm" onclick="closeModal('modal-unidad');openModalNuevaReserva('$\{u.id\}')">+ Reservar</button>\
+  `;\
+\
+  document.getElementById("modal-unidad").style.display = "flex";\
+\}\
+\
+function changeUnitStatus(unidadId, status) \{\
+  if (!status) return;\
+  const u = getUnidad(unidadId);\
+  if (u) \{\
+    u.status = status;\
+    if (status === "disponible") \{ u.huesped = null; u.reservaId = null; \}\
+    renderAll();\
+    closeModal("modal-unidad");\
+    toast(`$\{u.nombre\} 
+\f2 \uc0\u8594 
+\f0  $\{status\}`, "info");\
+  \}\
+\}\
+\
+function closeModal(id) \{\
+  document.getElementById(id).style.display = "none";\
+\}\
+\
+function renderAll() \{\
+  renderDashboard();\
+  renderMapa();\
+  renderReservas();\
+  renderCheckin();\
+  renderPagos();\
+\}\
+\
+// \uc0\u9472 \u9472  CHATBOT \u9472 \u9472 \
+function initChatbot() \{\
+  document.getElementById("chat-avatar").textContent = CONFIG.chatbotAvatar;\
+  document.getElementById("chat-name").textContent = CONFIG.chatbotNombre;\
+  addBotMsg(`\'a1Hola! Soy $\{CONFIG.chatbotNombre\}, asistente de $\{CONFIG.nombre\}. \'bfEn qu\'e9 puedo ayudarte?`);\
+\}\
+\
+function toggleChat() \{\
+  const w = document.getElementById("chat-window");\
+  w.classList.toggle("open");\
+\}\
+\
+function addBotMsg(text) \{\
+  const div = document.createElement("div");\
+  div.className = "msg msg-bot";\
+  div.textContent = text;\
+  document.getElementById("chat-messages").appendChild(div);\
+  document.getElementById("chat-messages").scrollTop = 9999;\
+\}\
+\
+function addUserMsg(text) \{\
+  const div = document.createElement("div");\
+  div.className = "msg msg-user";\
+  div.textContent = text;\
+  document.getElementById("chat-messages").appendChild(div);\
+  document.getElementById("chat-messages").scrollTop = 9999;\
+\}\
+\
+async function sendChat() \{\
+  const input = document.getElementById("chat-input");\
+  const text = input.value.trim();\
+  if (!text) return;\
+  input.value = "";\
+  addUserMsg(text);\
+  state.chatHistory.push(\{ role:"user", content: text \});\
+\
+  // System prompt din\'e1mico con datos del sistema\
+  const stats = getStats();\
+  const systemPrompt = `Sos $\{CONFIG.chatbotNombre\}, asistente interno del sistema de gesti\'f3n de $\{CONFIG.nombre\}.\
+Ayud\'e1s al equipo con informaci\'f3n sobre reservas y unidades.\
+Hoy: $\{new Date().toLocaleDateString("es-AR")\}.\
+Estado actual: $\{stats.ocupadas\} ocupadas, $\{stats.disponibles\} disponibles, $\{stats.reservadas\} reservadas de $\{stats.total\} unidades.\
+Check-ins hoy: $\{stats.checkinsHoy\}. Check-outs hoy: $\{stats.checkoutsHoy\}.\
+Respond\'e9 en espa\'f1ol, de forma concisa y \'fatil.`;\
+\
+  const key = state.groqKey;\
+  if (!key) \{\
+    addBotMsg("
+\f6 \uc0\u9888 \u65039 
+\f0  Necesit\'e1s configurar la API key de Groq en Configuraci\'f3n para usar el chatbot.");\
+    return;\
+  \}\
+\
+  const typing = document.createElement("div");\
+  typing.className = "msg msg-bot";\
+  typing.innerHTML = `<span style="opacity:0.5">...</span>`;\
+  document.getElementById("chat-messages").appendChild(typing);\
+\
+  try \{\
+    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", \{\
+      method: "POST",\
+      headers: \{ "Content-Type": "application/json", "Authorization": `Bearer $\{key\}` \},\
+      body: JSON.stringify(\{\
+        model: "llama-3.3-70b-versatile",\
+        messages: [\{ role:"system", content: systemPrompt \}, ...state.chatHistory],\
+        max_tokens: 300,\
+      \})\
+    \});\
+    const data = await res.json();\
+    typing.remove();\
+    const reply = data.choices?.[0]?.message?.content || "Sin respuesta";\
+    addBotMsg(reply);\
+    state.chatHistory.push(\{ role:"assistant", content: reply \});\
+  \} catch(e) \{\
+    typing.remove();\
+    addBotMsg("Error al conectar con el chatbot. Verific\'e1 la API key.");\
+  \}\
+\}\
+</script>\
+\
+</body>\
+</html>}
