@@ -18,19 +18,25 @@
   // ⚙️  CONFIGURACIÓN — editá solo esta sección
   // =========================================================
   const CONFIG = {
-    businessName: "Puerto Delfín",          // Nombre del negocio
-    businessLogo: "",                       // URL del logo (opcional)
+    businessName: "Puerto Delfín",
+    businessLogo: "",
     currency: "ARS",
     currencySymbol: "$",
-    adminEmail: "clio@mdq.com.ar",         // Email del admin (acceso total + modo corrección bot)
-    groqApiKey: "",                         // Se pide en pantalla si está vacío
-    // Unidades/cabañas disponibles
+    adminEmail: "clio@mdq.com.ar",
+    groqApiKey: "",
     units: [
-      { id: "c1", name: "Cabaña 1", capacity: 4 },
-      { id: "c2", name: "Cabaña 2", capacity: 4 },
-      { id: "c3", name: "Cabaña 3", capacity: 6 },
-      { id: "c4", name: "Cabaña 4", capacity: 6 },
-      { id: "c5", name: "Suite",    capacity: 2 },
+      { id: "c1",  name: "Cabaña 1",      capacity: 4 },
+      { id: "c2",  name: "Cabaña 2",      capacity: 4 },
+      { id: "c3",  name: "Cabaña 3",      capacity: 4 },
+      { id: "c4",  name: "Cabaña 4",      capacity: 4 },
+      { id: "c5",  name: "Cabaña 5",      capacity: 4 },
+      { id: "c6",  name: "Cabaña 6",      capacity: 4 },
+      { id: "c7",  name: "Cabaña 7",      capacity: 4 },
+      { id: "c8",  name: "Cabaña 8",      capacity: 4 },
+      { id: "c9",  name: "Cabaña 9",      capacity: 4 },
+      { id: "c10", name: "Cabaña 10",     capacity: 4 },
+      { id: "c11", name: "Cabaña 11",     capacity: 4 },
+      { id: "c12", name: "Monoambiente",  capacity: 2 },
     ]
   };
 
@@ -104,6 +110,10 @@
   // =========================================================
   // AUTH
   // =========================================================
+
+  // Registrar handler de login inmediatamente (el body ya muestra el form)
+  window._doLogin = doLogin;
+
   onAuthStateChanged(auth, async user => {
     if (user) {
       currentUser = user;
@@ -177,6 +187,8 @@
         <button class="btn-primary full" onclick="window._doLogin()">Ingresar</button>
       </div>
     </div>`;
+    window._doLogin = doLogin;
+  }
     window._doLogin = doLogin;
   }
 
@@ -1455,8 +1467,24 @@ code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-s
 </style>
 </head>
 <body>
-<div style="display:flex;align-items:center;justify-content:center;height:100vh;color:#7a9b80;font-family:sans-serif;">
-  Cargando sistema...
+<div class="login-wrap" id="initialLoader">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="logo-text">PD</div>
+    </div>
+    <h1 class="login-title">Puerto Delfin</h1>
+    <p class="login-sub">Sistema de Gestion</p>
+    <div class="field-group">
+      <label>Email</label>
+      <input id="loginEmail" type="email" placeholder="usuario@email.com" onkeydown="if(event.key==='Enter')window._doLogin&&window._doLogin()">
+    </div>
+    <div class="field-group">
+      <label>Contrasena</label>
+      <input id="loginPass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')window._doLogin&&window._doLogin()">
+    </div>
+    <p id="loginErr" class="err-msg"></p>
+    <button class="btn-primary full" onclick="window._doLogin&&window._doLogin()">Ingresar</button>
+  </div>
 </div>
 </body>
 </html>
