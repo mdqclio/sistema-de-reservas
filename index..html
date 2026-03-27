@@ -1,0 +1,1462 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sistema de Reservas</title>
+
+<!-- Firebase SDK -->
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+  import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged }
+    from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+  import { getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc,
+    updateDoc, deleteDoc, query, where, orderBy, onSnapshot, serverTimestamp }
+    from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+  // =========================================================
+  // ⚙️  CONFIGURACIÓN — editá solo esta sección
+  // =========================================================
+  const CONFIG = {
+    businessName: "Puerto Delfín",          // Nombre del negocio
+    businessLogo: "",                       // URL del logo (opcional)
+    currency: "ARS",
+    currencySymbol: "$",
+    adminEmail: "clio@mdq.com.ar",         // Email del admin (acceso total + modo corrección bot)
+    groqApiKey: "",                         // Se pide en pantalla si está vacío
+    // Unidades/cabañas disponibles
+    units: [
+      { id: "c1", name: "Cabaña 1", capacity: 4 },
+      { id: "c2", name: "Cabaña 2", capacity: 4 },
+      { id: "c3", name: "Cabaña 3", capacity: 6 },
+      { id: "c4", name: "Cabaña 4", capacity: 6 },
+      { id: "c5", name: "Suite",    capacity: 2 },
+    ]
+  };
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBO6nDGdYWHWd5CQiYnbNojq8Yi7i1YJRc",
+    authDomain: "sistema-de-reservas-d9e54.firebaseapp.com",
+    databaseURL: "https://sistema-de-reservas-d9e54-default-rtdb.firebaseio.com",
+    projectId: "sistema-de-reservas-d9e54",
+    storageBucket: "sistema-de-reservas-d9e54.firebasestorage.app",
+    messagingSenderId: "461330609922",
+    appId: "1:461330609922:web:70c6726069e21cf810341b"
+  };
+  // =========================================================
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  // ---- ROLES ----
+  // roles en Firestore: /users/{uid} → { email, role }
+  // roles: admin | reception | sales | cleaning
+  // admin: todo
+  // reception: reservas + check-in/out + chatbot
+  // sales: reservas + precios
+  // cleaning: solo vista de limpieza (qué cabaña se libera hoy)
+
+  // =========================================================
+  // STATE
+  // =========================================================
+  let currentUser = null;
+  let currentRole = null;
+  let reservations = [];
+  let knowledgeBase = [];
+  let chatHistory = [];
+  let groqKey = "";
+
+  // =========================================================
+  // UTILS
+  // =========================================================
+  const $ = id => document.getElementById(id);
+  const fmt = (n) => n?.toLocaleString('es-AR') ?? '';
+  const fmtDate = d => d ? new Date(d + 'T00:00:00').toLocaleDateString('es-AR') : '';
+
+  function today() {
+    return new Date().toISOString().split('T')[0];
+  }
+
+  function addDays(dateStr, n) {
+    const d = new Date(dateStr + 'T00:00:00');
+    d.setDate(d.getDate() + n);
+    return d.toISOString().split('T')[0];
+  }
+
+  function nightsBetween(a, b) {
+    const da = new Date(a + 'T00:00:00'), db = new Date(b + 'T00:00:00');
+    return Math.round((db - da) / 86400000);
+  }
+
+  function statusBadge(s) {
+    const map = {
+      confirmed:  ['Confirmada',  '#22c55e','#052e16'],
+      pending:    ['Pendiente',   '#f59e0b','#1c1007'],
+      checkin:    ['Check-in',    '#3b82f6','#0c1a2e'],
+      checkout:   ['Check-out',   '#8b5cf6','#1a0c2e'],
+      cancelled:  ['Cancelada',   '#ef4444','#2e0c0c'],
+    };
+    const [label, bg, fg] = map[s] || ['?','#888','#fff'];
+    return `<span style="background:${bg};color:${fg};padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;">${label}</span>`;
+  }
+
+  // =========================================================
+  // AUTH
+  // =========================================================
+  onAuthStateChanged(auth, async user => {
+    if (user) {
+      currentUser = user;
+      // fetch role
+      try {
+        const snap = await getDoc(doc(db, 'users', user.uid));
+        currentRole = (snap.exists() && snap.data().role) ? snap.data().role
+          : (user.email === CONFIG.adminEmail ? 'admin' : 'reception');
+      } catch(e) {
+        currentRole = user.email === CONFIG.adminEmail ? 'admin' : 'reception';
+      }
+      // load groq key
+      groqKey = localStorage.getItem('cabanias_groq_key') || CONFIG.groqApiKey || '';
+      await loadData();
+      renderApp();
+    } else {
+      currentUser = null;
+      currentRole = null;
+      renderLogin();
+    }
+  });
+
+  async function doLogin() {
+    const email = $('loginEmail').value.trim();
+    const pass  = $('loginPass').value;
+    $('loginErr').textContent = '';
+    try {
+      await signInWithEmailAndPassword(auth, email, pass);
+    } catch(e) {
+      $('loginErr').textContent = 'Email o contraseña incorrectos.';
+    }
+  }
+
+  async function doLogout() {
+    await signOut(auth);
+  }
+
+  // =========================================================
+  // DATA LOADING
+  // =========================================================
+  async function loadData() {
+    // reservations
+    const snap = await getDocs(query(collection(db, 'reservations'), orderBy('checkIn')));
+    reservations = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    // knowledge base
+    const kbSnap = await getDocs(collection(db, 'knowledge_base'));
+    knowledgeBase = kbSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  }
+
+  // =========================================================
+  // RENDER SHELL
+  // =========================================================
+  function renderLogin() {
+    document.body.innerHTML = `
+    <div class="login-wrap">
+      <div class="login-card">
+        <div class="login-logo">
+          ${CONFIG.businessLogo ? `<img src="${CONFIG.businessLogo}" alt="logo">` : `<div class="logo-text">${CONFIG.businessName.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)}</div>`}
+        </div>
+        <h1 class="login-title">${CONFIG.businessName}</h1>
+        <p class="login-sub">Sistema de Gestión</p>
+        <div class="field-group">
+          <label>Email</label>
+          <input id="loginEmail" type="email" placeholder="usuario@email.com" onkeydown="if(event.key==='Enter')window._doLogin()">
+        </div>
+        <div class="field-group">
+          <label>Contraseña</label>
+          <input id="loginPass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')window._doLogin()">
+        </div>
+        <p id="loginErr" class="err-msg"></p>
+        <button class="btn-primary full" onclick="window._doLogin()">Ingresar</button>
+      </div>
+    </div>`;
+    window._doLogin = doLogin;
+  }
+
+  function renderApp() {
+    const isAdmin   = currentRole === 'admin';
+    const canBilling= ['admin','sales'].includes(currentRole);
+    const canRes    = ['admin','reception','sales'].includes(currentRole);
+    const isCleaning= currentRole === 'cleaning';
+
+    document.body.innerHTML = `
+    <div class="app-shell">
+      <!-- SIDEBAR -->
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+          <div class="sb-logo">${CONFIG.businessName.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)}</div>
+          <span class="sb-name">${CONFIG.businessName}</span>
+        </div>
+        <nav class="sidebar-nav">
+          ${isCleaning ? `
+            <button class="nav-item active" data-tab="cleaning">🧹 Limpieza</button>
+          ` : `
+            <button class="nav-item active" data-tab="dashboard">📊 Dashboard</button>
+            ${canRes ? `<button class="nav-item" data-tab="reservations">📅 Reservas</button>` : ''}
+            ${canRes ? `<button class="nav-item" data-tab="calendar">🗓️ Calendario</button>` : ''}
+            ${canBilling ? `<button class="nav-item" data-tab="billing">💰 Facturación</button>` : ''}
+            ${isAdmin ? `<button class="nav-item" data-tab="users">👥 Usuarios</button>` : ''}
+            ${isAdmin ? `<button class="nav-item" data-tab="knowledge">🧠 Base de Conocimiento</button>` : ''}
+            ${isAdmin ? `<button class="nav-item" data-tab="settings">⚙️ Configuración</button>` : ''}
+          `}
+        </nav>
+        <div class="sidebar-footer">
+          <div class="user-badge">
+            <div class="user-avatar">${currentUser.email[0].toUpperCase()}</div>
+            <div>
+              <div class="user-email">${currentUser.email}</div>
+              <div class="user-role">${currentRole}</div>
+            </div>
+          </div>
+          <button class="btn-logout" onclick="window._doLogout()">Salir</button>
+        </div>
+      </aside>
+
+      <!-- MAIN -->
+      <main class="main-content" id="mainContent">
+        <div id="tabContent"></div>
+      </main>
+
+      <!-- CHATBOT -->
+      ${!isCleaning ? `
+      <div class="chat-bubble" id="chatBubble" onclick="window._toggleChat()">
+        <span>💬</span>
+        <span class="chat-badge" id="chatBadge" style="display:none">!</span>
+      </div>
+      <div class="chat-panel" id="chatPanel">
+        <div class="chat-header">
+          <div>
+            <div class="chat-title">Asistente Virtual</div>
+            <div class="chat-sub">${currentUser.email === CONFIG.adminEmail ? '⚡ Modo administrador activo' : CONFIG.businessName}</div>
+          </div>
+          <button onclick="window._toggleChat()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;">✕</button>
+        </div>
+        <div class="chat-messages" id="chatMessages">
+          <div class="msg bot">
+            <div class="msg-bubble">¡Hola! Soy el asistente de ${CONFIG.businessName}. ¿En qué te puedo ayudar?${currentUser.email === CONFIG.adminEmail ? '<br><br>🔑 <strong>Modo admin:</strong> podés decirme "actualizar precio", "agregar info", etc. para actualizar la base de conocimiento.' : ''}</div>
+          </div>
+        </div>
+        <div class="chat-input-row">
+          <input id="chatInput" type="text" placeholder="Escribí tu consulta..." onkeydown="if(event.key==='Enter')window._sendChat()">
+          <button onclick="window._sendChat()" class="btn-send">➤</button>
+        </div>
+      </div>
+      ` : ''}
+    </div>`;
+
+    // Nav events
+    document.querySelectorAll('.nav-item').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        renderTab(btn.dataset.tab);
+      });
+    });
+
+    window._doLogout = doLogout;
+    window._toggleChat = toggleChat;
+    window._sendChat = sendChat;
+
+    // render first tab
+    renderTab(isCleaning ? 'cleaning' : 'dashboard');
+
+    // groq key prompt
+    if (!groqKey && !isCleaning) promptGroqKey();
+  }
+
+  // =========================================================
+  // TABS
+  // =========================================================
+  function renderTab(tab) {
+    const el = $('tabContent');
+    switch(tab) {
+      case 'dashboard':    el.innerHTML = buildDashboard(); break;
+      case 'reservations': el.innerHTML = buildReservations(); bindReservationEvents(); break;
+      case 'calendar':     el.innerHTML = buildCalendar(); break;
+      case 'billing':      el.innerHTML = buildBilling(); break;
+      case 'cleaning':     el.innerHTML = buildCleaning(); break;
+      case 'users':        buildUsers(); break;
+      case 'knowledge':    el.innerHTML = buildKnowledge(); bindKnowledgeEvents(); break;
+      case 'settings':     el.innerHTML = buildSettings(); bindSettingsEvents(); break;
+    }
+  }
+
+  // --- DASHBOARD ---
+  function buildDashboard() {
+    const td = today();
+    const arriving = reservations.filter(r => r.checkIn === td && r.status !== 'cancelled');
+    const departing = reservations.filter(r => r.checkOut === td && r.status !== 'cancelled');
+    const inhouse = reservations.filter(r => r.checkIn <= td && r.checkOut > td && !['cancelled'].includes(r.status));
+    const monthRes = reservations.filter(r => r.checkIn?.startsWith(td.slice(0,7)) && r.status !== 'cancelled');
+    const monthRev = monthRes.reduce((s, r) => s + (r.totalAmount || 0), 0);
+
+    return `
+    <div class="tab-header">
+      <h2>Dashboard</h2>
+      <span class="tab-date">${new Date().toLocaleDateString('es-AR', {weekday:'long', year:'numeric', month:'long', day:'numeric'})}</span>
+    </div>
+    <div class="stat-grid">
+      <div class="stat-card blue">
+        <div class="stat-icon">🏠</div>
+        <div class="stat-val">${inhouse.length}</div>
+        <div class="stat-label">Cabañas ocupadas</div>
+      </div>
+      <div class="stat-card green">
+        <div class="stat-icon">✅</div>
+        <div class="stat-val">${arriving.length}</div>
+        <div class="stat-label">Check-ins hoy</div>
+      </div>
+      <div class="stat-card purple">
+        <div class="stat-icon">🚪</div>
+        <div class="stat-val">${departing.length}</div>
+        <div class="stat-label">Check-outs hoy</div>
+      </div>
+      <div class="stat-card orange">
+        <div class="stat-icon">💰</div>
+        <div class="stat-val">${CONFIG.currencySymbol}${fmt(monthRev)}</div>
+        <div class="stat-label">Ingresos del mes</div>
+      </div>
+    </div>
+
+    <div class="section-grid">
+      <div class="card">
+        <h3 class="card-title">📥 Check-ins de hoy</h3>
+        ${arriving.length === 0 ? '<p class="empty-msg">Sin check-ins hoy</p>' : `
+        <table class="mini-table">
+          <thead><tr><th>Huésped</th><th>Cabaña</th><th>Noches</th></tr></thead>
+          <tbody>${arriving.map(r=>`<tr><td>${r.guestName}</td><td>${unitName(r.unitId)}</td><td>${nightsBetween(r.checkIn,r.checkOut)}</td></tr>`).join('')}</tbody>
+        </table>`}
+      </div>
+      <div class="card">
+        <h3 class="card-title">📤 Check-outs de hoy</h3>
+        ${departing.length === 0 ? '<p class="empty-msg">Sin check-outs hoy</p>' : `
+        <table class="mini-table">
+          <thead><tr><th>Huésped</th><th>Cabaña</th><th>Estado pago</th></tr></thead>
+          <tbody>${departing.map(r=>`<tr><td>${r.guestName}</td><td>${unitName(r.unitId)}</td><td>${r.paid >= r.totalAmount ? '✅ Pagado' : '⚠️ Pendiente'}</td></tr>`).join('')}</tbody>
+        </table>`}
+      </div>
+    </div>
+
+    <div class="card mt">
+      <h3 class="card-title">🏕️ Ocupación actual</h3>
+      <div class="unit-grid">
+        ${CONFIG.units.map(u => {
+          const active = inhouse.find(r => r.unitId === u.id);
+          return `<div class="unit-card ${active ? 'occupied' : 'free'}">
+            <div class="unit-name">${u.name}</div>
+            <div class="unit-status">${active ? `👤 ${active.guestName}<br><small>hasta ${fmtDate(active.checkOut)}</small>` : '✅ Disponible'}</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }
+
+  // --- RESERVATIONS ---
+  function buildReservations() {
+    const sorted = [...reservations].sort((a,b) => a.checkIn > b.checkIn ? -1 : 1);
+    return `
+    <div class="tab-header">
+      <h2>Reservas</h2>
+      <button class="btn-primary" onclick="window._openNewRes()">+ Nueva reserva</button>
+    </div>
+
+    <!-- Filtros -->
+    <div class="filter-bar">
+      <input id="resSearch" type="text" placeholder="Buscar huésped..." oninput="window._filterRes()">
+      <select id="resStatus" onchange="window._filterRes()">
+        <option value="">Todos los estados</option>
+        <option value="pending">Pendiente</option>
+        <option value="confirmed">Confirmada</option>
+        <option value="checkin">Check-in</option>
+        <option value="checkout">Check-out</option>
+        <option value="cancelled">Cancelada</option>
+      </select>
+      <select id="resUnit" onchange="window._filterRes()">
+        <option value="">Todas las cabañas</option>
+        ${CONFIG.units.map(u=>`<option value="${u.id}">${u.name}</option>`).join('')}
+      </select>
+    </div>
+
+    <div class="table-wrap">
+      <table class="res-table" id="resTable">
+        <thead>
+          <tr>
+            <th>Huésped</th>
+            <th>Cabaña</th>
+            <th>Check-in</th>
+            <th>Check-out</th>
+            <th>Noches</th>
+            <th>Personas</th>
+            <th>Total</th>
+            <th>Seña</th>
+            <th>Saldo</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="resBody">
+          ${sorted.map(r => resRow(r)).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- MODAL reserva -->
+    <div class="modal-overlay" id="resModal" style="display:none">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 id="resModalTitle">Nueva Reserva</h3>
+          <button onclick="window._closeModal('resModal')" class="modal-close">✕</button>
+        </div>
+        <div class="modal-body" id="resModalBody"></div>
+      </div>
+    </div>`;
+  }
+
+  function resRow(r) {
+    const nights = nightsBetween(r.checkIn || '', r.checkOut || '');
+    const balance = (r.totalAmount || 0) - (r.paid || 0);
+    return `<tr id="row-${r.id}">
+      <td><strong>${r.guestName}</strong><br><small>${r.guestPhone || ''}</small></td>
+      <td>${unitName(r.unitId)}</td>
+      <td>${fmtDate(r.checkIn)}</td>
+      <td>${fmtDate(r.checkOut)}</td>
+      <td>${nights}</td>
+      <td>${r.guests || ''}</td>
+      <td>${CONFIG.currencySymbol}${fmt(r.totalAmount)}</td>
+      <td>${CONFIG.currencySymbol}${fmt(r.paid)}</td>
+      <td class="${balance > 0 ? 'balance-due' : 'balance-ok'}">${CONFIG.currencySymbol}${fmt(balance)}</td>
+      <td>${statusBadge(r.status)}</td>
+      <td>
+        <button class="btn-icon" onclick="window._editRes('${r.id}')" title="Editar">✏️</button>
+        <button class="btn-icon" onclick="window._changeStatus('${r.id}')" title="Estado">🔄</button>
+        <button class="btn-icon danger" onclick="window._deleteRes('${r.id}')" title="Eliminar">🗑️</button>
+      </td>
+    </tr>`;
+  }
+
+  function bindReservationEvents() {
+    window._openNewRes = () => openResModal(null);
+    window._editRes = id => openResModal(reservations.find(r => r.id === id));
+    window._closeModal = id => { $(id).style.display = 'none'; };
+    window._filterRes = filterRes;
+    window._changeStatus = changeStatus;
+    window._deleteRes = deleteRes;
+    window._saveRes = saveRes;
+  }
+
+  function resForm(r) {
+    const isEdit = !!r;
+    return `
+    <div class="form-grid">
+      <div class="field-group">
+        <label>Huésped *</label>
+        <input id="fGuestName" value="${r?.guestName||''}" placeholder="Nombre completo">
+      </div>
+      <div class="field-group">
+        <label>Teléfono</label>
+        <input id="fGuestPhone" value="${r?.guestPhone||''}" placeholder="+54 9 223...">
+      </div>
+      <div class="field-group">
+        <label>Email</label>
+        <input id="fGuestEmail" type="email" value="${r?.guestEmail||''}" placeholder="email@...">
+      </div>
+      <div class="field-group">
+        <label>DNI / Documento</label>
+        <input id="fGuestDoc" value="${r?.guestDoc||''}" placeholder="12.345.678">
+      </div>
+      <div class="field-group">
+        <label>Cabaña *</label>
+        <select id="fUnit">
+          ${CONFIG.units.map(u=>`<option value="${u.id}" ${r?.unitId===u.id?'selected':''}>${u.name} (cap. ${u.capacity})</option>`).join('')}
+        </select>
+      </div>
+      <div class="field-group">
+        <label>Personas</label>
+        <input id="fGuests" type="number" min="1" value="${r?.guests||1}">
+      </div>
+      <div class="field-group">
+        <label>Check-in *</label>
+        <input id="fCheckIn" type="date" value="${r?.checkIn||''}" onchange="window._calcTotal()">
+      </div>
+      <div class="field-group">
+        <label>Check-out *</label>
+        <input id="fCheckOut" type="date" value="${r?.checkOut||''}" onchange="window._calcTotal()">
+      </div>
+      <div class="field-group">
+        <label>Precio por noche (${CONFIG.currencySymbol})</label>
+        <input id="fNightPrice" type="number" value="${r?.nightPrice||0}" onchange="window._calcTotal()">
+      </div>
+      <div class="field-group">
+        <label>Total (${CONFIG.currencySymbol})</label>
+        <input id="fTotal" type="number" value="${r?.totalAmount||0}" onchange="window._calcTotal2()">
+      </div>
+      <div class="field-group">
+        <label>Seña / Depósito (${CONFIG.currencySymbol})</label>
+        <input id="fPaid" type="number" value="${r?.paid||0}">
+      </div>
+      <div class="field-group">
+        <label>Estado</label>
+        <select id="fStatus">
+          <option value="pending" ${r?.status==='pending'?'selected':''}>Pendiente</option>
+          <option value="confirmed" ${r?.status==='confirmed'?'selected':''}>Confirmada</option>
+          <option value="checkin" ${r?.status==='checkin'?'selected':''}>Check-in</option>
+          <option value="checkout" ${r?.status==='checkout'?'selected':''}>Check-out</option>
+          <option value="cancelled" ${r?.status==='cancelled'?'selected':''}>Cancelada</option>
+        </select>
+      </div>
+      <div class="field-group full-width">
+        <label>Notas</label>
+        <textarea id="fNotes" rows="3">${r?.notes||''}</textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="window._closeModal('resModal')">Cancelar</button>
+      <button class="btn-primary" onclick="window._saveRes('${r?.id||''}')">Guardar</button>
+    </div>`;
+  }
+
+  function openResModal(r) {
+    $('resModalTitle').textContent = r ? 'Editar Reserva' : 'Nueva Reserva';
+    $('resModalBody').innerHTML = resForm(r);
+    $('resModal').style.display = 'flex';
+    window._calcTotal = () => {
+      const ci = $('fCheckIn')?.value, co = $('fCheckOut')?.value;
+      const price = parseFloat($('fNightPrice')?.value) || 0;
+      if (ci && co && price) {
+        const nights = nightsBetween(ci, co);
+        if (nights > 0 && $('fTotal')) $('fTotal').value = nights * price;
+      }
+    };
+    window._calcTotal2 = () => {};
+  }
+
+  async function saveRes(id) {
+    const data = {
+      guestName:   $('fGuestName').value.trim(),
+      guestPhone:  $('fGuestPhone').value.trim(),
+      guestEmail:  $('fGuestEmail').value.trim(),
+      guestDoc:    $('fGuestDoc').value.trim(),
+      unitId:      $('fUnit').value,
+      guests:      parseInt($('fGuests').value) || 1,
+      checkIn:     $('fCheckIn').value,
+      checkOut:    $('fCheckOut').value,
+      nightPrice:  parseFloat($('fNightPrice').value) || 0,
+      totalAmount: parseFloat($('fTotal').value) || 0,
+      paid:        parseFloat($('fPaid').value) || 0,
+      status:      $('fStatus').value,
+      notes:       $('fNotes').value.trim(),
+      updatedAt:   serverTimestamp()
+    };
+    if (!data.guestName || !data.checkIn || !data.checkOut) {
+      alert('Completá nombre, check-in y check-out'); return;
+    }
+    // conflict check
+    const conflict = reservations.find(r =>
+      r.id !== id &&
+      r.unitId === data.unitId &&
+      r.status !== 'cancelled' &&
+      r.checkIn < data.checkOut &&
+      r.checkOut > data.checkIn
+    );
+    if (conflict) {
+      alert(`⚠️ Conflicto con la reserva de ${conflict.guestName} (${fmtDate(conflict.checkIn)} - ${fmtDate(conflict.checkOut)})`);
+      return;
+    }
+    if (id) {
+      await updateDoc(doc(db, 'reservations', id), data);
+    } else {
+      data.createdAt = serverTimestamp();
+      await addDoc(collection(db, 'reservations'), data);
+    }
+    $('resModal').style.display = 'none';
+    await loadData();
+    renderTab('reservations');
+  }
+
+  async function changeStatus(id) {
+    const r = reservations.find(x => x.id === id);
+    const nextMap = { pending:'confirmed', confirmed:'checkin', checkin:'checkout', checkout:'cancelled', cancelled:'pending' };
+    await updateDoc(doc(db, 'reservations', id), { status: nextMap[r.status] || 'pending' });
+    await loadData();
+    renderTab('reservations');
+  }
+
+  async function deleteRes(id) {
+    if (!confirm('¿Eliminar esta reserva?')) return;
+    await deleteDoc(doc(db, 'reservations', id));
+    await loadData();
+    renderTab('reservations');
+  }
+
+  function filterRes() {
+    const q = $('resSearch').value.toLowerCase();
+    const st = $('resStatus').value;
+    const ut = $('resUnit').value;
+    document.querySelectorAll('#resBody tr').forEach(tr => {
+      const text = tr.textContent.toLowerCase();
+      const rowId = tr.id.replace('row-','');
+      const r = reservations.find(x => x.id === rowId);
+      const ok = (!q || text.includes(q)) && (!st || r?.status === st) && (!ut || r?.unitId === ut);
+      tr.style.display = ok ? '' : 'none';
+    });
+  }
+
+  // --- CALENDAR ---
+  function buildCalendar() {
+    const now = new Date();
+    const year = now.getFullYear(), month = now.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const days = Array.from({length: daysInMonth}, (_,i) => {
+      const d = `${year}-${String(month+1).padStart(2,'0')}-${String(i+1).padStart(2,'0')}`;
+      return d;
+    });
+
+    const rows = CONFIG.units.map(u => {
+      const cells = days.map(d => {
+        const r = reservations.find(res =>
+          res.unitId === u.id &&
+          res.checkIn <= d &&
+          res.checkOut > d &&
+          res.status !== 'cancelled'
+        );
+        const isToday = d === today();
+        return `<td class="cal-cell ${r ? 'occupied' : 'free'} ${isToday ? 'today' : ''}" title="${r ? r.guestName : 'Libre'}">
+          ${r ? `<div class="cal-guest">${r.guestName.split(' ')[0]}</div>` : ''}
+        </td>`;
+      }).join('');
+      return `<tr><td class="cal-unit">${u.name}</td>${cells}</tr>`;
+    }).join('');
+
+    return `
+    <div class="tab-header">
+      <h2>Calendario — ${now.toLocaleDateString('es-AR', {month:'long', year:'numeric'})}</h2>
+    </div>
+    <div class="table-wrap">
+      <table class="cal-table">
+        <thead>
+          <tr>
+            <th>Cabaña</th>
+            ${days.map(d => {
+              const day = parseInt(d.split('-')[2]);
+              const dow = new Date(d+'T00:00:00').toLocaleDateString('es-AR',{weekday:'short'});
+              return `<th class="${d===today()?'today-header':''}">${day}<br><small>${dow}</small></th>`;
+            }).join('')}
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div class="legend">
+      <span class="leg occupied">Ocupado</span>
+      <span class="leg free">Disponible</span>
+      <span class="leg today-leg">Hoy</span>
+    </div>`;
+  }
+
+  // --- BILLING ---
+  function buildBilling() {
+    const months = [...new Set(reservations.map(r => r.checkIn?.slice(0,7)))].filter(Boolean).sort().reverse();
+    const selMonth = months[0] || today().slice(0,7);
+    const monthRes = reservations.filter(r => r.checkIn?.startsWith(selMonth) && r.status !== 'cancelled');
+    const totalRev = monthRes.reduce((s,r) => s+(r.totalAmount||0), 0);
+    const totalPaid = monthRes.reduce((s,r) => s+(r.paid||0), 0);
+    const totalBalance = totalRev - totalPaid;
+
+    return `
+    <div class="tab-header">
+      <h2>Facturación</h2>
+      <select onchange="window._changeBillingMonth(this.value)" id="billingMonth">
+        ${months.map(m => `<option value="${m}" ${m===selMonth?'selected':''}>${m}</option>`).join('')}
+      </select>
+    </div>
+    <div class="stat-grid">
+      <div class="stat-card green"><div class="stat-icon">💵</div><div class="stat-val">${CONFIG.currencySymbol}${fmt(totalRev)}</div><div class="stat-label">Total facturado</div></div>
+      <div class="stat-card blue"><div class="stat-icon">✅</div><div class="stat-val">${CONFIG.currencySymbol}${fmt(totalPaid)}</div><div class="stat-label">Cobrado</div></div>
+      <div class="stat-card orange"><div class="stat-icon">⏳</div><div class="stat-val">${CONFIG.currencySymbol}${fmt(totalBalance)}</div><div class="stat-label">Saldo pendiente</div></div>
+      <div class="stat-card purple"><div class="stat-icon">📋</div><div class="stat-val">${monthRes.length}</div><div class="stat-label">Reservas</div></div>
+    </div>
+    <div class="card mt">
+      <table class="res-table">
+        <thead><tr><th>Huésped</th><th>Cabaña</th><th>Check-in</th><th>Noches</th><th>Total</th><th>Cobrado</th><th>Saldo</th><th>Estado</th></tr></thead>
+        <tbody>
+          ${monthRes.map(r => `<tr>
+            <td>${r.guestName}</td>
+            <td>${unitName(r.unitId)}</td>
+            <td>${fmtDate(r.checkIn)}</td>
+            <td>${nightsBetween(r.checkIn,r.checkOut)}</td>
+            <td>${CONFIG.currencySymbol}${fmt(r.totalAmount)}</td>
+            <td>${CONFIG.currencySymbol}${fmt(r.paid)}</td>
+            <td class="${(r.totalAmount-r.paid)>0?'balance-due':'balance-ok'}">${CONFIG.currencySymbol}${fmt(r.totalAmount-r.paid)}</td>
+            <td>${statusBadge(r.status)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  }
+
+  // --- CLEANING ---
+  function buildCleaning() {
+    const td = today();
+    const checkouts = reservations.filter(r => r.checkOut === td && r.status !== 'cancelled');
+    const checkins  = reservations.filter(r => r.checkIn === td && r.status !== 'cancelled');
+    return `
+    <div class="tab-header"><h2>🧹 Panel de Limpieza</h2><span>${new Date().toLocaleDateString('es-AR')}</span></div>
+    <div class="cleaning-grid">
+      <div class="card">
+        <h3 class="card-title">🚪 Liberan hoy (limpiar)</h3>
+        ${checkouts.length===0?'<p class="empty-msg">Sin liberaciones hoy</p>':
+          checkouts.map(r=>`<div class="clean-item urgent">
+            <strong>${unitName(r.unitId)}</strong> — ${r.guestName}
+            <div class="clean-note">Check-out hoy ✓ Pendiente limpieza</div>
+          </div>`).join('')}
+      </div>
+      <div class="card">
+        <h3 class="card-title">📥 Entran hoy (preparar)</h3>
+        ${checkins.length===0?'<p class="empty-msg">Sin check-ins hoy</p>':
+          checkins.map(r=>`<div class="clean-item ready">
+            <strong>${unitName(r.unitId)}</strong> — para ${r.guestName} (${r.guests} pers.)
+            <div class="clean-note">Preparar para check-in</div>
+          </div>`).join('')}
+      </div>
+    </div>`;
+  }
+
+  // --- USERS ---
+  async function buildUsers() {
+    const snap = await getDocs(collection(db, 'users'));
+    const users = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+    $('tabContent').innerHTML = `
+    <div class="tab-header">
+      <h2>Usuarios</h2>
+      <button class="btn-primary" onclick="window._openUserModal()">+ Nuevo usuario</button>
+    </div>
+    <div class="card">
+      <table class="res-table">
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Email</th>
+            <th>Rol</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${users.length === 0 ? '<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:20px">Sin usuarios registrados</td></tr>' :
+            users.map(u=>`<tr>
+              <td><strong>${u.nombre || '—'}</strong></td>
+              <td>${u.email}</td>
+              <td>
+                <select onchange="window._changeRole('${u.uid}',this.value)" ${u.uid === currentUser.uid ? 'disabled title="No podés cambiar tu propio rol"' : ''}>
+                  ${['admin','reception','sales','cleaning'].map(r=>`<option value="${r}" ${u.role===r?'selected':''}>${r}</option>`).join('')}
+                </select>
+              </td>
+              <td>
+                <span style="color:${u.estado==='inactivo'?'var(--danger)':'var(--accent)'}">
+                  ${u.estado==='inactivo' ? '● Inactivo' : '● Activo'}
+                </span>
+              </td>
+              <td>
+                <button class="btn-icon" onclick="window._openUserModal('${u.uid}')" title="Editar">✏️</button>
+                ${u.uid !== currentUser.uid ? `<button class="btn-icon danger" onclick="window._deleteUser('${u.uid}')" title="Eliminar">🗑️</button>` : ''}
+              </td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="info-box">
+      <strong>ℹ️ Roles:</strong><br>
+      <b>admin</b>: acceso total + modo corrección del bot<br>
+      <b>reception</b>: reservas + check-in/out + chatbot<br>
+      <b>sales</b>: reservas + facturación<br>
+      <b>cleaning</b>: solo panel de limpieza del día
+    </div>
+
+    <!-- MODAL usuario -->
+    <div class="modal-overlay" id="userModal" style="display:none">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 id="userModalTitle">Nuevo Usuario</h3>
+          <button onclick="window._closeModal('userModal')" class="modal-close">✕</button>
+        </div>
+        <div class="modal-body" id="userModalBody"></div>
+      </div>
+    </div>`;
+
+    window._changeRole = async (uid, role) => {
+      await updateDoc(doc(db, 'users', uid), { role });
+    };
+
+    window._deleteUser = async (uid) => {
+      const u = users.find(x => x.uid === uid);
+      if (!confirm(`¿Eliminar el usuario ${u?.email}?\n\nNota: se elimina del sistema pero sigue existiendo en Firebase Auth. Para borrar completamente usá la consola de Firebase.`)) return;
+      await deleteDoc(doc(db, 'users', uid));
+      await buildUsers();
+    };
+
+    window._openUserModal = (uid) => {
+      const u = uid ? users.find(x => x.uid === uid) : null;
+      const isEdit = !!u;
+      $('userModalTitle').textContent = isEdit ? 'Editar Usuario' : 'Nuevo Usuario';
+      $('userModalBody').innerHTML = `
+        <div class="field-group">
+          <label>Nombre</label>
+          <input id="uNombre" value="${u?.nombre||''}" placeholder="Nombre y apellido">
+        </div>
+        <div class="field-group">
+          <label>Email *</label>
+          <input id="uEmail" type="email" value="${u?.email||''}" placeholder="usuario@email.com" ${isEdit?'disabled':''}>
+        </div>
+        <div class="field-group">
+          <label>${isEdit ? 'Nueva contraseña (dejar vacío para no cambiar)' : 'Contraseña *'}</label>
+          <input id="uPass" type="password" placeholder="Mínimo 6 caracteres">
+        </div>
+        <div class="field-group">
+          <label>Rol</label>
+          <select id="uRol">
+            ${['admin','reception','sales','cleaning'].map(r=>`<option value="${r}" ${(u?.role||'reception')===r?'selected':''}>${r}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field-group">
+          <label>Estado</label>
+          <select id="uEstado">
+            <option value="activo" ${(u?.estado||'activo')==='activo'?'selected':''}>Activo</option>
+            <option value="inactivo" ${u?.estado==='inactivo'?'selected':''}>Inactivo</option>
+          </select>
+        </div>
+        ${!isEdit ? `<div class="info-box" style="margin-bottom:12px">
+          ⚠️ Al crear un usuario nuevo, Firebase te deslogueará brevemente y volverá a loguearte como admin automáticamente.
+        </div>` : ''}
+        <div class="modal-footer">
+          <button class="btn-secondary" onclick="window._closeModal('userModal')">Cancelar</button>
+          <button class="btn-primary" onclick="window._saveUser('${uid||''}')">Guardar</button>
+        </div>`;
+      $('userModal').style.display = 'flex';
+    };
+
+    window._saveUser = async (uid) => {
+      const nombre = $('uNombre').value.trim();
+      const email  = $('uEmail').value.trim();
+      const pass   = $('uPass').value;
+      const role   = $('uRol').value;
+      const estado = $('uEstado').value;
+      const isEdit = !!uid;
+
+      if (!isEdit && (!email || !pass)) { alert('Email y contraseña son obligatorios'); return; }
+      if (!isEdit && pass.length < 6)   { alert('La contraseña debe tener al menos 6 caracteres'); return; }
+
+      try {
+        if (isEdit) {
+          // Solo actualizar datos en Firestore
+          await updateDoc(doc(db, 'users', uid), { nombre, role, estado });
+          $('userModal').style.display = 'none';
+          await buildUsers();
+        } else {
+          // Crear en Firebase Auth
+          const adminEmail = currentUser.email;
+          const adminPass  = prompt('Para crear el usuario, necesitamos tu contraseña de admin:');
+          if (!adminPass) return;
+
+          await createUserWithEmailAndPassword(auth, email, pass);
+          const newUid = auth.currentUser.uid;
+
+          // Guardar en Firestore
+          await setDoc(doc(db, 'users', newUid), {
+            nombre, email, role, estado,
+            creadoEn: serverTimestamp()
+          });
+
+          // Volver a logear como admin
+          await signInWithEmailAndPassword(auth, adminEmail, adminPass);
+
+          $('userModal').style.display = 'none';
+          await buildUsers();
+        }
+      } catch(e) {
+        const msg = e.code === 'auth/email-already-in-use' ? 'Ese email ya existe en Firebase Auth'
+          : e.code === 'auth/invalid-email' ? 'Email inválido'
+          : 'Error: ' + e.message;
+        alert('❌ ' + msg);
+      }
+    };
+  }
+
+  // --- KNOWLEDGE BASE ---
+  function buildKnowledge() {
+    return `
+    <div class="tab-header">
+      <h2>🧠 Base de Conocimiento</h2>
+      <button class="btn-primary" onclick="window._openKbModal()">+ Agregar entrada</button>
+    </div>
+    <div class="kb-list" id="kbList">
+      ${knowledgeBase.map(k => `
+      <div class="kb-item" id="kb-${k.id}">
+        <div class="kb-cat">${k.category || 'General'}</div>
+        <div class="kb-q"><strong>${k.question}</strong></div>
+        <div class="kb-a">${k.answer}</div>
+        <div class="kb-actions">
+          <button class="btn-icon" onclick="window._editKb('${k.id}')">✏️</button>
+          <button class="btn-icon danger" onclick="window._deleteKb('${k.id}')">🗑️</button>
+        </div>
+      </div>`).join('')}
+    </div>
+    <div class="modal-overlay" id="kbModal" style="display:none">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 id="kbModalTitle">Nueva entrada</h3>
+          <button onclick="window._closeModal('kbModal')" class="modal-close">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="field-group"><label>Categoría</label><input id="kbCat" placeholder="Precios, Políticas, Check-in..."></div>
+          <div class="field-group"><label>Pregunta / Tema</label><input id="kbQ" placeholder="¿Cuál es el precio por noche?"></div>
+          <div class="field-group"><label>Respuesta</label><textarea id="kbA" rows="5" placeholder="El precio por noche es..."></textarea></div>
+          <div class="modal-footer">
+            <button class="btn-secondary" onclick="window._closeModal('kbModal')">Cancelar</button>
+            <button class="btn-primary" onclick="window._saveKb()">Guardar</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function bindKnowledgeEvents() {
+    let editId = null;
+    window._openKbModal = (id) => {
+      editId = id || null;
+      const k = id ? knowledgeBase.find(x=>x.id===id) : null;
+      $('kbModalTitle').textContent = id ? 'Editar entrada' : 'Nueva entrada';
+      if (k) { $('kbCat').value = k.category||''; $('kbQ').value = k.question||''; $('kbA').value = k.answer||''; }
+      else    { $('kbCat').value=''; $('kbQ').value=''; $('kbA').value=''; }
+      $('kbModal').style.display='flex';
+    };
+    window._editKb = id => window._openKbModal(id);
+    window._saveKb = async () => {
+      const data = { category: $('kbCat').value.trim(), question: $('kbQ').value.trim(), answer: $('kbA').value.trim(), updatedAt: serverTimestamp() };
+      if (!data.question || !data.answer) { alert('Completá pregunta y respuesta'); return; }
+      if (editId) await updateDoc(doc(db,'knowledge_base',editId), data);
+      else        await addDoc(collection(db,'knowledge_base'), { ...data, createdAt: serverTimestamp() });
+      $('kbModal').style.display='none';
+      await loadData();
+      renderTab('knowledge');
+    };
+    window._deleteKb = async id => {
+      if (!confirm('¿Eliminar esta entrada?')) return;
+      await deleteDoc(doc(db,'knowledge_base',id));
+      await loadData();
+      renderTab('knowledge');
+    };
+  }
+
+  // --- SETTINGS ---
+  function buildSettings() {
+    const key = localStorage.getItem('cabanias_groq_key') || '';
+    return `
+    <div class="tab-header"><h2>⚙️ Configuración</h2></div>
+    <div class="card">
+      <h3 class="card-title">API Keys</h3>
+      <div class="field-group">
+        <label>Groq API Key (para el chatbot)</label>
+        <input id="settGroq" type="password" value="${key}" placeholder="gsk_...">
+      </div>
+      <button class="btn-primary" onclick="window._saveSettings()">Guardar</button>
+    </div>
+    <div class="card mt">
+      <h3 class="card-title">Unidades / Cabañas</h3>
+      <p class="info-text">Editá el array <code>CONFIG.units</code> en el código fuente del index.html para agregar o quitar cabañas.</p>
+    </div>`;
+  }
+
+  function bindSettingsEvents() {
+    window._saveSettings = () => {
+      const k = $('settGroq').value.trim();
+      if (k) { localStorage.setItem('cabanias_groq_key', k); groqKey = k; }
+      alert('✅ Configuración guardada');
+    };
+  }
+
+  // =========================================================
+  // CHATBOT
+  // =========================================================
+  function toggleChat() {
+    const panel = $('chatPanel');
+    panel.classList.toggle('open');
+    $('chatBadge').style.display = 'none';
+  }
+
+  function promptGroqKey() {
+    const k = prompt('Ingresá tu Groq API Key para activar el asistente:');
+    if (k) { groqKey = k.trim(); localStorage.setItem('cabanias_groq_key', groqKey); }
+  }
+
+  async function sendChat() {
+    const input = $('chatInput');
+    const msg = input.value.trim();
+    if (!msg) return;
+    input.value = '';
+
+    appendMsg(msg, 'user');
+    chatHistory.push({ role: 'user', content: msg });
+
+    // save to firebase
+    await addDoc(collection(db, 'chat_logs'), {
+      userEmail: currentUser.email,
+      message: msg,
+      role: 'user',
+      timestamp: serverTimestamp()
+    });
+
+    // build system prompt
+    const isAdmin = currentUser.email === CONFIG.adminEmail;
+    const kbText = knowledgeBase.map(k => `[${k.category||'Info'}] ${k.question}: ${k.answer}`).join('\n');
+    const td = today();
+    const avail = CONFIG.units.map(u => {
+      const occ = reservations.find(r => r.unitId===u.id && r.checkIn<=td && r.checkOut>td && r.status!=='cancelled');
+      return `${u.name}: ${occ ? 'OCUPADA (hasta '+fmtDate(occ.checkOut)+')' : 'DISPONIBLE'}`;
+    }).join(', ');
+
+    const systemPrompt = `Sos el asistente virtual de ${CONFIG.businessName}.
+Hoy es ${new Date().toLocaleDateString('es-AR')}.
+
+BASE DE CONOCIMIENTO:
+${kbText || 'Sin información cargada aún.'}
+
+DISPONIBILIDAD HOY (${fmtDate(td)}):
+${avail}
+
+${isAdmin ? `⚡ MODO ADMINISTRADOR ACTIVO:
+El usuario actual es el administrador (${CONFIG.adminEmail}). Cuando el admin te pida actualizar precios, agregar información, corregir datos, etc., respondé que tomarás nota y confirmá qué se debería actualizar. Las actualizaciones reales se hacen desde el módulo "Base de Conocimiento" del sistema.
+Si el admin dice "el precio de la cabaña X es $Y", sugerile que lo agregue/actualice en la base de conocimiento.` : ''}
+
+Respondé siempre en español, de forma amable y concisa. Si no sabés algo, decilo claramente.`;
+
+    const typing = appendTyping();
+    try {
+      if (!groqKey) { typing.remove(); appendMsg('⚠️ No hay API Key configurada. Andá a Configuración para cargarla.', 'bot'); return; }
+      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json', 'Authorization':`Bearer ${groqKey}` },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            ...chatHistory.slice(-10)
+          ]
+        })
+      });
+      const data = await res.json();
+      const reply = data.choices?.[0]?.message?.content || 'Sin respuesta';
+      typing.remove();
+      appendMsg(reply, 'bot');
+      chatHistory.push({ role: 'assistant', content: reply });
+
+      // save bot response
+      await addDoc(collection(db, 'chat_logs'), {
+        userEmail: 'bot',
+        message: reply,
+        role: 'assistant',
+        timestamp: serverTimestamp()
+      });
+
+      // si es admin y menciona actualización
+      if (isAdmin && /actualiz|precio|correg|agrega|modific/i.test(msg)) {
+        appendMsg('💡 <em>Recordatorio: podés actualizar la base de conocimiento desde el módulo "🧠 Base de Conocimiento" del menú lateral.</em>', 'bot');
+      }
+    } catch(e) {
+      typing.remove();
+      appendMsg('Error al conectar con el asistente: ' + e.message, 'bot');
+    }
+  }
+
+  function appendMsg(text, role) {
+    const div = document.createElement('div');
+    div.className = `msg ${role}`;
+    div.innerHTML = `<div class="msg-bubble">${text}</div>`;
+    $('chatMessages').appendChild(div);
+    $('chatMessages').scrollTop = 9999;
+    return div;
+  }
+
+  function appendTyping() {
+    return appendMsg('<span class="typing-dots"><span>.</span><span>.</span><span>.</span></span>', 'bot');
+  }
+
+  // =========================================================
+  // HELPERS
+  // =========================================================
+  function unitName(id) {
+    return CONFIG.units.find(u => u.id === id)?.name || id;
+  }
+
+  window._changeBillingMonth = (m) => {
+    // re-render billing with selected month (simplified: just reload)
+    renderTab('billing');
+  };
+
+</script>
+
+<style>
+/* =========================================================
+   DESIGN SYSTEM — Paleta refinada cabañas/naturaleza
+   ========================================================= */
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:          #0f1714;
+  --bg2:         #162019;
+  --bg3:         #1e2d23;
+  --surface:     #243329;
+  --surface2:    #2d3f32;
+  --border:      #354c3a;
+  --accent:      #6dbf7e;
+  --accent2:     #4a9e5c;
+  --accent-glow: rgba(109,191,126,0.15);
+  --gold:        #c9a84c;
+  --text:        #e8f0ea;
+  --text-muted:  #7a9b80;
+  --text-dim:    #4d6b52;
+  --danger:      #e05555;
+  --warn:        #d4962a;
+  --blue:        #4a90d9;
+  --purple:      #9b6ee8;
+
+  --sidebar-w: 240px;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow: 0 4px 24px rgba(0,0,0,0.4);
+  --font-display: 'DM Serif Display', Georgia, serif;
+  --font-body:    'DM Sans', system-ui, sans-serif;
+}
+
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font-body); font-size: 14px; }
+
+/* ---- LOGIN ---- */
+.login-wrap {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(ellipse at 30% 40%, #1e3a26 0%, var(--bg) 70%);
+}
+.login-card {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 20px; padding: 48px 40px; width: 380px;
+  box-shadow: var(--shadow), 0 0 60px rgba(109,191,126,0.05);
+}
+.login-logo { display: flex; justify-content: center; margin-bottom: 20px; }
+.logo-text {
+  width: 64px; height: 64px; border-radius: 16px;
+  background: linear-gradient(135deg, var(--accent2), var(--accent));
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display); font-size: 24px; color: #fff;
+}
+.login-title { font-family: var(--font-display); font-size: 26px; text-align: center; color: var(--text); }
+.login-sub { text-align: center; color: var(--text-muted); margin-bottom: 28px; font-size: 13px; }
+.err-msg { color: var(--danger); font-size: 13px; margin: 8px 0; min-height: 18px; }
+
+/* ---- APP SHELL ---- */
+.app-shell { display: flex; height: 100vh; overflow: hidden; }
+
+/* ---- SIDEBAR ---- */
+.sidebar {
+  width: var(--sidebar-w); background: var(--bg2);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  flex-shrink: 0;
+}
+.sidebar-header {
+  padding: 20px 16px; display: flex; align-items: center; gap: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.sb-logo {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg, var(--accent2), var(--accent));
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display); font-size: 14px; color: #fff; flex-shrink: 0;
+}
+.sb-name { font-weight: 600; font-size: 13px; color: var(--text); line-height: 1.3; }
+.sidebar-nav { flex: 1; padding: 12px 8px; overflow-y: auto; }
+.nav-item {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; padding: 10px 12px; border-radius: var(--radius-sm);
+  background: none; border: none; color: var(--text-muted);
+  font-family: var(--font-body); font-size: 13px; cursor: pointer;
+  transition: all 0.15s; text-align: left; margin-bottom: 2px;
+}
+.nav-item:hover { background: var(--surface); color: var(--text); }
+.nav-item.active { background: var(--accent-glow); color: var(--accent); font-weight: 600;
+  border-left: 3px solid var(--accent); }
+.sidebar-footer { padding: 12px; border-top: 1px solid var(--border); }
+.user-badge { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.user-avatar {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: var(--surface2); display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 13px; color: var(--accent); flex-shrink: 0;
+}
+.user-email { font-size: 11px; color: var(--text-muted); word-break: break-all; }
+.user-role { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+
+/* ---- MAIN ---- */
+.main-content { flex: 1; overflow-y: auto; padding: 28px; background: var(--bg); }
+.tab-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 24px;
+}
+.tab-header h2 { font-family: var(--font-display); font-size: 24px; color: var(--text); }
+.tab-date { color: var(--text-muted); font-size: 13px; }
+
+/* ---- CARDS ---- */
+.card {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px;
+}
+.card.mt { margin-top: 20px; }
+.card-title { font-size: 15px; font-weight: 600; margin-bottom: 14px; color: var(--text); }
+
+/* ---- STAT GRID ---- */
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap: 16px; margin-bottom: 24px; }
+.stat-card {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px; position: relative; overflow: hidden;
+}
+.stat-card::before { content:''; position:absolute; inset:0; opacity:0.07; }
+.stat-card.blue::before   { background: var(--blue); }
+.stat-card.green::before  { background: var(--accent); }
+.stat-card.purple::before { background: var(--purple); }
+.stat-card.orange::before { background: var(--warn); }
+.stat-icon { font-size: 22px; margin-bottom: 8px; }
+.stat-val { font-family: var(--font-display); font-size: 28px; color: var(--text); line-height: 1; }
+.stat-label { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+/* ---- SECTION GRID ---- */
+.section-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+@media(max-width: 768px) { .section-grid { grid-template-columns: 1fr; } }
+
+/* ---- UNIT GRID ---- */
+.unit-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); gap: 12px; }
+.unit-card {
+  border-radius: var(--radius-sm); padding: 14px; text-align: center;
+  border: 1px solid var(--border);
+}
+.unit-card.occupied { background: rgba(224,85,85,0.1); border-color: rgba(224,85,85,0.3); }
+.unit-card.free     { background: rgba(109,191,126,0.08); border-color: rgba(109,191,126,0.2); }
+.unit-name { font-weight: 600; font-size: 13px; margin-bottom: 6px; }
+.unit-status { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+
+/* ---- TABLES ---- */
+.table-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); }
+.res-table, .cal-table, .mini-table {
+  width: 100%; border-collapse: collapse; background: var(--bg2);
+  border-radius: var(--radius); overflow: hidden;
+}
+.res-table th, .cal-table th, .mini-table th {
+  background: var(--surface); color: var(--text-muted); font-size: 11px;
+  font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+  padding: 10px 12px; text-align: left; white-space: nowrap;
+}
+.res-table td, .mini-table td {
+  padding: 10px 12px; border-top: 1px solid var(--border);
+  color: var(--text); vertical-align: middle;
+}
+.res-table tr:hover td { background: var(--surface); }
+.balance-due { color: var(--warn); font-weight: 600; }
+.balance-ok  { color: var(--accent); }
+
+/* ---- CALENDAR ---- */
+.cal-table th { padding: 8px 4px; font-size: 10px; text-align: center; min-width: 40px; }
+.cal-unit { padding: 8px 12px; font-weight: 600; font-size: 12px; white-space: nowrap;
+  border-right: 1px solid var(--border); background: var(--surface); }
+.cal-cell { padding: 4px; text-align: center; border-top: 1px solid var(--border);
+  border-left: 1px solid var(--border); min-width: 40px; height: 44px; vertical-align: top; }
+.cal-cell.occupied { background: rgba(224,85,85,0.2); }
+.cal-cell.free     { background: rgba(109,191,126,0.04); }
+.cal-cell.today, th.today-header { background: rgba(109,191,126,0.15) !important; }
+.cal-guest { font-size: 10px; color: var(--text); background: rgba(224,85,85,0.4);
+  border-radius: 4px; padding: 1px 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.legend { display: flex; gap: 16px; margin-top: 12px; }
+.leg { font-size: 12px; padding: 4px 10px; border-radius: 20px; color: var(--text-muted); }
+.leg.occupied  { background: rgba(224,85,85,0.2); }
+.leg.free      { background: rgba(109,191,126,0.1); }
+.leg.today-leg { background: rgba(109,191,126,0.2); }
+
+/* ---- FILTER BAR ---- */
+.filter-bar {
+  display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;
+}
+.filter-bar input, .filter-bar select {
+  background: var(--bg2); border: 1px solid var(--border);
+  color: var(--text); border-radius: var(--radius-sm); padding: 8px 12px;
+  font-family: var(--font-body); font-size: 13px;
+}
+
+/* ---- FORMS / MODALS ---- */
+.field-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+.field-group label { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+.field-group input, .field-group select, .field-group textarea {
+  background: var(--surface); border: 1px solid var(--border);
+  color: var(--text); border-radius: var(--radius-sm); padding: 10px 12px;
+  font-family: var(--font-body); font-size: 14px; transition: border-color 0.15s;
+}
+.field-group input:focus, .field-group select:focus, .field-group textarea:focus {
+  outline: none; border-color: var(--accent);
+}
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+.form-grid .full-width { grid-column: 1/-1; }
+@media(max-width:600px) { .form-grid { grid-template-columns: 1fr; } }
+
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100;
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.modal {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 16px;
+  width: 100%; max-width: 640px; max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow);
+}
+.modal-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 20px 24px 0; margin-bottom: 16px;
+}
+.modal-header h3 { font-family: var(--font-display); font-size: 20px; }
+.modal-close { background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer; }
+.modal-body { padding: 0 24px 24px; }
+.modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+
+/* ---- BUTTONS ---- */
+.btn-primary {
+  background: var(--accent2); color: #fff; border: none;
+  border-radius: var(--radius-sm); padding: 10px 20px;
+  font-family: var(--font-body); font-weight: 600; font-size: 13px;
+  cursor: pointer; transition: background 0.15s;
+}
+.btn-primary:hover { background: var(--accent); }
+.btn-primary.full { width: 100%; padding: 12px; margin-top: 4px; }
+.btn-secondary {
+  background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 10px 20px;
+  font-family: var(--font-body); font-size: 13px; cursor: pointer;
+}
+.btn-secondary:hover { background: var(--surface); }
+.btn-logout {
+  width: 100%; padding: 8px; background: none; border: 1px solid var(--border);
+  color: var(--text-muted); border-radius: var(--radius-sm);
+  font-family: var(--font-body); font-size: 12px; cursor: pointer;
+}
+.btn-logout:hover { border-color: var(--danger); color: var(--danger); }
+.btn-icon {
+  background: none; border: none; cursor: pointer; font-size: 16px;
+  padding: 4px; border-radius: 6px; transition: background 0.1s;
+}
+.btn-icon:hover { background: var(--surface2); }
+.btn-icon.danger:hover { background: rgba(224,85,85,0.2); }
+.btn-send {
+  background: var(--accent2); border: none; color: #fff; border-radius: var(--radius-sm);
+  padding: 8px 14px; cursor: pointer; font-size: 16px; transition: background 0.15s;
+}
+.btn-send:hover { background: var(--accent); }
+
+/* ---- CHATBOT ---- */
+.chat-bubble {
+  position: fixed; bottom: 24px; right: 24px; width: 52px; height: 52px;
+  background: var(--accent2); border-radius: 50%; display: flex; align-items: center;
+  justify-content: center; cursor: pointer; box-shadow: 0 4px 20px rgba(109,191,126,0.4);
+  font-size: 22px; z-index: 200; transition: transform 0.2s;
+  user-select: none;
+}
+.chat-bubble:hover { transform: scale(1.1); }
+.chat-badge {
+  position: absolute; top: 2px; right: 2px; width: 14px; height: 14px;
+  background: var(--danger); border-radius: 50%; font-size: 9px; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+}
+.chat-panel {
+  position: fixed; bottom: 90px; right: 24px; width: 360px; height: 520px;
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 16px;
+  display: flex; flex-direction: column; box-shadow: var(--shadow); z-index: 200;
+  transform: scale(0.95) translateY(10px); opacity: 0; pointer-events: none;
+  transition: all 0.2s ease;
+}
+.chat-panel.open { transform: scale(1) translateY(0); opacity: 1; pointer-events: all; }
+.chat-header {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  padding: 16px; border-bottom: 1px solid var(--border);
+}
+.chat-title { font-weight: 700; font-size: 15px; }
+.chat-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.chat-messages { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.msg { display: flex; }
+.msg.user { justify-content: flex-end; }
+.msg.bot  { justify-content: flex-start; }
+.msg-bubble {
+  max-width: 80%; padding: 10px 14px; border-radius: 14px;
+  font-size: 13px; line-height: 1.5;
+}
+.msg.user .msg-bubble { background: var(--accent2); color: #fff; border-bottom-right-radius: 4px; }
+.msg.bot  .msg-bubble { background: var(--surface); color: var(--text); border-bottom-left-radius: 4px; }
+.chat-input-row {
+  display: flex; gap: 8px; padding: 12px;
+  border-top: 1px solid var(--border);
+}
+.chat-input-row input {
+  flex: 1; background: var(--surface); border: 1px solid var(--border);
+  color: var(--text); border-radius: var(--radius-sm); padding: 9px 12px;
+  font-family: var(--font-body); font-size: 13px;
+}
+.chat-input-row input:focus { outline: none; border-color: var(--accent); }
+
+/* ---- TYPING DOTS ---- */
+.typing-dots span {
+  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent); margin: 0 2px;
+  animation: bounce 1.2s infinite;
+}
+.typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes bounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-6px)} }
+
+/* ---- KNOWLEDGE BASE ---- */
+.kb-list { display: flex; flex-direction: column; gap: 12px; }
+.kb-item {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 16px; position: relative;
+}
+.kb-cat { font-size: 10px; color: var(--accent); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+.kb-q { font-size: 14px; margin-bottom: 6px; }
+.kb-a { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+.kb-actions { position: absolute; top: 12px; right: 12px; display: flex; gap: 4px; }
+
+/* ---- CLEANING ---- */
+.cleaning-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+@media(max-width:600px) { .cleaning-grid { grid-template-columns: 1fr; } }
+.clean-item { border-radius: var(--radius-sm); padding: 14px; margin-bottom: 10px; }
+.clean-item.urgent { background: rgba(224,85,85,0.1); border: 1px solid rgba(224,85,85,0.3); }
+.clean-item.ready  { background: rgba(109,191,126,0.08); border: 1px solid rgba(109,191,126,0.2); }
+.clean-note { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+/* ---- MISC ---- */
+.empty-msg { color: var(--text-dim); font-size: 13px; padding: 16px 0; }
+.info-box {
+  background: rgba(109,191,126,0.05); border: 1px solid rgba(109,191,126,0.2);
+  border-radius: var(--radius); padding: 16px; margin-top: 16px; font-size: 13px;
+  color: var(--text-muted); line-height: 1.7;
+}
+.info-text { font-size: 13px; color: var(--text-muted); }
+code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+
+/* ---- SCROLLBARS ---- */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+</style>
+</head>
+<body>
+<div style="display:flex;align-items:center;justify-content:center;height:100vh;color:#7a9b80;font-family:sans-serif;">
+  Cargando sistema...
+</div>
+</body>
+</html>
