@@ -212,6 +212,7 @@
             ${canRes ? `<button class="nav-item" data-tab="reservations">📅 Reservas</button>` : ''}
             ${canRes ? `<button class="nav-item" data-tab="calendar">🗓️ Calendario</button>` : ''}
             ${canBilling ? `<button class="nav-item" data-tab="billing">💰 Facturación</button>` : ''}
+            ${canRes ? `<button class="nav-item" data-tab="blacklist">🚫 Lista Negra</button>` : ''}
             ${isAdmin ? `<button class="nav-item" data-tab="users">👥 Usuarios</button>` : ''}
             ${isAdmin ? `<button class="nav-item" data-tab="knowledge">🧠 Base de Conocimiento</button>` : ''}
             ${isAdmin ? `<button class="nav-item" data-tab="settings">⚙️ Configuración</button>` : ''}
@@ -292,7 +293,7 @@
       case 'calendar':     el.innerHTML = buildCalendar(); break;
       case 'billing':      el.innerHTML = buildBilling(); break;
       case 'cleaning':     el.innerHTML = buildCleaning(); break;
-      case 'users':        buildUsers(); break;
+      case 'blacklist':    buildBlacklist(); break;
       case 'knowledge':    el.innerHTML = buildKnowledge(); bindKnowledgeEvents(); break;
       case 'settings':     el.innerHTML = buildSettings(); bindSettingsEvents(); break;
     }
@@ -449,6 +450,7 @@
         <button class="btn-icon" onclick="window._editRes('${r.id}')" title="Editar">✏️</button>
         <button class="btn-icon" onclick="window._changeStatus('${r.id}')" title="Cambiar estado">🔄</button>
         <button class="btn-icon" onclick="window._guestLink('${r.id}')" title="${hasGuest ? 'Ver datos del huésped' : 'Generar link pre check-in'}">${dniIcon}</button>
+        <button class="btn-icon" onclick="window._scoreGuest('${r.id}')" title="Puntuar huésped">⭐</button>
         <button class="btn-icon danger" onclick="window._deleteRes('${r.id}')" title="Eliminar">🗑️</button>
       </td>
     </tr>`;
@@ -533,9 +535,222 @@
       </div>`;
       document.body.appendChild(modal);
     };
+
+    window._scoreGuest = (id) => {
+      const r = reservations.find(x => x.id === id);
+      if (!r) return;
+      const sc = r.guestScore || {};
+      const modal = document.createElement('div');
+      modal.className = 'modal-overlay';
+      modal.style.display = 'flex';
+      const criteria = [
+        { key: 'limpieza',     label: '🧹 Limpieza de la cabaña' },
+        { key: 'comportamiento', label: '🤝 Comportamiento' },
+        { key: 'pago',         label: '💵 Pago puntual' },
+        { key: 'ruidos',       label: '🔇 Ruidos / molestias' },
+      ];
+      modal.innerHTML = `
+      <div class="modal">
+        <div class="modal-header">
+          <h3>⭐ Puntuar — ${r.guestName}</h3>
+          <button onclick="this.closest('.modal-overlay').remove()" class="modal-close">✕</button>
+        </div>
+        <div class="modal-body">
+          <p style="color:var(--text-muted);font-size:13px;margin-bottom:18px">
+            Cabaña ${unitName(r.unitId)} · ${fmtDate(r.checkIn)} → ${fmtDate(r.checkOut)}
+          </p>
+          ${criteria.map(c => `
+          <div class="score-row">
+            <span class="score-label">${c.label}</span>
+            <div class="score-stars" id="stars-${c.key}">
+              ${[1,2,3,4,5,6,7,8,9,10].map(n => `
+                <button class="star-btn ${(sc[c.key]||0) >= n ? 'active' : ''}"
+                  onclick="window._setStar('${c.key}',${n})">${n <= 5 ? '★' : '★'}</button>
+              `).join('')}
+            </div>
+            <span class="score-val" id="val-${c.key}">${sc[c.key] || '—'}</span>
+          </div>`).join('')}
+          <div class="field-group" style="margin-top:16px">
+            <label>Comentario / Observación</label>
+            <textarea id="scoreComment" rows="3" placeholder="Dejó todo limpio, muy amable...">${r.guestScoreComment||''}</textarea>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-secondary" onclick="this.closest('.modal-overlay').remove()">Cancelar</button>
+            <button class="btn-primary" onclick="window._saveScore('${id}')">Guardar puntaje</button>
+          </div>
+        </div>
+      </div>`;
+      document.body.appendChild(modal);
+
+      // stars temp state
+      window._starState = { ...sc };
+      window._setStar = (key, val) => {
+        window._starState[key] = val;
+        const container = document.getElementById(`stars-${key}`);
+        container.querySelectorAll('.star-btn').forEach((btn, i) => {
+          btn.classList.toggle('active', i < val);
+        });
+        document.getElementById(`val-${key}`).textContent = val;
+      };
+      window._saveScore = async (resId) => {
+        const scores = window._starState;
+        const vals = Object.values(scores).filter(v => v > 0);
+        const avg = vals.length ? (vals.reduce((a,b) => a+b, 0) / vals.length).toFixed(1) : null;
+        const comment = document.getElementById('scoreComment').value.trim();
+        await updateDoc(doc(db, 'reservations', resId), {
+          guestScore: scores,
+          guestScoreAvg: avg ? parseFloat(avg) : null,
+          guestScoreComment: comment,
+          guestScoreDate: serverTimestamp()
+        });
+        reservations = reservations.map(x => x.id === resId
+          ? { ...x, guestScore: scores, guestScoreAvg: parseFloat(avg), guestScoreComment: comment }
+          : x);
+        modal.remove();
+        await loadData();
+        renderTab('reservations');
+      };
+    };
   }
 
-  function resForm(r) {
+  // --- BLACKLIST ---
+  async function buildBlacklist() {
+    // Traer todas las reservas con puntaje
+    const scored = reservations.filter(r => r.guestScoreAvg !== undefined && r.guestScoreAvg !== null);
+
+    // Agrupar por nombre+DNI (mismo huésped puede tener varias estadías)
+    const guestMap = {};
+    scored.forEach(r => {
+      const key = (r.guestDoc || r.guestDni || r.guestName || '').toLowerCase().trim() || r.guestName?.toLowerCase();
+      if (!key) return;
+      if (!guestMap[key]) {
+        guestMap[key] = {
+          name: r.guestName,
+          doc: r.guestDoc || r.guestDni || '—',
+          phone: r.guestPhone || '—',
+          stays: [],
+          scores: []
+        };
+      }
+      guestMap[key].stays.push(r);
+      if (r.guestScoreAvg) guestMap[key].scores.push(r.guestScoreAvg);
+    });
+
+    // Calcular promedio histórico
+    const guests = Object.values(guestMap).map(g => ({
+      ...g,
+      avg: g.scores.length ? (g.scores.reduce((a,b)=>a+b,0)/g.scores.length) : null,
+      stayCount: g.stays.length
+    })).sort((a,b) => (a.avg||10) - (b.avg||10));
+
+    const scoreColor = avg => {
+      if (avg === null) return 'var(--text-muted)';
+      if (avg < 4)  return '#e05555';
+      if (avg < 6)  return '#d4962a';
+      if (avg < 8)  return '#f59e0b';
+      return '#22c55e';
+    };
+    const scoreEmoji = avg => {
+      if (avg === null) return '—';
+      if (avg < 4)  return '🔴';
+      if (avg < 6)  return '🟠';
+      if (avg < 8)  return '🟡';
+      return '🟢';
+    };
+
+    $('tabContent').innerHTML = `
+    <div class="tab-header">
+      <h2>🚫 Lista Negra</h2>
+      <span class="tab-date">${scored.length} estadías puntuadas</span>
+    </div>
+
+    ${guests.length === 0 ? `
+    <div class="card" style="text-align:center;padding:60px">
+      <div style="font-size:48px;margin-bottom:16px">⭐</div>
+      <p style="color:var(--text-muted)">Todavía no hay puntajes registrados.<br>Puntúa a los huéspedes desde la tabla de Reservas con el botón ⭐.</p>
+    </div>` : `
+
+    <div class="info-box" style="margin-bottom:20px">
+      🟢 8-10: Excelente &nbsp;|&nbsp; 🟡 6-7: Bueno &nbsp;|&nbsp; 🟠 4-5: Regular &nbsp;|&nbsp; 🔴 0-3: Problemático
+    </div>
+
+    <div class="card">
+      <table class="res-table">
+        <thead>
+          <tr>
+            <th>Huésped</th>
+            <th>DNI</th>
+            <th>Teléfono</th>
+            <th>Estadías</th>
+            <th>Limpieza</th>
+            <th>Comportamiento</th>
+            <th>Pago</th>
+            <th>Ruidos</th>
+            <th>Promedio</th>
+            <th>Detalle</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${guests.map(g => {
+            const lastStay = g.stays[g.stays.length - 1];
+            const sc = lastStay?.guestScore || {};
+            return `<tr style="${g.avg !== null && g.avg < 5 ? 'background:rgba(224,85,85,0.06)' : ''}">
+              <td><strong>${g.name}</strong></td>
+              <td>${g.doc}</td>
+              <td>${g.phone}</td>
+              <td style="text-align:center">${g.stayCount}</td>
+              <td style="text-align:center">${sc.limpieza ?? '—'}</td>
+              <td style="text-align:center">${sc.comportamiento ?? '—'}</td>
+              <td style="text-align:center">${sc.pago ?? '—'}</td>
+              <td style="text-align:center">${sc.ruidos ?? '—'}</td>
+              <td style="text-align:center;font-weight:700;font-size:16px;color:${scoreColor(g.avg)}">
+                ${scoreEmoji(g.avg)} ${g.avg !== null ? g.avg.toFixed(1) : '—'}
+              </td>
+              <td>
+                <button class="btn-icon" onclick="window._showGuestHistory('${g.name.replace(/'/g,"\\'")}')">🔍</button>
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`}`;
+
+    window._showGuestHistory = (name) => {
+      const guestStays = reservations.filter(r => r.guestName === name && r.guestScoreAvg !== undefined);
+      const modal = document.createElement('div');
+      modal.className = 'modal-overlay';
+      modal.style.display = 'flex';
+      modal.innerHTML = `
+      <div class="modal">
+        <div class="modal-header">
+          <h3>🔍 Historial — ${name}</h3>
+          <button onclick="this.closest('.modal-overlay').remove()" class="modal-close">✕</button>
+        </div>
+        <div class="modal-body">
+          ${guestStays.map(r => {
+            const sc = r.guestScore || {};
+            return `<div class="kb-item" style="margin-bottom:12px">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                <span>${unitName(r.unitId)} · ${fmtDate(r.checkIn)} → ${fmtDate(r.checkOut)}</span>
+                <strong style="font-size:18px">${r.guestScoreAvg?.toFixed(1) || '—'}</strong>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;color:var(--text-muted)">
+                <span>🧹 Limpieza: <strong style="color:var(--text)">${sc.limpieza||'—'}</strong></span>
+                <span>🤝 Comportamiento: <strong style="color:var(--text)">${sc.comportamiento||'—'}</strong></span>
+                <span>💵 Pago: <strong style="color:var(--text)">${sc.pago||'—'}</strong></span>
+                <span>🔇 Ruidos: <strong style="color:var(--text)">${sc.ruidos||'—'}</strong></span>
+              </div>
+              ${r.guestScoreComment ? `<div style="margin-top:8px;font-size:13px;color:var(--text-muted);font-style:italic">"${r.guestScoreComment}"</div>` : ''}
+            </div>`;
+          }).join('')}
+          <div class="modal-footer">
+            <button class="btn-secondary" onclick="this.closest('.modal-overlay').remove()">Cerrar</button>
+          </div>
+        </div>
+      </div>`;
+      document.body.appendChild(modal);
+    };
+  }
     const isEdit = !!r;
     return `
     <div class="form-grid">
@@ -1531,6 +1746,19 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 }
 .info-text { font-size: 13px; color: var(--text-muted); }
 code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+
+/* ---- SCORE / STARS ---- */
+.score-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.score-label { font-size: 13px; color: var(--text-muted); width: 180px; flex-shrink: 0; }
+.score-stars { display: flex; gap: 3px; flex: 1; }
+.star-btn {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 4px;
+  color: var(--text-dim); cursor: pointer; font-size: 13px; padding: 4px 6px;
+  transition: all 0.1s; line-height: 1;
+}
+.star-btn.active { background: #f59e0b; border-color: #d4962a; color: #fff; }
+.star-btn:hover  { background: var(--accent-glow); border-color: var(--accent); }
+.score-val { font-size: 16px; font-weight: 700; color: var(--accent); width: 28px; text-align:center; }
 
 /* ---- GUEST DATA ---- */
 .guest-data-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
