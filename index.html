@@ -108,8 +108,13 @@
     if (user) {
       currentUser = user;
       // fetch role
-      const snap = await getDoc(doc(db, 'users', user.uid));
-      currentRole = snap.exists() ? snap.data().role : 'reception';
+      try {
+        const snap = await getDoc(doc(db, 'users', user.uid));
+        currentRole = (snap.exists() && snap.data().role) ? snap.data().role
+          : (user.email === CONFIG.adminEmail ? 'admin' : 'reception');
+      } catch(e) {
+        currentRole = user.email === CONFIG.adminEmail ? 'admin' : 'reception';
+      }
       // load groq key
       groqKey = localStorage.getItem('cabanias_groq_key') || CONFIG.groqApiKey || '';
       await loadData();
