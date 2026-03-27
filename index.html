@@ -111,7 +111,22 @@
   // AUTH
   // =========================================================
 
-  // Registrar handler de login inmediatamente (el body ya muestra el form)
+  async function doLogin() {
+    const emailEl = document.getElementById('loginEmail');
+    const passEl  = document.getElementById('loginPass');
+    const errEl   = document.getElementById('loginErr');
+    if (!emailEl || !passEl) return;
+    const email = emailEl.value.trim();
+    const pass  = passEl.value;
+    if (errEl) errEl.textContent = '';
+    try {
+      await signInWithEmailAndPassword(auth, email, pass);
+    } catch(e) {
+      if (errEl) errEl.textContent = 'Email o contraseña incorrectos.';
+    }
+  }
+
+  // Registrar handler DESPUÉS de definir doLogin
   window._doLogin = doLogin;
 
   onAuthStateChanged(auth, async user => {
@@ -135,17 +150,6 @@
       renderLogin();
     }
   });
-
-  async function doLogin() {
-    const email = $('loginEmail').value.trim();
-    const pass  = $('loginPass').value;
-    $('loginErr').textContent = '';
-    try {
-      await signInWithEmailAndPassword(auth, email, pass);
-    } catch(e) {
-      $('loginErr').textContent = 'Email o contraseña incorrectos.';
-    }
-  }
 
   async function doLogout() {
     await signOut(auth);
