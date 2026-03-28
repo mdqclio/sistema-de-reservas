@@ -3344,10 +3344,10 @@ function buildSystemPrompt() {
 
   // Camas en mantenimiento según estado en beds
   const cabañasEnMantenimiento = Object.entries(bedStates)
-    .filter(([,v]) => v?.estado === 'maintenance').map(([k]) => k);
+    .filter(([,v]) => v === 'maintenance' || v?.estado === 'maintenance').map(([k]) => k);
 
   const totalCamas = 12;
-  const cabañasDisponibles = totalCamas - cabañasEnMantenimiento.length - 12; // 12 = habs 5 y 6
+  const cabañasDisponibles = totalCamas - cabañasEnMantenimiento.length;
 
   // Ocupación hoy
   const reservasHoy = reservas.filter(r =>
@@ -3518,7 +3518,10 @@ function addBotMessage(text, isTyping = false) {
   const formatted = text
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\n/g, '<br>')
-    .replace(/(https:\/\/wa\.me\/\S+)/g, '<a href="$1" target="_blank" style="color:var(--accent2);text-decoration:underline;">💬 WhatsApp</a>');
+    .replace(/(https:\/\/wa\.me\/\S+)/g, '<a href="$1" target="_blank" style="color:var(--accent2);text-decoration:underline;">💬 WhatsApp</a>')
+    .replace(/(https:\/\/maps\.google\.[^\s<]+)/g, '<a href="$1" target="_blank" style="color:var(--accent2);text-decoration:underline;">📍 Ver en Google Maps</a>')
+    .replace(/(https:\/\/goo\.gl\/maps\/[^\s<]+)/g, '<a href="$1" target="_blank" style="color:var(--accent2);text-decoration:underline;">📍 Ver en Google Maps</a>')
+    .replace(/(https:\/\/(?!wa\.me|maps\.google|goo\.gl\/maps)[^\s<"]+)/g, '<a href="$1" target="_blank" style="color:var(--accent2);text-decoration:underline;">🔗 $1</a>');
 
   const bubbleId = 'msg_' + Date.now();
   div.innerHTML = `
