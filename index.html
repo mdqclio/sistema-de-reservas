@@ -667,7 +667,7 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
       <div style="margin-top:14px;" class="card">
         <div class="card-header"><h3>Huéspedes actualmente en la cabaña</h3></div>
         <table>
-          <thead><tr><th>Huésped</th><th>Nac.</th><th>Cabaña</th><th>🔑 Llave</th><th>Check-in</th><th>Check-out</th><th>Saldo</th><th>Acciones</th></tr></thead>
+          <thead><tr><th>Huésped</th><th>Nac.</th><th>Cabaña</th><th>Check-in</th><th>Check-out</th><th>Saldo</th><th>Acciones</th></tr></thead>
           <tbody id="tablaEnHostel"></tbody>
         </table>
       </div>
@@ -859,7 +859,7 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
       <div class="form-group"><label>Moneda</label>
         <select id="res-moneda"><option value="ARS">ARS</option><option value="USD">USD</option></select>
       </div>
-      <div class="form-group"><label>Precio por noche</label><input type="number" id="res-precio" placeholder="27000" oninput="calcTotalReserva()"></div>
+      <div class="form-group"><label>Precio por noche</label><input type="number" id="res-precio" placeholder="510000" oninput="calcTotalReserva()"></div>
     </div>
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:12px;">
       <p style="font-size:12px;color:var(--text3);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;">Pagos</p>
@@ -975,7 +975,7 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
       </div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label>🔑 Código de llave</label><input type="text" id="cc-llave" placeholder="Dejar vacío para no cambiar"></div>
+      <div class="form-group" style="display:none"><input type="text" id="cc-llave" value=""></div>
       <div class="form-group"><label>Motivo (opcional)</label><input type="text" id="cc-motivo" placeholder="Ej: solicitud especial......"></div>
     </div>
     <div class="modal-footer">
@@ -1021,9 +1021,8 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
     <input type="hidden" id="ci-res-id">
     <div id="ci-resumen" style="background:var(--surface2);border-radius:var(--radius);padding:12px;margin-bottom:16px;font-size:13px;"></div>
     <div class="form-row">
-      <div class="form-group">
-        <label>Código / Número de llave 🔑</label>
-        <input type="text" id="ci-llave" placeholder="Ej: 12, A3, Llave roja...">
+      <div class="form-group" style="display:none">
+        <input type="text" id="ci-llave" value="">
       </div>
       <div class="form-group">
         <label>Hora de ingreso</label>
@@ -1480,7 +1479,7 @@ async function initData() {
   await DB.set('cierres', []);
   // NO tocar knowledge_base si ya tiene datos
   if (!cache['knowledge_base'] || !Array.isArray(cache['knowledge_base']) || cache['knowledge_base'].length === 0) {
-    await DB.set('knowledge_base', []);
+    if (!cache['knowledge_base'] || cache['knowledge_base'].length === 0) { await DB.set('knowledge_base', []); }
   }
   await DB.set('init_cabanas', true);
 }
@@ -1963,11 +1962,34 @@ function calcTotalReserva() {
 }
 
 function openNuevaReserva() {
-  // Poblar select de huéspedes con los datos en cache
   const huespedes = DB.get('huespedes', []);
   const sel = document.getElementById('res-huesped');
   sel.innerHTML = '<option value="">Seleccionar...</option>' +
     huespedes.map(h => `<option value="${h.id}">${h.nombre} ${h.apellido}</option>`).join('');
+  // Fecha de entrada = hoy por defecto
+  const entradaEl = document.getElementById('res-entrada');
+  if (!entradaEl.value) {
+    entradaEl.value = today();
+    const manana = new Date(); manana.setDate(manana.getDate()+1);
+    document.getElementById('res-salida').value = manana.toISOString().split('T')[0];
+  }
+  // Precio por defecto según temporada
+  const precioEl = document.getElementById('res-precio');
+  if (!precioEl.value || precioEl.value === '0') {
+    const precios = DB.get('precios', {});
+    const hoy = today();
+    let precio = 510000;
+    if (precios.temporadas && precios.temporadas.length) {
+      const mes = new Date().getMonth() + 1;
+      const temp = precios.temporadas.find(t => {
+        const meses = (t.meses||'').split(',').map(m => parseInt(m.trim()));
+        return meses.includes(mes);
+      });
+      if (temp) precio = temp.precio;
+    }
+    precioEl.value = precio;
+  }
+  calcTotalReserva();
   openModal('modalReserva');
 }
 
@@ -2035,10 +2057,9 @@ function doCheckin(rid) {
   const reservas = DB.get('reservas',[]);
   const r = reservas.find(x=>x.id===rid);
   if(!r) return;
-  // No permitir check-in antes de la fecha de entrada
+  // Advertir si el check-in es antes de la fecha de entrada
   if(r.entrada > today()) {
-    showNotif(`Check-in no permitido antes del ${r.entrada}`, 'error');
-    return;
+    if(!confirm(`La fecha de entrada es ${r.entrada}. ¿Confirmar check-in anticipado?`)) return;
   }
   document.getElementById('ci-res-id').value = rid;
   const now = new Date();
@@ -2242,7 +2263,7 @@ function renderCheckin() {
           <td>${h?.nac||'—'}</td>
           <td>${h?.ciudad||'—'}</td>
           <td>Cabaña ${r.hab}</td>
-          <td><span style="font-family:'DM Mono';font-size:13px;font-weight:600;color:var(--accent2)">${r.llave||'—'}</span></td>
+
           <td>${r.entrada}${r.horaCheckin?` <span style="color:var(--text3);font-size:11px">${r.horaCheckin}hs</span>`:''}</td>
           <td>${r.salida}</td>
           <td>${saldo>0?`<span class="badge amber">Debe ${fmtMoney(saldo,r.moneda)}</span>`:`<span class="badge green">Al día</span>`}</td>
@@ -3297,6 +3318,8 @@ function renderGrilla() {
 
 // ===================== CHATBOT ALULA =====================
 function buildSystemPrompt() {
+  // Asegurar que la KB esté en cache (puede no estar si el chat se abrió muy rápido)
+  // Los datos se leen de cache que fue populado por loadAllData()
   const reservas = DB.get('reservas', []);
   const bedStates = DB.get('beds', {});
   const precios = DB.get('precios', {});
@@ -3561,8 +3584,11 @@ async function sendMessage(text) {
     addBotMessage('⚠️ Necesito la API key de Groq para responder. Ingresala arriba 👆');
     return;
   }
-  // Recargar datos frescos (reservas + KB) antes de responder
+  // Recargar KB y datos frescos antes de armar el prompt
   await loadAllData();
+  // Recargar datos frescos incluyendo KB antes de cada respuesta
+  await loadAllData();
+  await loadApiKeyFromDB();
 
   chatTyping = true;
   document.getElementById('chatSendBtn').disabled = true;
