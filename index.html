@@ -70,6 +70,7 @@
   let currentRole = null;
   let reservations = [];
   let knowledgeBase = [];
+  let guestsList = [];
   let chatHistory = [];
   let groqKey = "";
 
@@ -159,12 +160,12 @@
   // DATA LOADING
   // =========================================================
   async function loadData() {
-    // reservations
     const snap = await getDocs(query(collection(db, 'reservations'), orderBy('checkIn')));
     reservations = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    // knowledge base
     const kbSnap = await getDocs(collection(db, 'knowledge_base'));
     knowledgeBase = kbSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const gSnap = await getDocs(query(collection(db, 'guests'), orderBy('name')));
+    guestsList = gSnap.docs.map(d => ({ id: d.id, ...d.data() }));
   }
 
   // =========================================================
@@ -621,46 +622,50 @@
 
   // --- GUESTS ---
   async function buildGuests() {
-    // Construir lista de huéspedes únicos desde reservas
+    // Combinar huéspedes de la colección guests + los de reservas
     const guestMap = {};
+
+    // Primero los de la colección guests (Firestore)
+    guestsList.forEach(g => {
+      const key = (g.doc || g.name || '').toLowerCase().trim();
+      guestMap[key] = { ...g, fromDB: true, stays: [], scores: [] };
+    });
+
+    // Enriquecer con datos de reservas
     reservations.forEach(r => {
       if (!r.guestName) return;
-      const key = (r.guestDoc || r.guestDni || r.guestName).toLowerCase().trim();
+      const key = (r.guestDoc || r.guestDni || r.guestName || '').toLowerCase().trim();
       if (!guestMap[key]) {
         guestMap[key] = {
-          name:    r.guestName,
-          doc:     r.guestDoc || r.guestDni || '—',
-          phone:   r.guestPhone || '—',
-          email:   r.guestEmail || '—',
-          address: r.guestAddress || '—',
-          city:    r.guestCity || '—',
-          pets:    r.guestPets || '—',
-          plate:   r.guestPlate || '—',
-          stays:   [],
-          scores:  [],
-          hasDniPhoto: false,
+          name: r.guestName, doc: r.guestDoc || r.guestDni || '',
+          phone: r.guestPhone || '', email: r.guestEmail || '',
+          address: r.guestAddress || '', city: r.guestCity || '',
+          pets: r.guestPets || '', plate: r.guestPlate || '',
+          stays: [], scores: [], hasDniPhoto: false, fromDB: false
         };
       }
       guestMap[key].stays.push(r);
       if (r.guestScoreAvg) guestMap[key].scores.push(r.guestScoreAvg);
-      if (r.guestDniPhoto) guestMap[key].hasDniPhoto = true;
-      // actualizar con datos más recientes
+      if (r.guestDniPhoto) { guestMap[key].hasDniPhoto = true; guestMap[key].dniPhoto = r.guestDniPhoto; }
       if (r.guestPhone)   guestMap[key].phone   = r.guestPhone;
       if (r.guestEmail)   guestMap[key].email   = r.guestEmail;
       if (r.guestAddress) guestMap[key].address = r.guestAddress;
       if (r.guestCity)    guestMap[key].city    = r.guestCity;
-      if (r.guestPets)    guestMap[key].pets    = r.guestPets;
-      if (r.guestPlate)   guestMap[key].plate   = r.guestPlate;
     });
 
-    const guests = Object.values(guestMap).sort((a,b) => a.name.localeCompare(b.name));
+    const guests = Object.values(guestMap).sort((a,b) => (a.name||'').localeCompare(b.name||''));
+    window._guestData = guests;
 
     const avgColor = avg => avg < 5 ? 'var(--danger)' : avg < 7 ? 'var(--warn)' : 'var(--accent)';
 
     $('tabContent').innerHTML = `
     <div class="tab-header">
       <h2>👤 Huéspedes</h2>
-      <span class="tab-date">${guests.length} huéspedes registrados</span>
+      <div style="display:flex;gap:10px;align-items:center">
+        <span class="tab-date">${guests.length} registrados</span>
+        <button class="btn-primary" onclick="window._openGuestModal()">+ Agregar huésped</button>
+        <button class="btn-secondary" onclick="window._guestSelfLink()" title="Generar link de autocarga">🔗 Link autocarga</button>
+      </div>
     </div>
 
     <div class="filter-bar">
@@ -671,42 +676,45 @@
       <table class="res-table" id="guestTable">
         <thead>
           <tr>
-            <th>Nombre</th>
-            <th>DNI</th>
-            <th>Teléfono</th>
-            <th>Email</th>
-            <th>Ciudad</th>
-            <th>Estadías</th>
-            <th>Puntaje</th>
-            <th>DNI foto</th>
-            <th>Acciones</th>
+            <th>Nombre</th><th>DNI</th><th>Teléfono</th><th>Email</th>
+            <th>Ciudad</th><th>Estadías</th><th>Puntaje</th><th>DNI</th><th>Acciones</th>
           </tr>
         </thead>
         <tbody id="guestBody">
           ${guests.map((g,i) => {
             const avg = g.scores.length ? (g.scores.reduce((a,b)=>a+b,0)/g.scores.length) : null;
-            return `<tr data-idx="${i}">
-              <td><strong>${g.name}</strong></td>
-              <td>${g.doc}</td>
-              <td>${g.phone}</td>
-              <td style="font-size:12px">${g.email}</td>
-              <td>${g.city}</td>
+            return `<tr>
+              <td><strong>${g.name||'—'}</strong></td>
+              <td>${g.doc||'—'}</td>
+              <td>${g.phone||'—'}</td>
+              <td style="font-size:12px">${g.email||'—'}</td>
+              <td>${g.city||'—'}</td>
               <td style="text-align:center">${g.stays.length}</td>
-              <td style="text-align:center;font-weight:700;color:${avg ? avgColor(avg) : 'var(--text-dim)'}">
-                ${avg ? avg.toFixed(1) : '—'}
+              <td style="text-align:center;font-weight:700;color:${avg?avgColor(avg):'var(--text-dim)'}">
+                ${avg?avg.toFixed(1):'—'}
               </td>
-              <td style="text-align:center">${g.hasDniPhoto ? '🪪✅' : '—'}</td>
+              <td style="text-align:center">${g.hasDniPhoto?'🪪✅':'—'}</td>
               <td>
                 <button class="btn-icon" onclick="window._viewGuest(${i})" title="Ver ficha">🔍</button>
+                <button class="btn-icon" onclick="window._openGuestModal(${i})" title="Editar">✏️</button>
+                ${g.id ? `<button class="btn-icon danger" onclick="window._deleteGuest('${g.id}')" title="Eliminar">🗑️</button>` : ''}
               </td>
             </tr>`;
           }).join('')}
         </tbody>
       </table>
-    </div>`;
+    </div>
 
-    // Guardar guests en window para acceso desde modal
-    window._guestList = guests;
+    <!-- Modal huésped -->
+    <div class="modal-overlay" id="guestModal" style="display:none">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 id="guestModalTitle">Nuevo Huésped</h3>
+          <button onclick="window._closeModal('guestModal')" class="modal-close">✕</button>
+        </div>
+        <div class="modal-body" id="guestModalBody"></div>
+      </div>
+    </div>`;
 
     window._filterGuests = () => {
       const q = $('guestSearch').value.toLowerCase();
@@ -715,56 +723,109 @@
       });
     };
 
+    window._guestSelfLink = () => {
+      const baseUrl = window.location.href.replace(/\/[^/]*$/, '').replace(/\/$/, '');
+      const link = `${baseUrl}/guest-register.html`;
+      const modal = document.createElement('div');
+      modal.className = 'modal-overlay'; modal.style.display = 'flex';
+      modal.innerHTML = `<div class="modal">
+        <div class="modal-header"><h3>🔗 Link de autocarga</h3>
+          <button onclick="this.closest('.modal-overlay').remove()" class="modal-close">✕</button></div>
+        <div class="modal-body">
+          <p style="color:var(--text-muted);margin-bottom:12px">Mandá este link al huésped para que cargue sus datos antes de llegar:</p>
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;word-break:break-all;font-size:12px;color:var(--accent);margin-bottom:16px">${link}</div>
+          <div class="modal-footer">
+            <button class="btn-secondary" onclick="this.closest('.modal-overlay').remove()">Cerrar</button>
+            <button class="btn-primary" onclick="navigator.clipboard.writeText('${link}');this.textContent='✅ Copiado!'">📋 Copiar link</button>
+          </div>
+        </div></div>`;
+      document.body.appendChild(modal);
+    };
+
+    window._openGuestModal = (idx) => {
+      const g = (idx !== undefined) ? guests[idx] : null;
+      $('guestModalTitle').textContent = g ? 'Editar Huésped' : 'Nuevo Huésped';
+      $('guestModalBody').innerHTML = `
+        <div class="form-grid">
+          <div class="field-group"><label>Nombre completo *</label><input id="gmName" value="${g?.name||''}"></div>
+          <div class="field-group"><label>DNI / CUIL *</label><input id="gmDoc" value="${g?.doc||''}"></div>
+          <div class="field-group"><label>Teléfono</label><input id="gmPhone" value="${g?.phone||''}"></div>
+          <div class="field-group"><label>Email</label><input id="gmEmail" type="email" value="${g?.email||''}"></div>
+          <div class="field-group"><label>Dirección</label><input id="gmAddress" value="${g?.address||''}"></div>
+          <div class="field-group"><label>Ciudad</label><input id="gmCity" value="${g?.city||''}"></div>
+          <div class="field-group"><label>Mascotas</label><input id="gmPets" value="${g?.pets||''}"></div>
+          <div class="field-group"><label>Patente</label><input id="gmPlate" value="${g?.plate||''}"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" onclick="window._closeModal('guestModal')">Cancelar</button>
+          <button class="btn-primary" onclick="window._saveGuest('${g?.id||''}')">Guardar</button>
+        </div>`;
+      $('guestModal').style.display = 'flex';
+    };
+
+    window._saveGuest = async (id) => {
+      const data = {
+        name:    $('gmName').value.trim(),
+        doc:     $('gmDoc').value.trim(),
+        phone:   $('gmPhone').value.trim(),
+        email:   $('gmEmail').value.trim(),
+        address: $('gmAddress').value.trim(),
+        city:    $('gmCity').value.trim(),
+        pets:    $('gmPets').value.trim(),
+        plate:   $('gmPlate').value.trim(),
+        updatedAt: serverTimestamp()
+      };
+      if (!data.name || !data.doc) { alert('Nombre y DNI son obligatorios'); return; }
+      if (id) await updateDoc(doc(db, 'guests', id), data);
+      else    await addDoc(collection(db, 'guests'), { ...data, createdAt: serverTimestamp() });
+      $('guestModal').style.display = 'none';
+      await loadData();
+      buildGuests();
+    };
+
+    window._deleteGuest = async (id) => {
+      if (!confirm('¿Eliminar este huésped?')) return;
+      await deleteDoc(doc(db, 'guests', id));
+      await loadData();
+      buildGuests();
+    };
+
     window._viewGuest = (idx) => {
-      const g = window._guestList[idx];
+      const g = window._guestData[idx];
       if (!g) return;
       const avg = g.scores.length ? (g.scores.reduce((a,b)=>a+b,0)/g.scores.length).toFixed(1) : '—';
-      const lastDni = g.stays.slice().reverse().find(r => r.guestDniPhoto)?.guestDniPhoto;
-
       const modal = document.createElement('div');
-      modal.className = 'modal-overlay';
-      modal.style.display = 'flex';
-      modal.innerHTML = `
-      <div class="modal">
-        <div class="modal-header">
-          <h3>👤 ${g.name}</h3>
-          <button onclick="this.closest('.modal-overlay').remove()" class="modal-close">✕</button>
-        </div>
+      modal.className = 'modal-overlay'; modal.style.display = 'flex';
+      modal.innerHTML = `<div class="modal">
+        <div class="modal-header"><h3>👤 ${g.name}</h3>
+          <button onclick="this.closest('.modal-overlay').remove()" class="modal-close">✕</button></div>
         <div class="modal-body">
           <div class="guest-data-grid" style="margin-bottom:16px">
-            <div class="guest-data-item"><span class="gd-label">DNI / CUIL</span><span class="gd-val">${g.doc}</span></div>
-            <div class="guest-data-item"><span class="gd-label">Teléfono</span><span class="gd-val">${g.phone}</span></div>
-            <div class="guest-data-item"><span class="gd-label">Email</span><span class="gd-val">${g.email}</span></div>
-            <div class="guest-data-item"><span class="gd-label">Ciudad</span><span class="gd-val">${g.city}</span></div>
-            <div class="guest-data-item"><span class="gd-label">Dirección</span><span class="gd-val">${g.address}</span></div>
-            <div class="guest-data-item"><span class="gd-label">Mascotas</span><span class="gd-val">${g.pets}</span></div>
-            <div class="guest-data-item"><span class="gd-label">Patente</span><span class="gd-val">${g.plate}</span></div>
+            <div class="guest-data-item"><span class="gd-label">DNI / CUIL</span><span class="gd-val">${g.doc||'—'}</span></div>
+            <div class="guest-data-item"><span class="gd-label">Teléfono</span><span class="gd-val">${g.phone||'—'}</span></div>
+            <div class="guest-data-item"><span class="gd-label">Email</span><span class="gd-val">${g.email||'—'}</span></div>
+            <div class="guest-data-item"><span class="gd-label">Ciudad</span><span class="gd-val">${g.city||'—'}</span></div>
+            <div class="guest-data-item"><span class="gd-label">Dirección</span><span class="gd-val">${g.address||'—'}</span></div>
+            <div class="guest-data-item"><span class="gd-label">Mascotas</span><span class="gd-val">${g.pets||'—'}</span></div>
+            <div class="guest-data-item"><span class="gd-label">Patente</span><span class="gd-val">${g.plate||'—'}</span></div>
             <div class="guest-data-item"><span class="gd-label">Puntaje promedio</span><span class="gd-val" style="font-size:20px;font-weight:700">${avg}</span></div>
           </div>
-
-          ${lastDni ? `
-          <div style="margin-bottom:16px">
-            <div class="gd-label" style="margin-bottom:8px">Foto DNI</div>
-            <img src="${lastDni}" style="max-width:100%;border-radius:8px;border:1px solid var(--border)">
-          </div>` : ''}
-
-          <div class="gd-label" style="margin-bottom:8px">Historial de estadías</div>
-          ${g.stays.map(r => `
-          <div style="background:var(--surface);border-radius:8px;padding:10px 14px;margin-bottom:8px;font-size:13px">
-            <div style="display:flex;justify-content:space-between">
-              <span><strong>${unitName(r.unitId)}</strong> · ${fmtDate(r.checkIn)} → ${fmtDate(r.checkOut)}</span>
-              <span style="color:${r.guestScoreAvg ? avgColor(r.guestScoreAvg) : 'var(--text-dim)'}">
-                ${r.guestScoreAvg ? '★ '+r.guestScoreAvg.toFixed(1) : 'Sin puntaje'}
-              </span>
-            </div>
-            ${r.guestScoreComment ? `<div style="color:var(--text-muted);margin-top:4px;font-style:italic">"${r.guestScoreComment}"</div>` : ''}
-          </div>`).join('')}
-
+          ${g.dniPhoto ? `<div style="margin-bottom:16px"><div class="gd-label" style="margin-bottom:8px">Foto DNI</div>
+            <img src="${g.dniPhoto}" style="max-width:100%;border-radius:8px;border:1px solid var(--border)"></div>` : ''}
+          <div class="gd-label" style="margin-bottom:8px">Historial de estadías (${g.stays.length})</div>
+          ${g.stays.length === 0 ? '<p style="color:var(--text-dim);font-size:13px">Sin estadías registradas</p>' :
+            g.stays.map(r => `<div style="background:var(--surface);border-radius:8px;padding:10px 14px;margin-bottom:8px;font-size:13px">
+              <div style="display:flex;justify-content:space-between">
+                <span><strong>${unitName(r.unitId)}</strong> · ${fmtDate(r.checkIn)} → ${fmtDate(r.checkOut)}</span>
+                <span style="color:${r.guestScoreAvg?avgColor(r.guestScoreAvg):'var(--text-dim)'}">
+                  ${r.guestScoreAvg?'★ '+r.guestScoreAvg.toFixed(1):'Sin puntaje'}</span>
+              </div>
+              ${r.guestScoreComment?`<div style="color:var(--text-muted);margin-top:4px;font-style:italic">"${r.guestScoreComment}"</div>`:''}
+            </div>`).join('')}
           <div class="modal-footer" style="margin-top:16px">
             <button class="btn-secondary" onclick="this.closest('.modal-overlay').remove()">Cerrar</button>
           </div>
-        </div>
-      </div>`;
+        </div></div>`;
       document.body.appendChild(modal);
     };
   }

@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Registro de Huésped — Puerto Delfín</title>
+
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+  import { getFirestore, collection, addDoc, query, where, getDocs, serverTimestamp }
+    from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBO6nDGdYWHWd5CQiYnbNojq8Yi7i1YJRc",
+    authDomain: "sistema-de-reservas-d9e54.firebaseapp.com",
+    projectId: "sistema-de-reservas-d9e54",
+    storageBucket: "sistema-de-reservas-d9e54.firebasestorage.app",
+    messagingSenderId: "461330609922",
+    appId: "1:461330609922:web:70c6726069e21cf810341b"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db  = getFirestore(app);
+  const $   = id => document.getElementById(id);
+
+  // Preview foto DNI
+  $('fDniPhoto').addEventListener('change', async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 3 * 1024 * 1024) { alert('La foto no puede superar 3MB'); e.target.value=''; return; }
+    const b64 = await toBase64(file);
+    $('dniPreview').src = b64;
+    $('dniPreview').style.display = 'block';
+    $('dniPreviewWrap').style.display = 'block';
+  });
+
+  function toBase64(file) {
+    return new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload  = () => res(r.result);
+      r.onerror = rej;
+      r.readAsDataURL(file);
+    });
+  }
+
+  window.submitForm = async () => {
+    const btn = $('submitBtn');
+    const name    = $('fName').value.trim();
+    const doc_    = $('fDoc').value.trim();
+    const phone   = $('fPhone').value.trim();
+    const email   = $('fEmail').value.trim();
+    const address = $('fAddress').value.trim();
+    const city    = $('fCity').value.trim();
+    const pets    = $('fPets').value.trim();
+    const plate   = $('fPlate').value.trim();
+
+    if (!name || !doc_) { alert('Nombre y DNI son obligatorios'); return; }
+
+    btn.disabled = true;
+    btn.textContent = 'Enviando...';
+
+    // Verificar si ya existe
+    const existing = await getDocs(query(collection(db, 'guests'), where('doc', '==', doc_)));
+
+    let dniPhoto = '';
+    const file = $('fDniPhoto').files[0];
+    if (file) {
+      try { dniPhoto = await toBase64(file); } catch(e) {}
+    }
+
+    const data = {
+      name, doc: doc_, phone, email, address, city, pets, plate,
+      dniPhoto, selfRegistered: true,
+      createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+    };
+
+    try {
+      if (!existing.empty) {
+        // Ya existe — actualizar
+        const { updateDoc, doc: docRef } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+        await updateDoc(docRef(db, 'guests', existing.docs[0].id), { ...data });
+      } else {
+        await addDoc(collection(db, 'guests'), data);
+      }
+      $('formBox').style.display = 'none';
+      $('doneBox').style.display = 'block';
+    } catch(e) {
+      alert('Error al enviar: ' + e.message);
+      btn.disabled = false;
+      btn.textContent = '✅ Registrarme';
+    }
+  };
+</script>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap');
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:#0f1714; --bg2:#162019; --surface:#243329; --border:#354c3a;
+  --accent:#6dbf7e; --accent2:#4a9e5c; --text:#e8f0ea; --muted:#7a9b80; --radius:14px;
+}
+html, body { min-height:100vh; background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif; }
+.wrap { max-width:520px; margin:0 auto; padding:24px 16px 60px; }
+.header { text-align:center; margin-bottom:28px; }
+.logo { width:60px; height:60px; border-radius:16px;
+  background:linear-gradient(135deg,var(--accent2),var(--accent));
+  display:flex; align-items:center; justify-content:center;
+  font-family:'DM Serif Display',serif; font-size:22px; color:#fff; margin:0 auto 14px; }
+.header h1 { font-family:'DM Serif Display',serif; font-size:24px; }
+.header p  { color:var(--muted); font-size:14px; margin-top:4px; }
+.card { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:24px; margin-bottom:16px; }
+.card-title { font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.8px; color:var(--accent); margin-bottom:16px; }
+.field { margin-bottom:16px; }
+.field label { display:block; font-size:12px; color:var(--muted); margin-bottom:5px; font-weight:500; }
+.field input { width:100%; background:var(--surface); border:1px solid var(--border); color:var(--text);
+  border-radius:10px; padding:12px 14px; font-family:'DM Sans',sans-serif; font-size:15px; }
+.field input:focus { outline:none; border-color:var(--accent); }
+.field-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.required::after { content:' *'; color:var(--accent); }
+.upload-area { border:2px dashed var(--border); border-radius:10px; padding:20px; text-align:center; cursor:pointer; }
+.upload-area:hover { border-color:var(--accent); }
+.upload-area input { display:none; }
+.upload-icon { font-size:32px; margin-bottom:8px; }
+.upload-label { font-size:13px; color:var(--muted); }
+#dniPreviewWrap { display:none; margin-top:12px; }
+#dniPreview { width:100%; border-radius:10px; border:1px solid var(--border); display:none; }
+.btn-submit { width:100%; background:var(--accent2); color:#fff; border:none; border-radius:12px;
+  padding:16px; font-family:'DM Sans',sans-serif; font-size:16px; font-weight:700; cursor:pointer; margin-top:8px; }
+.btn-submit:hover { background:var(--accent); }
+.btn-submit:disabled { opacity:.6; cursor:not-allowed; }
+#doneBox { display:none; text-align:center; padding:60px 20px; }
+.done-icon { font-size:60px; margin-bottom:16px; }
+.done-title { font-family:'DM Serif Display',serif; font-size:26px; margin-bottom:10px; }
+.done-sub { color:var(--muted); font-size:15px; line-height:1.6; }
+.footer-note { text-align:center; color:var(--muted); font-size:12px; margin-top:20px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <div class="logo">PD</div>
+    <h1>Puerto Delfín</h1>
+    <p>Registro de huésped</p>
+  </div>
+
+  <div id="doneBox">
+    <div class="done-icon">🎉</div>
+    <div class="done-title">¡Datos registrados!</div>
+    <p class="done-sub">Gracias por registrarte.<br>¡Te esperamos en Puerto Delfín! 🌊🐬</p>
+  </div>
+
+  <div id="formBox">
+    <div class="card">
+      <div class="card-title">Datos personales</div>
+      <div class="field">
+        <label class="required">Nombre y apellido</label>
+        <input id="fName" type="text" placeholder="Juan Pérez">
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label class="required">DNI / CUIL</label>
+          <input id="fDoc" type="text" placeholder="12.345.678" inputmode="numeric">
+        </div>
+        <div class="field">
+          <label>Teléfono</label>
+          <input id="fPhone" type="tel" placeholder="+54 9 223..." inputmode="tel">
+        </div>
+      </div>
+      <div class="field">
+        <label>Email</label>
+        <input id="fEmail" type="email" placeholder="correo@...">
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Domicilio</div>
+      <div class="field">
+        <label>Dirección</label>
+        <input id="fAddress" type="text" placeholder="Av. Siempreviva 742">
+      </div>
+      <div class="field">
+        <label>Ciudad</label>
+        <input id="fCity" type="text" placeholder="Buenos Aires">
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Datos adicionales</div>
+      <div class="field-row">
+        <div class="field">
+          <label>Mascotas</label>
+          <input id="fPets" type="text" placeholder="Labrador mediano">
+        </div>
+        <div class="field">
+          <label>Patente del vehículo</label>
+          <input id="fPlate" type="text" placeholder="AB 123 CD" style="text-transform:uppercase">
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Foto del DNI <span style="font-weight:400;text-transform:none;font-size:12px;color:var(--muted)">(opcional pero recomendado)</span></div>
+      <label class="upload-area" for="fDniPhoto">
+        <input type="file" id="fDniPhoto" accept="image/*" capture="environment">
+        <div class="upload-icon">📷</div>
+        <div class="upload-label">Tocá para sacar foto o elegir imagen</div>
+      </label>
+      <div id="dniPreviewWrap">
+        <img id="dniPreview" alt="Vista previa DNI">
+        <p style="font-size:12px;color:var(--muted);margin-top:6px;text-align:center">✅ Foto cargada</p>
+      </div>
+    </div>
+
+    <button class="btn-submit" id="submitBtn" onclick="submitForm()">✅ Registrarme</button>
+
+    <p class="footer-note">
+      Tus datos son confidenciales y se usan únicamente para tu estadía.<br>
+      🌊 Puerto Delfín — Primera línea de playa, Mar del Plata
+    </p>
+  </div>
+</div>
+</body>
+</html>
