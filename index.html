@@ -686,7 +686,7 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
           </div>
         </div>
         <table>
-          <thead><tr><th>Nombre</th><th>DNI/Pasaporte</th><th>Nac.</th><th>Teléfono</th><th>Email</th><th>Estadías</th><th>Score</th><th>Acciones</th></tr></thead>
+          <thead><tr><th>Nombre</th><th>DNI/Pasaporte</th><th>Nac.</th><th>Ciudad</th><th>Teléfono</th><th>Email</th><th>Estadías</th><th>Score</th><th>Acciones</th></tr></thead>
           <tbody id="tablaHuespedes"></tbody>
         </table>
       </div>
@@ -924,6 +924,7 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
     <div class="form-row">
       <div class="form-group"><label>DNI / Pasaporte *</label><input type="text" id="eh-dni"></div>
       <div class="form-group"><label>Nacionalidad</label><input type="text" id="eh-nac"></div>
+      <div class="form-group"><label>Ciudad</label><input type="text" id="eh-ciudad"></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label>Teléfono</label><input type="text" id="eh-tel"></div>
@@ -1123,6 +1124,7 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
     <div class="form-row">
       <div class="form-group"><label>DNI / Pasaporte *</label><input type="text" id="h-dni" placeholder="12345678"></div>
       <div class="form-group"><label>Nacionalidad *</label><input type="text" id="h-nac" placeholder="Argentina"></div>
+      <div class="form-group"><label>Ciudad</label><input type="text" id="h-ciudad" placeholder="Buenos Aires"></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label>Teléfono</label><input type="text" id="h-tel" placeholder="+54 9 223..."></div>
@@ -2223,6 +2225,7 @@ function renderCheckin() {
         return `<tr>
           <td>${getHuespedNombre(r.huespedId)}</td>
           <td>${h?.nac||'—'}</td>
+          <td>${h?.ciudad||'—'}</td>
           <td>Cab.${r.hab} / C${cabañaLabel(r.cabaña)}</td>
           <td><span style="font-family:'DM Mono';font-size:13px;font-weight:600;color:var(--accent2)">${r.llave||'—'}</span></td>
           <td>${r.entrada}${r.horaCheckin?` <span style="color:var(--text3);font-size:11px">${r.horaCheckin}hs</span>`:''}</td>
@@ -2748,6 +2751,7 @@ function openEditHuesped(id) {
   document.getElementById('eh-apellido').value = h.apellido;
   document.getElementById('eh-dni').value = h.dni;
   document.getElementById('eh-nac').value = h.nac||'';
+  if(document.getElementById('eh-ciudad')) document.getElementById('eh-ciudad').value = h.ciudad||'';
   document.getElementById('eh-tel').value = h.tel||'';
   document.getElementById('eh-email').value = h.email||'';
   document.getElementById('eh-score').value = h.score||'';
@@ -2913,6 +2917,7 @@ function showPublicRegistrationForm() {
       <div class="form-row">
         <div class="form-group"><label>DNI / Pasaporte *</label><input type="text" id="pub-dni" placeholder="12345678"></div>
         <div class="form-group"><label>Nacionalidad *</label><input type="text" id="pub-nac" placeholder="Argentina"></div>
+      <div class="form-group"><label>Ciudad</label><input type="text" id="pub-ciudad" placeholder="Buenos Aires"></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label>Teléfono</label><input type="text" id="pub-tel" placeholder="+54 9 223..."></div>
@@ -3219,7 +3224,7 @@ function renderGrilla() {
   let html = '<table class="grilla-table">';
 
   // Header fechas
-  html += '<thead><tr><th style="position:sticky;left:0;z-index:3;background:var(--surface2)">Cama</th>';
+  html += '<thead><tr><th style="position:sticky;left:0;z-index:3;background:var(--surface2)">Cabaña</th>';
   fechas.forEach(f => {
     const d = new Date(f + 'T12:00:00');
     const isToday = f === tod;
@@ -3232,15 +3237,15 @@ function renderGrilla() {
   html += '</tr></thead><tbody>';
 
   // Filas por habitación y cabaña
-  for (let h = 1; h <= 6; h++) {
+  for (let h = 1; h <= 12; h++) {
     const hs = String(h);
     const beds = habBeds(hs);
 
-    // Fila separador de habitación
-    html += `<tr class="grilla-hab-header"><td colspan="${fechas.length + 1}">Habitación ${h} (${beds.length} cabañas)</td></tr>`;
+    // Fila por cabaña (sin separador ya que cada cabaña es una unidad)
+    html += `<tr class="grilla-hab-header"><td colspan="${fechas.length + 1}">Cabaña ${h}</td></tr>`;
 
     beds.forEach(b => {
-      html += `<tr><td class="cabaña-label">Cama ${b.label}</td>`;
+      html += `<tr><td class="cabaña-label">Cabaña ${b.label}</td>`;
 
       // Para cada fecha, ver si hay reserva
       fechas.forEach((f, fi) => {
