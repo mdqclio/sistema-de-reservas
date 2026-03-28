@@ -394,13 +394,20 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
 .chat-bubble { max-width: 85%; padding: 10px 14px; border-radius: 14px; font-size: 13px; line-height: 1.5; word-break: break-word; }
 .chat-bubble.user { background: var(--blue2); color: white; border-bottom-right-radius: 3px; align-self: flex-end; }
 .chat-bubble.bot { background: var(--surface3); color: var(--text); border-bottom-left-radius: 3px; align-self: flex-start; border: 1px solid var(--border); position: relative; }
-.chat-bubble.bot .copy-btn {
-  position: absolute; top: 6px; right: 6px; background: var(--surface2);
-  border: 1px solid var(--border); border-radius: 4px; color: var(--text3);
-  font-size: 10px; padding: 2px 6px; cursor: pointer; opacity: 0; transition: opacity 0.15s;
+.chat-bubble.bot .copy-btn { display: none; } /* reemplazado por action-row */
+.chat-action-row {
+  display: flex; gap: 6px; margin-top: 4px; opacity: 0; transition: opacity 0.2s;
 }
-.chat-bubble.bot:hover .copy-btn { opacity: 1; }
-.chat-bubble.bot .copy-btn:hover { color: var(--accent2); }
+.chat-msg-wrap:hover .chat-action-row { opacity: 1; }
+.chat-action-btn {
+  display: flex; align-items: center; gap: 4px;
+  padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 600;
+  cursor: pointer; border: 1px solid var(--border); transition: all 0.15s;
+  background: var(--surface2); color: var(--text2);
+}
+.chat-action-btn:hover { color: var(--text); background: var(--surface3); }
+.chat-action-btn.edit:hover { color: #fbbf24; border-color: rgba(217,119,6,0.4); }
+.chat-action-btn.copy:hover { color: #34d399; border-color: rgba(5,150,105,0.4); }
 .chat-bubble.typing { color: var(--text3); font-style: italic; }
 .chat-bottom { padding: 10px 12px; border-top: 1px solid var(--border); }
 .chat-api-warning { font-size: 11px; color: #fbbf24; background: rgba(217,119,6,0.1); border: 1px solid rgba(217,119,6,0.25); border-radius: var(--radius); padding: 8px 10px; margin-bottom:8px; }
@@ -833,18 +840,18 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
       <div class="form-group"><label>Cabaña *</label>
         <select id="res-hab" onchange="updateBedsSelect();calcTotalReserva()" style="font-size:14px">
           <option value="">Seleccionar...</option>
-          <option value="1">Cabaña 1</option>
-          <option value="2">Cabaña 2</option>
-          <option value="3">Cabaña 3</option>
-          <option value="4">Cabaña 4</option>
-          <option value="5">Cabaña 5</option>
-          <option value="6">Cabaña 6</option>
-          <option value="7">Cabaña 7</option>
-          <option value="8">Cabaña 8</option>
-          <option value="9">Cabaña 9</option>
-          <option value="10">Cabaña 10</option>
-          <option value="11">Cabaña 11</option>
-          <option value="12">Cabaña 12</option>
+          <option value="1">Cabaña 1 (3 personas)</option>
+          <option value="2">Cabaña 2 (3 personas)</option>
+          <option value="3">Cabaña 3 (3 personas)</option>
+          <option value="4">Cabaña 4 (3 personas)</option>
+          <option value="5">Cabaña 5 (4 personas)</option>
+          <option value="6">Cabaña 6 (4 personas)</option>
+          <option value="7">Cabaña 7 (4 personas)</option>
+          <option value="8">Cabaña 8 (4 personas)</option>
+          <option value="9">Cabaña 9 (6 personas)</option>
+          <option value="10">Cabaña 10 (6 personas)</option>
+          <option value="11">Cabaña 11 (6 personas)</option>
+          <option value="12">Cabaña 12 (6 personas)</option>
         </select>
       </div>
       <div class="form-group" style="display:none">
@@ -956,18 +963,18 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
     <div class="form-row">
       <div class="form-group"><label>Nueva Cabaña</label>
         <select id="cc-hab" onchange="updateCambioCamaSelect()">
-          <option value="1">Cabaña 1</option>
-          <option value="2">Cabaña 2</option>
-          <option value="3">Cabaña 3</option>
-          <option value="4">Cabaña 4</option>
-          <option value="5">Cabaña 5</option>
-          <option value="6">Cabaña 6</option>
-          <option value="7">Cabaña 7</option>
-          <option value="8">Cabaña 8</option>
-          <option value="9">Cabaña 9</option>
-          <option value="10">Cabaña 10</option>
-          <option value="11">Cabaña 11</option>
-          <option value="12">Cabaña 12</option>
+          <option value="1">Cabaña 1 (3 personas)</option>
+          <option value="2">Cabaña 2 (3 personas)</option>
+          <option value="3">Cabaña 3 (3 personas)</option>
+          <option value="4">Cabaña 4 (3 personas)</option>
+          <option value="5">Cabaña 5 (4 personas)</option>
+          <option value="6">Cabaña 6 (4 personas)</option>
+          <option value="7">Cabaña 7 (4 personas)</option>
+          <option value="8">Cabaña 8 (4 personas)</option>
+          <option value="9">Cabaña 9 (6 personas)</option>
+          <option value="10">Cabaña 10 (6 personas)</option>
+          <option value="11">Cabaña 11 (6 personas)</option>
+          <option value="12">Cabaña 12 (6 personas)</option>
         </select>
       </div>
       <div class="form-group"><label>Unidad</label>
@@ -1444,18 +1451,18 @@ async function initData() {
       { id:'t3', nombre:'Baja', meses:'Abr-May, Sep-Oct', precio:22000, moneda:'ARS' },
     ],
     habitaciones: [
-      { hab:'1',  nombre:'Cabaña 1',  precio_base:510000, precio_alta:637500, precio_baja:400000, moneda:'ARS' },
-      { hab:'2',  nombre:'Cabaña 2',  precio_base:510000, precio_alta:637500, precio_baja:400000, moneda:'ARS' },
-      { hab:'3',  nombre:'Cabaña 3',  precio_base:510000, precio_alta:637500, precio_baja:400000, moneda:'ARS' },
-      { hab:'4',  nombre:'Cabaña 4',  precio_base:510000, precio_alta:637500, precio_baja:400000, moneda:'ARS' },
-      { hab:'5',  nombre:'Cabaña 5',  precio_base:510000, precio_alta:637500, precio_baja:400000, moneda:'ARS' },
-      { hab:'6',  nombre:'Cabaña 6',  precio_base:510000, precio_alta:637500, precio_baja:400000, moneda:'ARS' },
-      { hab:'7',  nombre:'Cabaña 7',  precio_base:510000, precio_alta:637500, precio_baja:400000, moneda:'ARS' },
-      { hab:'8',  nombre:'Cabaña 8',  precio_base:510000, precio_alta:637500, precio_baja:400000, moneda:'ARS' },
-      { hab:'9',  nombre:'Cabaña 9',  precio_base:510000, precio_alta:637500, precio_baja:400000, moneda:'ARS' },
-      { hab:'10', nombre:'Cabaña 10', precio_base:510000, precio_alta:637500, precio_baja:400000, moneda:'ARS' },
-      { hab:'11', nombre:'Cabaña 11', precio_base:510000, precio_alta:637500, precio_baja:400000, moneda:'ARS' },
-      { hab:'12', nombre:'Cabaña 12', precio_base:340000, precio_alta:425000, precio_baja:270000, moneda:'ARS' },
+      { hab:'1',  nombre:'Cabaña 1',  capacidad:3, precio_base:510000, precio_alta:637500, precio_baja:400000, moneda:'ARS' },
+      { hab:'2',  nombre:'Cabaña 2',  capacidad:3, precio_base:510000, precio_alta:637500, precio_baja:400000, moneda:'ARS' },
+      { hab:'3',  nombre:'Cabaña 3',  capacidad:3, precio_base:510000, precio_alta:637500, precio_baja:400000, moneda:'ARS' },
+      { hab:'4',  nombre:'Cabaña 4',  capacidad:3, precio_base:510000, precio_alta:637500, precio_baja:400000, moneda:'ARS' },
+      { hab:'5',  nombre:'Cabaña 5',  capacidad:4, precio_base:510000, precio_alta:637500, precio_baja:400000, moneda:'ARS' },
+      { hab:'6',  nombre:'Cabaña 6',  capacidad:4, precio_base:510000, precio_alta:637500, precio_baja:400000, moneda:'ARS' },
+      { hab:'7',  nombre:'Cabaña 7',  capacidad:4, precio_base:510000, precio_alta:637500, precio_baja:400000, moneda:'ARS' },
+      { hab:'8',  nombre:'Cabaña 8',  capacidad:4, precio_base:510000, precio_alta:637500, precio_baja:400000, moneda:'ARS' },
+      { hab:'9',  nombre:'Cabaña 9',  capacidad:6, precio_base:637500, precio_alta:800000, precio_baja:500000, moneda:'ARS' },
+      { hab:'10', nombre:'Cabaña 10', capacidad:6, precio_base:637500, precio_alta:800000, precio_baja:500000, moneda:'ARS' },
+      { hab:'11', nombre:'Cabaña 11', capacidad:6, precio_base:637500, precio_alta:800000, precio_baja:500000, moneda:'ARS' },
+      { hab:'12', nombre:'Cabaña 12', capacidad:6, precio_base:637500, precio_alta:800000, precio_baja:500000, moneda:'ARS' },
     ],
     plataformas: [
       { plat:'directo', descuento:0, comision:0 },
@@ -3326,21 +3333,8 @@ function buildSystemPrompt() {
 
   const todayStr = today();
 
-  // Habitaciones: 1=8 cabañas, 2-6=6 cabañas cada una. Habs 5 y 6 en mantenimiento.
-  const HABS = {
-    '1':  { descripcion: 'Cabaña 1 — capacidad 4 personas, parrilla individual, primera línea de playa' },
-    '2':  { descripcion: 'Cabaña 2 — capacidad 4 personas, parrilla individual, primera línea de playa' },
-    '3':  { descripcion: 'Cabaña 3 — capacidad 4 personas, parrilla individual, primera línea de playa' },
-    '4':  { descripcion: 'Cabaña 4 — capacidad 4 personas, parrilla individual, primera línea de playa' },
-    '5':  { descripcion: 'Cabaña 5 — capacidad 4 personas, parrilla individual, primera línea de playa' },
-    '6':  { descripcion: 'Cabaña 6 — capacidad 4 personas, parrilla individual, primera línea de playa' },
-    '7':  { descripcion: 'Cabaña 7 — capacidad 4 personas, parrilla individual, primera línea de playa' },
-    '8':  { descripcion: 'Cabaña 8 — capacidad 4 personas, parrilla individual, primera línea de playa' },
-    '9':  { descripcion: 'Cabaña 9 — capacidad 4 personas, parrilla individual, primera línea de playa' },
-    '10': { descripcion: 'Cabaña 10 — capacidad 4 personas, parrilla individual, primera línea de playa' },
-    '11': { descripcion: 'Cabaña 11 — capacidad 4 personas, parrilla individual, primera línea de playa' },
-    '12': { descripcion: 'Cabaña 12 — monoambiente, capacidad 2 personas, primera línea de playa' },
-};
+  // Sin HABS hardcodeado — toda la info de cabañas viene de la base de conocimiento
+  const infoCabañas = `Cabañas 1-4: hasta 3 personas | Cabañas 5-8: hasta 4 personas | Cabañas 9-12: hasta 6 personas. No tienen vista al mar pero se escucha desde las cabañas. A 50m de la playa.`;
 
   // Camas en mantenimiento según estado en beds
   const cabañasEnMantenimiento = Object.entries(bedStates)
@@ -3418,20 +3412,21 @@ function buildSystemPrompt() {
 Respondés de forma amigable, cálida y concisa. Detectás el idioma y respondés en el mismo idioma.
 
 INFORMACIÓN GENERAL:
-- Primera línea de playa, a 50m del mar, a 4 cuadras del centro de Mar del Plata
+- A 50m del mar, a 4 cuadras del centro de Mar del Plata. Sin vista al mar directa, pero se escucha desde las cabañas
 - CHECK-IN: 15:00 hs | CHECK-OUT: 10:00 hs
 - Desayuno incluido (se lleva a la cabaña cada mañana)
 - Pileta descubierta y templada disponible del 15 de noviembre al 5 de abril
 - Mascotas bienvenidas (hasta 2 pequeñas por cabaña)
 - Parrilla individual por cabaña, WiFi, TV LED 32", estacionamiento incluido
 
-CABAÑAS DISPONIBLES (12 unidades):
-${Object.values(HABS).map(h => `- ${h.descripcion}`).join('\n')}
+CABAÑAS (12 unidades):
+- ${infoCabañas}
+- Todas incluyen desayuno, parrilla individual y servicio de playa
+- No tienen vista al mar, pero se escucha el mar desde las cabañas
 
-PRECIOS ACTUALES:
-${preciosTexto}
+INFORMACIÓN ADICIONAL (base de conocimiento):
+${kbTexto || 'Sin información adicional cargada. Usá el módulo Base de Conocimiento para agregar info sobre cabañas, precios, políticas, etc.'}
 
-${kbTexto ? `INFORMACIÓN ADICIONAL:\n${kbTexto}\n` : ''}
 ESTADO DETALLADO HOY (${todayStr}):
 ${detalleCabañas}
 
@@ -3526,9 +3521,10 @@ function addUserMessage(text) {
 
 function addBotMessage(text, isTyping = false) {
   const msgs = document.getElementById('chatMessages');
-  const div = document.createElement('div');
-  div.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;gap:4px;';
-  if (isTyping) div.id = 'typingIndicator';
+  const wrap = document.createElement('div');
+  wrap.className = 'chat-msg-wrap';
+  wrap.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;gap:4px;';
+  if (isTyping) wrap.id = 'typingIndicator';
 
   const formatted = text
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
@@ -3539,26 +3535,82 @@ function addBotMessage(text, isTyping = false) {
     .replace(/(https:\/\/(?!wa\.me|maps\.google|goo\.gl\/maps)[^\s<"]+)/g, '<a href="$1" target="_blank" style="color:var(--accent2);text-decoration:underline;">🔗 $1</a>');
 
   const bubbleId = 'msg_' + Date.now();
-  div.innerHTML = `
-    <div class="chat-bubble bot ${isTyping ? 'typing' : ''}" id="${bubbleId}">
-      ${formatted}
-      ${!isTyping ? `<button class="copy-btn" onclick="copyMsg('${bubbleId}')">📋 copiar</button>` : ''}
-    </div>`;
-  msgs.appendChild(div);
+  wrap.innerHTML = `
+    <div class="chat-bubble bot ${isTyping ? 'typing' : ''}" id="${bubbleId}">${formatted}</div>
+    ${!isTyping ? `
+    <div class="chat-action-row">
+      <button class="chat-action-btn copy" onclick="copyMsg('${bubbleId}')">📋 Copiar</button>
+      <button class="chat-action-btn edit" onclick="editBotMsg('${bubbleId}')">✏️ Corregir → KB</button>
+    </div>` : ''}`;
+  msgs.appendChild(wrap);
   msgs.scrollTop = msgs.scrollHeight;
-  return div;
+  return wrap;
 }
 
 function copyMsg(id) {
   const el = document.getElementById(id);
   if (!el) return;
-  // Obtener texto plano sin el botón copiar
-  const clone = el.cloneNode(true);
-  clone.querySelector('.copy-btn')?.remove();
-  const text = clone.innerText || clone.textContent;
-  navigator.clipboard.writeText(text.trim()).then(() => {
-    showNotif('✅ Respuesta copiada al portapapeles');
+  const text = (el.innerText || el.textContent).trim();
+  navigator.clipboard.writeText(text).then(() => {
+    showNotif('✅ Copiado — listo para pegar en WhatsApp o Instagram');
   });
+}
+
+function editBotMsg(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const originalText = (el.innerText || el.textContent).trim();
+
+  // Buscar el último mensaje del usuario para usarlo como pregunta
+  const userMsgs = document.querySelectorAll('.chat-bubble.user');
+  const lastQ = userMsgs.length ? (userMsgs[userMsgs.length-1].innerText || '').trim() : '';
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:1000;';
+  modal.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius2);padding:28px;width:520px;max-width:95vw;max-height:90vh;overflow-y:auto;">
+      <h2 style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text)">✏️ Corregir respuesta → Base de Conocimiento</h2>
+      <div class="form-group">
+        <label>Categoría</label>
+        <input id="ebCat" value="" placeholder="Precios, Servicios, Políticas..." style="width:100%;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;">
+      </div>
+      <div class="form-group" style="margin-top:10px;">
+        <label>Pregunta / Tema</label>
+        <input id="ebQ" value="${lastQ.replace(/"/g,'&quot;')}" placeholder="¿Cuál es la pregunta?" style="width:100%;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;">
+      </div>
+      <div class="form-group" style="margin-top:10px;">
+        <label>Respuesta correcta</label>
+        <textarea id="ebA" rows="6" style="width:100%;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;resize:vertical;">${originalText.replace(/</g,'&lt;')}</textarea>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
+        <button onclick="this.closest('.modal-overlay').remove()" style="padding:8px 16px;background:transparent;border:1px solid var(--border);color:var(--text2);border-radius:var(--radius);cursor:pointer;">Cancelar</button>
+        <button onclick="saveEditedBotMsg()" style="padding:8px 16px;background:var(--blue2);color:white;border:none;border-radius:var(--radius);cursor:pointer;font-weight:600;">💾 Guardar en KB</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if(e.target===modal) modal.remove(); });
+}
+
+async function saveEditedBotMsg() {
+  const cat = document.getElementById('ebCat').value.trim();
+  const q   = document.getElementById('ebQ').value.trim();
+  const a   = document.getElementById('ebA').value.trim();
+  if (!q || !a) { showNotif('Completá pregunta y respuesta', 'error'); return; }
+  const kb = DB.get('knowledge_base', []);
+  // Si ya existe una entrada con la misma pregunta, actualizarla
+  const existing = kb.findIndex(k => k.question.toLowerCase() === q.toLowerCase());
+  if (existing >= 0) {
+    kb[existing] = { ...kb[existing], category: cat || kb[existing].category, answer: a };
+    showNotif('✅ Entrada de KB actualizada');
+  } else {
+    kb.push({ category: cat || 'General', question: q, answer: a });
+    showNotif('✅ Nueva entrada guardada en KB');
+  }
+  await DB.set('knowledge_base', kb);
+  document.querySelector('.modal-overlay')?.remove();
+  // Actualizar cache
+  await loadAllData();
 }
 
 function showQuickReplies() {
@@ -3786,7 +3838,7 @@ async function deleteKb(idx) {
 
 Object.assign(window, {
   doLogin, doLogout, renderKnowledge, openKbModal, closeKbModal, saveKb, deleteKb, showSection, closeSidebar, toggleSidebar, openNuevaReserva,
-  toggleChatFloat, initChatbot, clearChat, sendChat, sendQuickReply, saveApiKey, copyMsg,
+  toggleChatFloat, initChatbot, clearChat, sendChat, sendQuickReply, saveApiKey, copyMsg, editBotMsg, saveEditedBotMsg,
   grillaNavegar, grillaHoy, renderGrilla,
   renderListaNegra, copyListaNegraLink, renderScoreStars, setScore,
   mapaNavegar, renderMapaFecha,
