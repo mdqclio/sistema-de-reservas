@@ -118,10 +118,10 @@ nav { flex: 1; padding: 12px 0; overflow-y: auto; }
 .section.active { display: block; }
 
 /* ===== BEDS MAP ===== */
-.rooms-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.rooms-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
 .room-card {
   background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius2); padding: 18px;
+  border-radius: var(--radius2); padding: 12px;
 }
 .room-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
 .room-title { font-size: 14px; font-weight: 600; color: var(--text); }
@@ -129,11 +129,12 @@ nav { flex: 1; padding: 12px 0; overflow-y: auto; }
 .room-badge.full { background: rgba(220,12,12,0.15); color: #f87171; }
 .room-badge.partial { background: rgba(217,119,6,0.15); color: #fbbf24; }
 .room-badge.free { background: rgba(5,150,105,0.15); color: #34d399; }
-.beds-grid { display: grid; grid-template-columns: 1fr; gap: 6px; }
+.beds-grid { display: grid; grid-template-columns: 1fr; gap: 4px; }
 .bed {
-  aspect-ratio: 1; border-radius: 6px; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; font-size: 9px; font-weight: 600;
+  height: 28px; border-radius: 5px; display: flex; flex-direction: row;
+  align-items: center; justify-content: center; gap: 4px; font-size: 11px; font-weight: 600;
   cursor: pointer; transition: all 0.15s; position: relative; border: 1px solid transparent;
+  padding: 0 8px;
 }
 .bed.free { background: rgba(5,150,105,0.18); color: #34d399; border-color: rgba(5,150,105,0.3); }
 .bed.free:hover { background: rgba(5,150,105,0.35); }
@@ -1477,6 +1478,10 @@ async function initData() {
     { id:'u1', nombre:'Administrador', email:'clio@mdq.com.ar', rol:'rol-admin', estado:'activo', ultimoAcceso: null },
   ]);
   await DB.set('cierres', []);
+  // NO tocar knowledge_base si ya tiene datos
+  if (!cache['knowledge_base'] || !Array.isArray(cache['knowledge_base']) || cache['knowledge_base'].length === 0) {
+    await DB.set('knowledge_base', []);
+  }
   await DB.set('init_cabanas', true);
 }
 
@@ -1597,9 +1602,11 @@ function allBeds() {
   for(let h=1;h<=12;h++) beds = beds.concat(habBeds(String(h)));
   return beds;
 }
-function getHuespedNombre(id) {
+function getHuespedNombre(id, reserva) {
+  if (!id) return reserva?.guestName || '—';
   const h = DB.get('huespedes',[]).find(x=>x.id===id);
-  return h ? h.nombre+' '+h.apellido : id;
+  if (h) return ((h.nombre||'') + ' ' + (h.apellido||'')).trim();
+  return reserva?.guestName || id;
 }
 function nightsBetween(a,b) {
   return Math.round((new Date(b)-new Date(a))/(1000*60*60*24));
@@ -1668,16 +1675,16 @@ function renderDashboard() {
 
   document.getElementById('dash-checkins').innerHTML = proxCheckins.length
     ? proxCheckins.map(r=>`<tr>
-        <td>${getHuespedNombre(r.huespedId)}</td>
-        <td>Cab.${r.hab} <span style="font-family:'DM Mono';font-size:11px;color:var(--accent2)">C${cabañaLabel(r.cabaña)}</span></td>
+        <td>${getHuespedNombre(r.huespedId, r)}</td>
+        <td>Cabaña ${r.hab}</td>
         <td>${r.entrada}</td>
         <td>${platBadge(r.plataforma)}</td>
       </tr>`).join('')
     : '<tr><td colspan="4" style="text-align:center;color:var(--text3)">Sin check-ins pendientes</td></tr>';
   document.getElementById('dash-checkouts').innerHTML = proxCheckouts.length
     ? proxCheckouts.map(r=>`<tr>
-        <td>${getHuespedNombre(r.huespedId)}</td>
-        <td>Cab.${r.hab} <span style="font-family:'DM Mono';font-size:11px;color:var(--accent2)">C${cabañaLabel(r.cabaña)}</span></td>
+        <td>${getHuespedNombre(r.huespedId, r)}</td>
+        <td>Cabaña ${r.hab}</td>
         <td>${r.salida}</td>
         <td>${pagoBadge(r)}</td>
       </tr>`).join('')
@@ -1764,12 +1771,12 @@ function renderMapa(fechaVer) {
             r.entrada.substring(0,10) <= fechaConsulta && r.salida.substring(0,10) > fechaConsulta
           );
           const guestName = res ? getHuespedNombre(res.huespedId).split(' ')[0] : '';
-          const bunk = i%2===0 ? '⬇' : '⬆';
+          const bunk = '🏕️';
           const clickable = !esModoConsulta;
-          const tooltipText = guestName ? `Cama ${b.label} — ${guestName}` : `Cama ${b.label}`;
+          const tooltipText = guestName ? `Cabaña ${b.label} — ${guestName}` : `Cabaña ${b.label} — Libre`;
           return `<div class="bed ${state} tooltip-wrap" ${clickable?`onclick="cycleBed('${b.id}')"`:'style="cursor:default"'}>
             <span style="font-size:8px">${bunk}</span>
-            <span class="bed-num">${b.label}</span>
+            <span class="bed-num">Cab. ${b.label}</span>
             ${guestName ? `<span class="bed-guest">${guestName}</span>` : ''}
             <div class="tooltip-box">${tooltipText}</div>
           </div>`;
@@ -1817,9 +1824,9 @@ function cycleBed(bedId) {
       <div class="guest-detail" style="margin-bottom:20px">
         <div class="guest-avatar">${h?(h.nombre[0]+h.apellido[0]):'?'}</div>
         <div class="guest-info">
-          <h3>${getHuespedNombre(resOcupada.huespedId)}</h3>
+          <h3>${getHuespedNombre(resOcupada.huespedId, resOcupada)}</h3>
           <div class="guest-meta">
-            <span class="meta-chip">🛏 Cab.${resOcupada.hab} — Cama ${cabañaLabel(resOcupada.cabaña)}</span>
+            <span class="meta-chip">🛏 Cab.${resOcupada.hab} — Cama ${camaLabel(resOcupada.cabaña)}</span>
             ${resOcupada.llave?`<span class="meta-chip">🔑 Llave: ${resOcupada.llave}</span>`:''}
             <span class="meta-chip">🌍 ${h?.nac||'—'}</span>
             ${h?.tel?`<span class="meta-chip"><a href="https://wa.me/${h.tel.replace(/\D/g,'')}" target="_blank" style="color:inherit;text-decoration:none;">📱 ${h.tel}</a></span>`:''}
@@ -1873,7 +1880,7 @@ function renderReservas() {
   const plat = document.getElementById('filterPlat')?.value||'';
 
   let filtered = reservas.filter(r => {
-    const nombre = getHuespedNombre(r.huespedId).toLowerCase();
+    const nombre = getHuespedNombre(r.huespedId, r).toLowerCase();
     const matchQ = !q || nombre.includes(q) || r.id.includes(q);
     const matchE = !estado || r.estado===estado;
     const matchP = !plat || r.plataforma===plat;
@@ -1893,8 +1900,8 @@ function renderReservas() {
     const hasSaldo = Number(r.saldo||0) > 0;
     return `<tr>
       <td style="font-family:'DM Mono';font-size:11px;color:var(--text3)">${r.id}</td>
-      <td>${getHuespedNombre(r.huespedId)}</td>
-      <td>Cab.${r.hab} / C${cabañaLabel(r.cabaña)}</td>
+      <td>${getHuespedNombre(r.huespedId, r)}</td>
+      <td>Cabaña ${r.hab}</td>
       <td>${r.entrada}</td><td>${r.salida}</td>
       <td style="text-align:center">${nights}</td>
       <td>${total}</td>
@@ -1904,10 +1911,10 @@ function renderReservas() {
       <td style="display:flex;gap:4px;flex-wrap:wrap;">
         ${canCheckin ? `<button class="btn btn-green btn-sm" onclick="doCheckin('${r.id}')">Check-in</button>` : ''}
         ${canCheckout ? `<button class="btn btn-amber btn-sm" onclick="doCheckout('${r.id}')">Check-out</button>` : ''}
-        ${(canCheckin||canCheckout) ? `<button class="btn btn-ghost btn-sm" onclick="openCambioCama('${r.id}')">🔄 Cama</button>` : ''}
+        ${(canCheckin||canCheckout) ? `<button class="btn btn-ghost btn-sm" onclick="openCambioCama('${r.id}')">🔄 Cabaña</button>` : ''}
         ${canCheckout ? `<button class="btn btn-blue btn-sm" onclick="openExtender('${r.id}')">+ Días</button>` : ''}
         ${(canCheckin||canCheckout) && hasSaldo ? `<button class="btn btn-green btn-sm" onclick="openPago('${r.id}')">💰 Cobrar</button>` : ''}
-        <button class="btn btn-red btn-sm" onclick="confirmDelete('reserva','${r.id}','reserva de ${getHuespedNombre(r.huespedId)}')">🗑</button>
+        <button class="btn btn-red btn-sm" onclick="confirmDelete('reserva','${r.id}','reserva de ${getHuespedNombre(r.huespedId, r)}')">🗑</button>
       </td>
     </tr>`;
   }).join('');
@@ -1932,7 +1939,7 @@ function updateBedsSelect() {
       }
       return false;
     });
-    return `<option value="${b.id}" ${blocked?'disabled':''}>Cama ${b.label}${blocked?' (no disponible)':''}</option>`;
+    return `<option value="${b.id}" ${blocked?'disabled':''}>Cabaña ${b.label}${blocked?' (no disponible)':''}</option>`;
   }).join('');
 }
 
@@ -1984,7 +1991,7 @@ async function saveReserva() {
     showNotif('Esa cabaña ya está reservada para esas fechas','error'); return; 
   }
   savingReserva = true;
-  const precio = Number(document.getElementById('res-precio').value)||27000;
+  const precio = Number(document.getElementById('res-precio').value)||510000;
   const moneda = document.getElementById('res-moneda').value;
   const nights = nightsBetween(entrada, salida);
   const totalEstadia = precio * nights;
@@ -1992,9 +1999,12 @@ async function saveReserva() {
   const saldo = Math.max(totalEstadia - pagado, 0);
   const estadoPago = document.getElementById('res-estado-pago').value;
   const reservas = DB.get('reservas',[]);
+  const huespedData = DB.get('huespedes',[]).find(x=>x.id===h);
   const r = {
     id: 'r'+Date.now(),
-    huespedId: h, hab, cabaña, entrada, salida,
+    huespedId: h, 
+    guestName: huespedData ? huespedData.nombre+' '+huespedData.apellido : h,
+    hab, cabaña, entrada, salida,
     precio, moneda,
     pago: document.getElementById('res-pago').value,
     plataforma: document.getElementById('res-plat').value,
@@ -2006,7 +2016,7 @@ async function saveReserva() {
   await DB.set('reservas', reservas);
   if(pagado > 0) {
     const movs = DB.get('movimientos',[]);
-    movs.push({ id:'m'+Date.now(), tipo:'ingreso', cat:'reserva', moneda, monto:pagado, metodo:r.pago, fecha:today(), concepto:`${estadoPago==='senia'?'Seña':'Pago'} reserva ${getHuespedNombre(h)} - Cab.${hab}` });
+    movs.push({ id:'m'+Date.now(), tipo:'ingreso', cat:'reserva', moneda, monto:pagado, metodo:r.pago, fecha:today(), concepto:`${estadoPago==='senia'?'Seña':'Pago'} reserva ${getHuespedNombre(h, r)} - Cabaña ${r.hab || hab}` });
     await DB.set('movimientos', movs);
   }
   savingReserva = false;
@@ -2033,7 +2043,7 @@ function doCheckin(rid) {
   document.getElementById('ci-resumen').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
       <div><span style="color:var(--text3);display:block;font-size:11px">Huésped</span><strong>${getHuespedNombre(r.huespedId)}</strong></div>
-      <div><span style="color:var(--text3);display:block;font-size:11px">Cab. / Cama</span><strong>Cab.${r.hab} / C${cabañaLabel(r.cabaña)}</strong></div>
+      <div><span style="color:var(--text3);display:block;font-size:11px">Cab. / Cama</span><strong>Cabaña ${r.hab}</strong></div>
       <div><span style="color:var(--text3);display:block;font-size:11px">Salida</span><strong>${r.salida}</strong></div>
     </div>`;
   openModal('modalCheckin');
@@ -2070,7 +2080,7 @@ async function confirmCheckin() {
   renderReservas();
   renderCheckin();
   renderMapa();
-  showNotif(`✅ Check-in realizado: ${getHuespedNombre(r.huespedId)}${llave?' — Llave: '+llave:''}`);
+  showNotif(`✅ Check-in realizado: ${getHuespedNombre(r.huespedId, r)}${llave?' — Llave: '+llave:''}`);
 }
 
 function openPago(rid) {
@@ -2198,7 +2208,7 @@ function renderCheckin() {
 
   document.getElementById('tablaCheckin').innerHTML = pendCheckin.length
     ? pendCheckin.map(r=>`<tr>
-        <td>${getHuespedNombre(r.huespedId)}</td>
+        <td>${getHuespedNombre(r.huespedId, r)}</td>
         <td>Cab.${r.hab}</td><td>${r.entrada}</td>
         <td style="display:flex;gap:4px;flex-wrap:wrap;">
           <button class="btn btn-green btn-sm" onclick="doCheckin('${r.id}');renderCheckin()">Check-in</button>
@@ -2209,7 +2219,7 @@ function renderCheckin() {
 
   document.getElementById('tablaCheckout').innerHTML = pendCheckout.length
     ? pendCheckout.map(r=>`<tr>
-        <td>${getHuespedNombre(r.huespedId)}</td>
+        <td>${getHuespedNombre(r.huespedId, r)}</td>
         <td>Cab.${r.hab}</td><td>${r.salida}</td>
         <td style="display:flex;gap:4px;flex-wrap:wrap;">
           <button class="btn btn-amber btn-sm" onclick="doCheckout('${r.id}');renderCheckin()">Check-out</button>
@@ -2223,10 +2233,10 @@ function renderCheckin() {
         const h = DB.get('huespedes',[]).find(x=>x.id===r.huespedId);
         const saldo = Number(r.saldo||0);
         return `<tr>
-          <td>${getHuespedNombre(r.huespedId)}</td>
+          <td>${getHuespedNombre(r.huespedId, r)}</td>
           <td>${h?.nac||'—'}</td>
           <td>${h?.ciudad||'—'}</td>
-          <td>Cab.${r.hab} / C${cabañaLabel(r.cabaña)}</td>
+          <td>Cabaña ${r.hab}</td>
           <td><span style="font-family:'DM Mono';font-size:13px;font-weight:600;color:var(--accent2)">${r.llave||'—'}</span></td>
           <td>${r.entrada}${r.horaCheckin?` <span style="color:var(--text3);font-size:11px">${r.horaCheckin}hs</span>`:''}</td>
           <td>${r.salida}</td>
@@ -2825,7 +2835,7 @@ function openCambioCama(rid) {
   document.getElementById('cc-resumen').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
       <div><span style="color:var(--text3);display:block;font-size:11px">Huésped</span><strong>${getHuespedNombre(r.huespedId)}</strong></div>
-      <div><span style="color:var(--text3);display:block;font-size:11px">Cama actual</span><strong style="color:#fbbf24">Cab.${r.hab} — Cama ${cabañaLabel(r.cabaña)}</strong></div>
+      <div><span style="color:var(--text3);display:block;font-size:11px">Cama actual</span><strong style="color:#fbbf24">Cab.${r.hab} — Cama ${camaLabel(r.cabaña)}</strong></div>
       <div><span style="color:var(--text3);display:block;font-size:11px">Período</span><strong>${r.entrada} → ${r.salida}</strong></div>
     </div>`;
   updateCambioCamaSelect();
@@ -2862,7 +2872,7 @@ async function saveCambioCama() {
   const reservas = DB.get('reservas',[]);
   const r = reservas.find(x=>x.id===rid);
   if(!r) return;
-  const cabañaAnterior = cabañaLabel(r.cabaña);
+  const cabañaAnterior = camaLabel(r.cabaña);
   // Limpiar estado manual de beds para ambas cabañas — las reservas son fuente de verdad
   const beds = DB.get('beds',{});
   delete beds[r.cabaña];
@@ -2877,7 +2887,7 @@ async function saveCambioCama() {
   renderReservas();
   renderCheckin();
   renderMapa(document.getElementById('mapaFecha')?.value);
-  showNotif(`🔄 Cambio realizado: cabaña ${cabañaAnterior} → cabaña ${cabañaLabel(nuevaCama)}`);
+  showNotif(`🔄 Cambio realizado: cabaña ${cabañaAnterior} → cabaña ${camaLabel(nuevaCama)}`);
 }
 
 // ===================== FORMULARIO PÚBLICO =====================
@@ -3011,7 +3021,7 @@ function openHorario(rid, tipo) {
   document.getElementById('horario-resumen').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
       <div><span style="color:var(--text3);display:block;font-size:11px">Huésped</span><strong>${getHuespedNombre(r.huespedId)}</strong></div>
-      <div><span style="color:var(--text3);display:block;font-size:11px">Cab. / Cama</span><strong>Cab.${r.hab} / C${cabañaLabel(r.cabaña)}</strong></div>
+      <div><span style="color:var(--text3);display:block;font-size:11px">Cab. / Cama</span><strong>Cabaña ${r.hab}</strong></div>
       <div><span style="color:var(--text3);display:block;font-size:11px">${isLate?'Salida estándar':'Entrada estándar'}</span><strong style="color:#fbbf24">${isLate?'10:00 hs':'14:00 hs'}</strong></div>
       <div><span style="color:var(--text3);display:block;font-size:11px">${isLate?'Fecha de salida':'Fecha de entrada'}</span><strong>${isLate?r.salida:r.entrada}</strong></div>
     </div>`;
@@ -3378,7 +3388,7 @@ ${Object.values(HABS).map(h => `- ${h.descripcion}`).join('\n')}
 PRECIOS ACTUALES:
 ${preciosTexto}
 
-${kbTexto ? `BASE DE CONOCIMIENTO:\n${kbTexto}\n` : ''}
+${kbTexto ? `INFORMACIÓN ADICIONAL:\n${kbTexto}\n` : ''}
 DISPONIBILIDAD HOY (${todayStr}):
 - Cabañas operativas: ${cabañasDisponibles}
 - Ocupadas: ${ocupadasHoy} | Libres: ${libresHoy}
@@ -3431,7 +3441,7 @@ function toggleChatFloat() {
   document.getElementById('nav-chatbot')?.classList.toggle('active', chatOpen);
 }
 
-function initChatbot() {
+async function initChatbot() {
   chatHistory = [];
   document.getElementById('chatMessages').innerHTML = '';
   if (!chatApiKey) {
@@ -3439,7 +3449,9 @@ function initChatbot() {
   } else {
     document.getElementById('chatApiWarning').style.display = 'none';
   }
-  addBotMessage('¡Hola! 👋 Soy **Alu**, el asistente del Puerto Delfín.\n\n¿En qué te puedo ayudar? Podés preguntarme sobre precios, disponibilidad, servicios y más.');
+  // Cargar datos frescos incluyendo base de conocimiento
+  await loadAllData();
+  addBotMessage('¡Hola! 👋 Soy el asistente virtual de **Cabañas Puerto Delfín** 🐬\n\n¿En qué te puedo ayudar? Podés preguntarme sobre precios, disponibilidad, servicios y más.');
   showQuickReplies();
 }
 
@@ -3544,6 +3556,8 @@ async function sendMessage(text) {
     addBotMessage('⚠️ Necesito la API key de Groq para responder. Ingresala arriba 👆');
     return;
   }
+  // Recargar datos frescos (reservas + KB) antes de responder
+  await loadAllData();
 
   chatTyping = true;
   document.getElementById('chatSendBtn').disabled = true;
