@@ -829,19 +829,25 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
       </div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label>Habitación *</label>
+      <div class="form-group"><label>Cabaña *</label>
         <select id="res-hab" onchange="updateBedsSelect()">
           <option value="">Seleccionar...</option>
-          <option value="1">Habitación 1</option>
-          <option value="2">Habitación 2</option>
-          <option value="3">Habitación 3</option>
-          <option value="4">Habitación 4</option>
-          <option value="5">Habitación 5</option>
-          <option value="6">Habitación 6</option>
+          <option value="1">Cabaña 1</option>
+          <option value="2">Cabaña 2</option>
+          <option value="3">Cabaña 3</option>
+          <option value="4">Cabaña 4</option>
+          <option value="5">Cabaña 5</option>
+          <option value="6">Cabaña 6</option>
+          <option value="7">Cabaña 7</option>
+          <option value="8">Cabaña 8</option>
+          <option value="9">Cabaña 9</option>
+          <option value="10">Cabaña 10</option>
+          <option value="11">Cabaña 11</option>
+          <option value="12">Cabaña 12</option>
         </select>
       </div>
-      <div class="form-group"><label>Cama *</label>
-        <select id="res-cabaña"><option value="">Primero elegí habitación</option></select>
+      <div class="form-group"><label>Unidad</label>
+        <select id="res-cabaña"><option value="">Seleccioná primero la cabaña</option></select>
       </div>
     </div>
     <div class="form-row">
@@ -946,23 +952,29 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
     <input type="hidden" id="cc-res-id">
     <div id="cc-resumen" style="background:var(--surface2);border-radius:var(--radius);padding:12px;margin-bottom:16px;font-size:13px;"></div>
     <div class="form-row">
-      <div class="form-group"><label>Nueva Habitación</label>
+      <div class="form-group"><label>Nueva Cabaña</label>
         <select id="cc-hab" onchange="updateCambioCamaSelect()">
-          <option value="1">Habitación 1</option>
-          <option value="2">Habitación 2</option>
-          <option value="3">Habitación 3</option>
-          <option value="4">Habitación 4</option>
-          <option value="5">Habitación 5</option>
-          <option value="6">Habitación 6</option>
+          <option value="1">Cabaña 1</option>
+          <option value="2">Cabaña 2</option>
+          <option value="3">Cabaña 3</option>
+          <option value="4">Cabaña 4</option>
+          <option value="5">Cabaña 5</option>
+          <option value="6">Cabaña 6</option>
+          <option value="7">Cabaña 7</option>
+          <option value="8">Cabaña 8</option>
+          <option value="9">Cabaña 9</option>
+          <option value="10">Cabaña 10</option>
+          <option value="11">Cabaña 11</option>
+          <option value="12">Cabaña 12</option>
         </select>
       </div>
-      <div class="form-group"><label>Nueva Cama</label>
+      <div class="form-group"><label>Unidad</label>
         <select id="cc-cabaña"></select>
       </div>
     </div>
     <div class="form-row">
       <div class="form-group"><label>🔑 Código de llave</label><input type="text" id="cc-llave" placeholder="Dejar vacío para no cambiar"></div>
-      <div class="form-group"><label>Motivo (opcional)</label><input type="text" id="cc-motivo" placeholder="Ej: ronquidos, prefiere cabaña baja..."></div>
+      <div class="form-group"><label>Motivo (opcional)</label><input type="text" id="cc-motivo" placeholder="Ej: solicitud especial......"></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modalCambioCama')">Cancelar</button>
@@ -1904,7 +1916,7 @@ function updateBedsSelect() {
   const entrada = document.getElementById('res-entrada').value;
   const salida = document.getElementById('res-salida').value;
   const sel = document.getElementById('res-cabaña');
-  if(!hab) { sel.innerHTML='<option>Primero elegí habitación</option>'; return; }
+  if(!hab) { sel.innerHTML='<option>Seleccioná primero la cabaña</option>'; return; }
   const reservas = DB.get('reservas',[]);
   const beds = habBeds(hab);
   sel.innerHTML = beds.map(b => {
@@ -3338,51 +3350,54 @@ function buildSystemPrompt() {
     dispProximas += `- ${label}: ${libres} cabaña${libres !== 1 ? 's' : ''} libre${libres !== 1 ? 's' : ''}\n`;
   }
 
-  return `Sos Alu, el asistente virtual del Puerto Delfín, un hostel en Mar del Plata, Argentina.
-Respondés de forma amigable, cálida y concisa. Detectás el idioma del mensaje y respondés en el mismo idioma (español o inglés).
+  // Base de conocimiento desde Firebase
+  const kb = DB.get('knowledge_base', []);
+  const kbTexto = kb.length
+    ? kb.map(k => `[${k.category||'Info'}] ${k.question}: ${k.answer}`).join('\n')
+    : '';
 
-INFORMACIÓN DEL HOSTEL:
-- Dirección: Av. Patricio Peralta Ramos 1361, frente a Playa Alfonsina, a 5 cuadras del centro
-- WhatsApp: +54 9 223 439-7923 (Coni/Constanza)
-- Instagram: @alulahostel | Facebook: Puerto Delfín Mar del Plata
-- Servicios: Living, comedor, cocina equipada, pool, WiFi, té y café de cortesía
-- CHECK-IN: 15hs | CHECK-OUT: 10hs (ambos pueden ser flexibles)
+  return `Sos el asistente virtual de Cabañas Puerto Delfín, en Mar del Plata, Argentina.
+Respondés de forma amigable, cálida y concisa. Detectás el idioma y respondés en el mismo idioma.
 
-HABITACIONES (todas compartidas mixtas, 12 cabañas en total):
+INFORMACIÓN GENERAL:
+- Primera línea de playa, a 50m del mar, a 4 cuadras del centro de Mar del Plata
+- CHECK-IN: 15:00 hs | CHECK-OUT: 10:00 hs
+- Desayuno incluido (se lleva a la cabaña cada mañana)
+- Pileta descubierta y templada disponible del 15 de noviembre al 5 de abril
+- Mascotas bienvenidas (hasta 2 pequeñas por cabaña)
+- Parrilla individual por cabaña, WiFi, TV LED 32", estacionamiento incluido
+
+CABAÑAS DISPONIBLES (12 unidades):
 ${Object.values(HABS).map(h => `- ${h.descripcion}`).join('\n')}
 
 PRECIOS ACTUALES:
 ${preciosTexto}
 
-BASE DE CONOCIMIENTO:
-${DB.get('knowledge_base',[]).map(k => '['+k.category+'] '+k.question+': '+k.answer).join('\n') || 'Sin información adicional cargada.'}
-
+${kbTexto ? `BASE DE CONOCIMIENTO:\n${kbTexto}\n` : ''}
 DISPONIBILIDAD HOY (${todayStr}):
-- Camas operativas: ${cabañasDisponibles} (habs 5 y 6 en mantenimiento)
+- Cabañas operativas: ${cabañasDisponibles}
 - Ocupadas: ${ocupadasHoy} | Libres: ${libresHoy}
 - Check-ins hoy: ${checkinsHoy} | Check-outs hoy: ${checkoutsHoy}
 - Check-ins mañana: ${checkinsMañana}
 
 DISPONIBILIDAD PRÓXIMAS 2 SEMANAS:
 ${dispProximas}
-EQUIPO:
-- Franco gestiona las cabañas en el predio
-- Para reservas y consultas, el asistente puede responder directamente o derivar a WhatsApp
-
 INSTRUCCIONES:
 - Respondé brevemente (máximo 3 párrafos)
-- Para reservar o confirmar disponibilidad, derivá a WhatsApp para confirmar disponibilidad
-- Si pregunta por una fecha específica, usá los datos de disponibilidad de arriba para responder con precisión
-- Si no sabés algo, derivá a WhatsApp con Coni
+- Podés responder preguntas sobre precios, disponibilidad, servicios y políticas directamente
+- Si necesitan confirmar una reserva, pediles que se comuniquen por WhatsApp
+- Si pregunta por una fecha específica, usá los datos de disponibilidad de arriba
 - Usá emojis con moderación`;
 }
 
 const QUICK_REPLIES = [
   { label: "💰 Precios", msg: "¿Cuáles son los precios?" },
-  { label: "🏠 Habitaciones", msg: "¿Qué tipo de habitaciones tienen?" },
+  { label: "🏕️ Cabañas", msg: "¿Qué tipos de cabañas tienen?" },
   { label: "📍 Ubicación", msg: "¿Dónde están ubicados?" },
   { label: "⏰ Horarios", msg: "¿Cuáles son los horarios de check-in y check-out?" },
-  { label: "🏊 Servicios", msg: "¿Qué servicios ofrecen?" },
+  { label: "🐾 Mascotas", msg: "¿Aceptan mascotas?" },
+  { label: "🥐 Desayuno", msg: "¿Qué incluye el desayuno?" },
+  { label: "🏊 Pileta", msg: "¿Tienen pileta? ¿Cuándo está disponible?" },
   { label: "📅 Reservar", msg: "Quiero hacer una reserva" },
 ];
 
@@ -3419,7 +3434,7 @@ function initChatbot() {
   } else {
     document.getElementById('chatApiWarning').style.display = 'none';
   }
-  addBotMessage('¡Hola! 👋 Soy **Alu**, el asistente del Puerto Delfín.\n\nPegá acá el mensaje del cliente y te preparo una respuesta para copiar.');
+  addBotMessage('¡Hola! 👋 Soy **Alu**, el asistente del Puerto Delfín.\n\n¿En qué te puedo ayudar? Podés preguntarme sobre precios, disponibilidad, servicios y más.');
   showQuickReplies();
 }
 
