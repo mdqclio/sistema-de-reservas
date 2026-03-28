@@ -831,7 +831,7 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
     </div>
     <div class="form-row">
       <div class="form-group"><label>Cabaña *</label>
-        <select id="res-hab" onchange="updateBedsSelect()">
+        <select id="res-hab" onchange="updateBedsSelect();calcTotalReserva()" style="font-size:14px">
           <option value="">Seleccionar...</option>
           <option value="1">Cabaña 1</option>
           <option value="2">Cabaña 2</option>
@@ -847,8 +847,8 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
           <option value="12">Cabaña 12</option>
         </select>
       </div>
-      <div class="form-group"><label>Unidad</label>
-        <select id="res-cabaña"><option value="">Seleccioná primero la cabaña</option></select>
+      <div class="form-group" style="display:none">
+        <select id="res-cabaña"><option value="">auto</option></select>
       </div>
     </div>
     <div class="form-row">
@@ -1925,7 +1925,11 @@ function updateBedsSelect() {
   const entrada = document.getElementById('res-entrada').value;
   const salida = document.getElementById('res-salida').value;
   const sel = document.getElementById('res-cabaña');
-  if(!hab) { sel.innerHTML='<option>Seleccioná primero la cabaña</option>'; return; }
+  if(!hab) { sel.innerHTML='<option value="">auto</option>'; return; }
+  // Para cabañas: la unidad es siempre hab-1 (1 cabaña por habitación)
+  const bedId = hab + '-1';
+  sel.innerHTML = `<option value="${bedId}" selected>${bedId}</option>`;
+  // Verificar disponibilidad
   const reservas = DB.get('reservas',[]);
   const beds = habBeds(hab);
   sel.innerHTML = beds.map(b => {
@@ -1974,7 +1978,8 @@ async function saveReserva() {
   if(btnGuardar) { btnGuardar.disabled = true; btnGuardar.textContent = 'Guardando...'; }
   const h = document.getElementById('res-huesped').value;
   const hab = document.getElementById('res-hab').value;
-  const cabaña = document.getElementById('res-cabaña').value;
+  const habVal = document.getElementById('res-hab').value;
+  const cabaña = document.getElementById('res-cabaña').value || (habVal ? habVal+'-1' : '');
   const entrada = document.getElementById('res-entrada').value;
   const salida = document.getElementById('res-salida').value;
   if(!h||!hab||!cabaña||!entrada||!salida) { showNotif('Completá todos los campos obligatorios','error'); return; }
