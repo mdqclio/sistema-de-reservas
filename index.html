@@ -1825,7 +1825,7 @@ function cycleBed(bedId) {
         <div class="guest-info">
           <h3>${getHuespedNombre(resOcupada.huespedId, resOcupada)}</h3>
           <div class="guest-meta">
-            <span class="meta-chip">🛏 Cab.${resOcupada.hab} — Cama ${camaLabel(resOcupada.cabaña)}</span>
+            <span class="meta-chip">🏕️ Cabaña ${resOcupada.hab}</span>
             ${resOcupada.llave?`<span class="meta-chip">🔑 Llave: ${resOcupada.llave}</span>`:''}
             <span class="meta-chip">🌍 ${h?.nac||'—'}</span>
             ${h?.tel?`<span class="meta-chip"><a href="https://wa.me/${h.tel.replace(/\D/g,'')}" target="_blank" style="color:inherit;text-decoration:none;">📱 ${h.tel}</a></span>`:''}
@@ -1858,11 +1858,11 @@ function cycleBed(bedId) {
       </div>
       ${resOcupada.notas?`<div style="margin-top:12px;padding:10px;background:var(--surface2);border-radius:var(--radius);font-size:13px;color:var(--text2)">📝 ${resOcupada.notas}</div>`:''}
     `;
-    document.querySelector('#modalGuestDetail h2').textContent = '🛏 Cama '+bedId;
+    document.querySelector('#modalGuestDetail h2').textContent = '🏕️ Cabaña ' + bedId.split('-')[0];
     openModal('modalGuestDetail');
     return;
   }
-  // Cama libre: ciclar estado
+  // Cabaña libre: ciclar estado
   const states = ['free','dirty','maintenance'];
   const cur = beds[bedId] || 'free';
   const next = states[(states.indexOf(cur)+1)%states.length];
@@ -3383,15 +3383,30 @@ function buildSystemPrompt() {
     return Math.max(0, cabañasDisponibles - ocupadas);
   }
 
-  // Próximas 2 semanas de disponibilidad resumida
+  // Próximas 4 semanas de disponibilidad resumida
   let dispProximas = '';
-  for (let i = 0; i <= 14; i++) {
+  for (let i = 0; i <= 28; i++) {
     const d = new Date(); d.setDate(d.getDate() + i);
     const ds = d.toISOString().slice(0,10);
     const libres = disponibilidadEnFecha(ds);
     const label = i === 0 ? 'Hoy' : i === 1 ? 'Mañana' : ds;
     dispProximas += `- ${label}: ${libres} cabaña${libres !== 1 ? 's' : ''} libre${libres !== 1 ? 's' : ''}\n`;
   }
+
+  // Lista de cabañas ocupadas hoy con detalle
+  const detalleCabañas = Array.from({length:12}, (_,i) => {
+    const num = String(i+1);
+    const res = reservas.find(r =>
+      r.hab === num &&
+      r.estado !== 'checkout' &&
+      r.entrada <= todayStr && r.salida > todayStr
+    );
+    if (res) return `  Cabaña ${num}: OCUPADA (${getHuespedNombre(res.huespedId, res)}, hasta ${res.salida})`;
+    const estado = bedStates[num+'-1'];
+    if (estado === 'maintenance') return `  Cabaña ${num}: EN MANTENIMIENTO`;
+    if (estado === 'dirty') return `  Cabaña ${num}: SUCIA (libre pero pendiente limpieza)`;
+    return `  Cabaña ${num}: LIBRE`;
+  }).join('\n');
 
   // Base de conocimiento desde Firebase
   const kb = DB.get('knowledge_base', []);
@@ -3417,13 +3432,13 @@ PRECIOS ACTUALES:
 ${preciosTexto}
 
 ${kbTexto ? `INFORMACIÓN ADICIONAL:\n${kbTexto}\n` : ''}
-DISPONIBILIDAD HOY (${todayStr}):
-- Cabañas operativas: ${cabañasDisponibles}
-- Ocupadas: ${ocupadasHoy} | Libres: ${libresHoy}
-- Check-ins hoy: ${checkinsHoy} | Check-outs hoy: ${checkoutsHoy}
-- Check-ins mañana: ${checkinsMañana}
+ESTADO DETALLADO HOY (${todayStr}):
+${detalleCabañas}
 
-DISPONIBILIDAD PRÓXIMAS 2 SEMANAS:
+RESUMEN HOY: ${cabañasDisponibles} operativas | ${ocupadasHoy} ocupadas | ${libresHoy} libres
+Check-ins hoy: ${checkinsHoy} | Check-outs hoy: ${checkoutsHoy} | Check-ins mañana: ${checkinsMañana}
+
+DISPONIBILIDAD PRÓXIMAS 4 SEMANAS:
 ${dispProximas}
 INSTRUCCIONES:
 - Respondé brevemente (máximo 3 párrafos)
@@ -3587,11 +3602,8 @@ async function sendMessage(text) {
     addBotMessage('⚠️ Necesito la API key de Groq para responder. Ingresala arriba 👆');
     return;
   }
-  // Recargar KB y datos frescos antes de armar el prompt
+  // Recargar datos frescos (reservas + KB) antes de armar el prompt
   await loadAllData();
-  // Recargar datos frescos incluyendo KB antes de cada respuesta
-  await loadAllData();
-  await loadApiKeyFromDB();
 
   chatTyping = true;
   document.getElementById('chatSendBtn').disabled = true;
