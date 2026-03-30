@@ -3221,7 +3221,7 @@ async function showListaNegraPublica() {
             </div>`).join('')}
           </div>`}
       <p style="text-align:center;font-size:11px;color:var(--text3);margin-top:24px">
-        Actualizado: ${new Date().toLocaleDateString('es-AR')} · Puerto Delfín Mar del Plata
+        Actualizado: ${new Date().toLocaleDateString('es-AR')} · Puerto Delfín Mar de las Pampas
       </p>
     </div>`;
 }
@@ -3408,11 +3408,11 @@ function buildSystemPrompt() {
     ? kb.map(k => `[${k.category||'Info'}] ${k.question}: ${k.answer}`).join('\n')
     : '';
 
-  return `Sos el asistente virtual de Cabañas Puerto Delfín, en Mar del Plata, Argentina.
+  return `Sos el asistente virtual de Cabañas Puerto Delfín, en Mar de las Pampas, Buenos Aires, Argentina.
 Respondés de forma amigable, cálida y concisa. Detectás el idioma y respondés en el mismo idioma.
 
 INFORMACIÓN GENERAL:
-- A 50m del mar, a 4 cuadras del centro de Mar del Plata. Sin vista al mar directa, pero se escucha desde las cabañas
+- A 50m del mar, a 4 cuadras del centro de Mar de las Pampas (Buenos Aires). Sin vista directa al mar pero se escucha desde las cabañas
 - CHECK-IN: 15:00 hs | CHECK-OUT: 10:00 hs
 - Desayuno incluido (se lleva a la cabaña cada mañana)
 - Pileta descubierta y templada disponible del 15 de noviembre al 5 de abril
