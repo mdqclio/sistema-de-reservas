@@ -1442,19 +1442,22 @@ const auth = getAuth(firebaseApp);
 // ===================== DATA STORE =====================
 // Cache local para rendimiento
 const cache = {};
+const pendingWrites = new Set(); // Claves con escrituras pendientes a Firebase
 
 const DB = {
-  get: (k, def) => { 
-    try { 
+  get: (k, def) => {
+    try {
       const v = cache[k];
-      return (v !== undefined && v !== null) ? v : def; 
-    } catch(e) { return def; } 
+      return (v !== undefined && v !== null) ? v : def;
+    } catch(e) { return def; }
   },
   set: async (k, v) => {
     cache[k] = v;
+    pendingWrites.add(k);
     try {
       await set(ref(db, 'cabanas/' + k), v);
     } catch(e) { console.error('Firebase write error:', e); }
+    pendingWrites.delete(k);
   }
 };
 
@@ -1464,10 +1467,13 @@ async function loadAllData() {
     const snapshot = await get(ref(db, 'cabanas'));
     if (snapshot.exists()) {
       const data = snapshot.val();
-      Object.keys(data).forEach(k => cache[k] = data[k]);
+      // No pisar claves con escrituras locales pendientes (evita race condition)
+      Object.keys(data).forEach(k => {
+        if (!pendingWrites.has(k)) cache[k] = data[k];
+      });
     }
     await initData();
-  await loadApiKeyFromDB();
+    await loadApiKeyFromDB();
   } catch(e) {
     console.error('Firebase read error:', e);
     showNotif('Error conectando con Firebase. Verificá tu conexión.', 'error');
