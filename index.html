@@ -1472,25 +1472,6 @@ async function loadAllData() {
         if (!pendingWrites.has(k)) cache[k] = data[k];
       });
     }
-    // Normalizar knowledge_base: Firebase puede devolver objeto en vez de array
-    if (!pendingWrites.has('knowledge_base')) {
-      const kb = cache['knowledge_base'];
-      if (!kb || !Array.isArray(kb)) {
-        cache['knowledge_base'] = kb && typeof kb === 'object' ? Object.values(kb) : [];
-        // Si estaba vacío en Firebase, inicializarlo con entradas base
-        if (!cache['knowledge_base'].length) {
-          const kbDefault = [
-            { category: 'General', question: '¿Qué es Cabañas Puerto Delfín?', answer: 'Somos un complejo de 12 cabañas ubicado en la costa. Ofrecemos alojamiento para familias y grupos.', creadoEn: new Date().toISOString(), creadoPor: 'sistema' },
-            { category: 'Precios', question: '¿Cuáles son los precios?', answer: 'Los precios varían según temporada. Consultá la sección de precios o preguntá directamente.', creadoEn: new Date().toISOString(), creadoPor: 'sistema' },
-            { category: 'Políticas', question: '¿Cuál es el horario de check-in y check-out?', answer: 'Check-in: desde las 14hs. Check-out: hasta las 10hs.', creadoEn: new Date().toISOString(), creadoPor: 'sistema' },
-          ];
-          if (!pendingWrites.has('knowledge_base')) {
-            cache['knowledge_base'] = kbDefault;
-            await DB.set('knowledge_base', kbDefault);
-          }
-        }
-      }
-    }
     await initData();
     await loadApiKeyFromDB();
   } catch(e) {
@@ -1685,7 +1666,7 @@ function showSection(s) {
   if (s === 'caja') renderCaja();
   if (s === 'usuarios') renderUsuarios();
   if (s === 'roles') renderRoles();
-  if (s === 'knowledge') loadAllData().then(() => renderKnowledge());
+  if (s === 'knowledge') loadKnowledgeBase().then(() => renderKnowledge());
   if (s === 'botconfig') renderBotConfig();
 }
 
@@ -4119,6 +4100,26 @@ loadAllData().then(() => {
 
 // ===== EXPONER FUNCIONES GLOBALMENTE (requerido por type="module") =====
 // ===================== BASE DE CONOCIMIENTO =====================
+async function loadKnowledgeBase() {
+  try {
+    const snap = await get(ref(db, 'cabanas/knowledge_base'));
+    let data = snap.exists() ? snap.val() : null;
+    // Firebase devuelve objetos con claves numéricas en lugar de arrays
+    if (data === null || data === undefined) {
+      cache['knowledge_base'] = [];
+    } else if (Array.isArray(data)) {
+      cache['knowledge_base'] = data;
+    } else if (typeof data === 'object') {
+      // {"0":{...},"1":{...}} → [{...},{...}]
+      cache['knowledge_base'] = Object.values(data);
+    } else {
+      cache['knowledge_base'] = [];
+    }
+  } catch(e) {
+    console.error('Error cargando knowledge_base:', e);
+  }
+}
+
 function renderKnowledge(filtro) {
   const rawKb = DB.get('knowledge_base', []);
   let kb = Array.isArray(rawKb) ? rawKb : (rawKb && typeof rawKb === 'object' ? Object.values(rawKb) : []);
@@ -4202,6 +4203,7 @@ async function saveKb(idx) {
   }
   await DB.set('knowledge_base', kb);
   closeKbModal();
+  await loadKnowledgeBase();
   renderKnowledge();
   showNotif('✅ Entrada guardada');
 }
@@ -4212,6 +4214,7 @@ async function deleteKb(idx) {
   const kb = Array.isArray(raw) ? raw : (raw && typeof raw === 'object' ? Object.values(raw) : []);
   kb.splice(idx, 1);
   await DB.set('knowledge_base', kb);
+  await loadKnowledgeBase();
   renderKnowledge();
   showNotif('Entrada eliminada');
 }
@@ -4290,7 +4293,7 @@ Object.assign(window, {
   renderBotConfig, saveBotConfig, saveQuickReplies, addQuickReply, removeQuickReply,
   renderListaNegra, copyListaNegraLink, renderScoreStars, setScore,
   mapaNavegar, renderMapaFecha,
-  today, fmtFecha,
+  today, fmtFecha, loadKnowledgeBase,
   confirmCheckin, doCheckin, doCheckout, editUsuario, openExtender, openHorario, openNuevoUsuario, openPago,
   openModal, closeModal,
   renderReservas, renderDashboard, renderMapa, renderMapaFecha, renderCheckin,
