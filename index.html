@@ -4104,17 +4104,14 @@ async function loadKnowledgeBase() {
   try {
     const snap = await get(ref(db, 'cabanas/knowledge_base'));
     let data = snap.exists() ? snap.val() : null;
-    // Firebase devuelve objetos con claves numéricas en lugar de arrays
-    if (data === null || data === undefined) {
-      cache['knowledge_base'] = [];
-    } else if (Array.isArray(data)) {
-      cache['knowledge_base'] = data;
-    } else if (typeof data === 'object') {
-      // {"0":{...},"1":{...}} → [{...},{...}]
-      cache['knowledge_base'] = Object.values(data);
-    } else {
-      cache['knowledge_base'] = [];
+    // Firebase puede devolver array con nulls al inicio, u objeto con claves numéricas
+    let entries = [];
+    if (Array.isArray(data)) {
+      entries = data.filter(x => x !== null && x !== undefined);
+    } else if (data && typeof data === 'object') {
+      entries = Object.values(data).filter(x => x !== null && x !== undefined);
     }
+    cache['knowledge_base'] = entries;
   } catch(e) {
     console.error('Error cargando knowledge_base:', e);
   }
