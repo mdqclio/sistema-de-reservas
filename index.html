@@ -2212,7 +2212,7 @@ async function saveReserva() {
   await DB.set('reservas', reservas);
   if(pagado > 0) {
     const movs = DB.get('movimientos',[]);
-    movs.push({ id:'m'+Date.now(), tipo:'ingreso', cat:'reserva', moneda, monto:pagado, metodo:r.pago, fecha:today(), concepto:`${estadoPago==='senia'?'Seña':'Pago'} reserva ${getHuespedNombre(h, r)} - Cabaña ${r.hab || hab}` });
+    movs.push({ id:'m'+Date.now(), tipo:'ingreso', cat:'reserva', moneda, monto:pagado, metodo:newData.pago, fecha:today(), concepto:`${estadoPago==='senia'?'Seña':'Pago'} reserva ${getHuespedNombre(h)} - Cabaña ${newData.hab}` });
     await DB.set('movimientos', movs);
   }
   savingReserva = false;
