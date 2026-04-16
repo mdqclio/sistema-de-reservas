@@ -3873,7 +3873,7 @@ function addBotMessage(text, isTyping = false) {
     ${!isTyping ? `
     <div class="chat-action-row">
       <button class="chat-action-btn copy" onclick="copyMsg('${bubbleId}')">📋 Copiar</button>
-      <button class="chat-action-btn edit" onclick="editBotMsg('${bubbleId}')">✏️ Corregir → KB</button>
+      <button class="chat-action-btn edit" onclick="editBotMsg(this)">✏️ Corregir → KB</button>
     </div>` : ''}`;
   msgs.appendChild(wrap);
   msgs.scrollTop = msgs.scrollHeight;
@@ -3889,10 +3889,10 @@ function copyMsg(id) {
   });
 }
 
-function editBotMsg(id) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  const originalText = (el.innerText || el.textContent).trim();
+function editBotMsg(btn) {
+  const bubble = (btn instanceof Element ? btn : null)?.closest('.chat-msg-wrap')?.querySelector('.chat-bubble.bot');
+  if (!bubble) return;
+  const originalText = (bubble.innerText || bubble.textContent).trim();
 
   // Buscar el último mensaje del usuario para usarlo como pregunta
   const userMsgs = document.querySelectorAll('.chat-bubble.user');
