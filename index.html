@@ -1472,6 +1472,25 @@ async function loadAllData() {
         if (!pendingWrites.has(k)) cache[k] = data[k];
       });
     }
+    // Normalizar knowledge_base: Firebase puede devolver objeto en vez de array
+    if (!pendingWrites.has('knowledge_base')) {
+      const kb = cache['knowledge_base'];
+      if (!kb || !Array.isArray(kb)) {
+        cache['knowledge_base'] = kb && typeof kb === 'object' ? Object.values(kb) : [];
+        // Si estaba vacío en Firebase, inicializarlo con entradas base
+        if (!cache['knowledge_base'].length) {
+          const kbDefault = [
+            { category: 'General', question: '¿Qué es Cabañas Puerto Delfín?', answer: 'Somos un complejo de 12 cabañas ubicado en la costa. Ofrecemos alojamiento para familias y grupos.', creadoEn: new Date().toISOString(), creadoPor: 'sistema' },
+            { category: 'Precios', question: '¿Cuáles son los precios?', answer: 'Los precios varían según temporada. Consultá la sección de precios o preguntá directamente.', creadoEn: new Date().toISOString(), creadoPor: 'sistema' },
+            { category: 'Políticas', question: '¿Cuál es el horario de check-in y check-out?', answer: 'Check-in: desde las 14hs. Check-out: hasta las 10hs.', creadoEn: new Date().toISOString(), creadoPor: 'sistema' },
+          ];
+          if (!pendingWrites.has('knowledge_base')) {
+            cache['knowledge_base'] = kbDefault;
+            await DB.set('knowledge_base', kbDefault);
+          }
+        }
+      }
+    }
     await initData();
     await loadApiKeyFromDB();
   } catch(e) {
@@ -1666,7 +1685,7 @@ function showSection(s) {
   if (s === 'caja') renderCaja();
   if (s === 'usuarios') renderUsuarios();
   if (s === 'roles') renderRoles();
-  if (s === 'knowledge') renderKnowledge();
+  if (s === 'knowledge') loadAllData().then(() => renderKnowledge());
   if (s === 'botconfig') renderBotConfig();
 }
 
@@ -1705,6 +1724,11 @@ function fmtMoney(m, mon='ARS') {
   return '$'+Number(m).toLocaleString('es-AR');
 }
 function today() { return new Date().toISOString().split('T')[0]; }
+function fmtFecha(iso) {
+  if (!iso) return '';
+  const [y, m, d] = iso.substring(0, 10).split('-');
+  return `${d}/${m}/${y}`;
+}
 function platBadge(p) {
   const map = { directo:'blue', booking:'green', airbnb:'amber', otro:'gray' };
   return `<span class="badge ${map[p]||'gray'}">${p}</span>`;
@@ -1766,7 +1790,7 @@ function renderDashboard() {
     ? proxCheckins.map(r=>`<tr>
         <td>${getHuespedNombre(r.huespedId, r)}</td>
         <td>Cabaña ${r.hab}</td>
-        <td>${r.entrada}</td>
+        <td>${fmtFecha(r.entrada)}</td>
         <td>${platBadge(r.plataforma)}</td>
       </tr>`).join('')
     : '<tr><td colspan="4" style="text-align:center;color:var(--text3)">Sin check-ins pendientes</td></tr>';
@@ -1774,7 +1798,7 @@ function renderDashboard() {
     ? proxCheckouts.map(r=>`<tr>
         <td>${getHuespedNombre(r.huespedId, r)}</td>
         <td>Cabaña ${r.hab}</td>
-        <td>${r.salida}</td>
+        <td>${fmtFecha(r.salida)}</td>
         <td>${pagoBadge(r)}</td>
       </tr>`).join('')
     : '<tr><td colspan="4" style="text-align:center;color:var(--text3)">Sin check-outs pendientes</td></tr>';
@@ -1931,11 +1955,11 @@ function cycleBed(bedId) {
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
         <div style="background:var(--surface2);border-radius:var(--radius);padding:12px;">
           <span style="font-size:11px;color:var(--text3);display:block">Check-in</span>
-          <strong>${resOcupada.entrada}${resOcupada.horaCheckin?' '+resOcupada.horaCheckin+'hs':''}</strong>
+          <strong>${fmtFecha(resOcupada.entrada)}${resOcupada.horaCheckin?' '+resOcupada.horaCheckin+'hs':''}</strong>
         </div>
         <div style="background:var(--surface2);border-radius:var(--radius);padding:12px;">
           <span style="font-size:11px;color:var(--text3);display:block">Check-out</span>
-          <strong>${resOcupada.salida}</strong>
+          <strong>${fmtFecha(resOcupada.salida)}</strong>
         </div>
         <div style="background:var(--surface2);border-radius:var(--radius);padding:12px;">
           <span style="font-size:11px;color:var(--text3);display:block">Noches</span>
@@ -1997,7 +2021,7 @@ function renderReservas() {
       <td style="font-family:'DM Mono';font-size:11px;color:var(--text3)">${r.id}</td>
       <td>${getHuespedNombre(r.huespedId, r)}</td>
       <td>Cabaña ${r.hab}</td>
-      <td>${r.entrada}</td><td>${r.salida}</td>
+      <td>${fmtFecha(r.entrada)}</td><td>${fmtFecha(r.salida)}</td>
       <td style="text-align:center">${nights}</td>
       <td>${total}</td>
       <td>${platBadge(r.plataforma)}</td>
@@ -2247,7 +2271,7 @@ function doCheckin(rid) {
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
       <div><span style="color:var(--text3);display:block;font-size:11px">Huésped</span><strong>${getHuespedNombre(r.huespedId)}</strong></div>
       <div><span style="color:var(--text3);display:block;font-size:11px">Cab. / Cama</span><strong>Cabaña ${r.hab}</strong></div>
-      <div><span style="color:var(--text3);display:block;font-size:11px">Salida</span><strong>${r.salida}</strong></div>
+      <div><span style="color:var(--text3);display:block;font-size:11px">Salida</span><strong>${fmtFecha(r.salida)}</strong></div>
     </div>`;
   openModal('modalCheckin');
 }
@@ -2337,7 +2361,7 @@ function openExtender(rid) {
   document.getElementById('ext-resumen').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
       <div><span style="color:var(--text3);display:block;font-size:11px">Huésped</span><strong>${getHuespedNombre(r.huespedId)}</strong></div>
-      <div><span style="color:var(--text3);display:block;font-size:11px">Salida actual</span><strong style="color:#fbbf24">${r.salida}</strong></div>
+      <div><span style="color:var(--text3);display:block;font-size:11px">Salida actual</span><strong style="color:#fbbf24">${fmtFecha(r.salida)}</strong></div>
       <div><span style="color:var(--text3);display:block;font-size:11px">Precio/noche</span><strong style="color:var(--accent2)">${fmtMoney(r.precio,r.moneda)}</strong></div>
     </div>`;
   document.getElementById('ext-nueva-salida').addEventListener('input', () => calcExtension(r));
@@ -2412,7 +2436,7 @@ function renderCheckin() {
   document.getElementById('tablaCheckin').innerHTML = pendCheckin.length
     ? pendCheckin.map(r=>`<tr>
         <td>${getHuespedNombre(r.huespedId, r)}</td>
-        <td>Cab.${r.hab}</td><td>${r.entrada}</td>
+        <td>Cab.${r.hab}</td><td>${fmtFecha(r.entrada)}</td>
         <td style="display:flex;gap:4px;flex-wrap:wrap;">
           <button class="btn btn-green btn-sm" onclick="doCheckin('${r.id}');renderCheckin()">Check-in</button>
           <button class="btn btn-blue btn-sm" onclick="openHorario('${r.id}','early')">🌅 Early</button>
@@ -2423,7 +2447,7 @@ function renderCheckin() {
   document.getElementById('tablaCheckout').innerHTML = pendCheckout.length
     ? pendCheckout.map(r=>`<tr>
         <td>${getHuespedNombre(r.huespedId, r)}</td>
-        <td>Cab.${r.hab}</td><td>${r.salida}</td>
+        <td>Cab.${r.hab}</td><td>${fmtFecha(r.salida)}</td>
         <td style="display:flex;gap:4px;flex-wrap:wrap;">
           <button class="btn btn-amber btn-sm" onclick="doCheckout('${r.id}');renderCheckin()">Check-out</button>
           <button class="btn btn-blue btn-sm" onclick="openHorario('${r.id}','late')">🌙 Late</button>
@@ -2441,8 +2465,8 @@ function renderCheckin() {
           <td>${h?.ciudad||'—'}</td>
           <td>Cabaña ${r.hab}</td>
 
-          <td>${r.entrada}${r.horaCheckin?` <span style="color:var(--text3);font-size:11px">${r.horaCheckin}hs</span>`:''}</td>
-          <td>${r.salida}</td>
+          <td>${fmtFecha(r.entrada)}${r.horaCheckin?` <span style="color:var(--text3);font-size:11px">${r.horaCheckin}hs</span>`:''}</td>
+          <td>${fmtFecha(r.salida)}</td>
           <td>${saldo>0?`<span class="badge amber">Debe ${fmtMoney(saldo,r.moneda)}</span>`:`<span class="badge green">Al día</span>`}</td>
           <td style="display:flex;gap:4px;flex-wrap:wrap;">
             <button class="btn btn-ghost btn-sm" onclick="openHorario('${r.id}','late')">🌙 Late</button>
@@ -2502,7 +2526,7 @@ function showGuestDetail(id) {
     <p style="font-size:12px;color:var(--text3);margin-bottom:8px">Historial de reservas:</p>
     <table><thead><tr><th>Entrada</th><th>Salida</th><th>Cab.</th><th>Total</th><th>Estado</th></tr></thead>
     <tbody>${reservas.map(r=>`<tr>
-      <td>${r.entrada}</td><td>${r.salida}</td><td>Cab.${r.hab}</td>
+      <td>${fmtFecha(r.entrada)}</td><td>${fmtFecha(r.salida)}</td><td>Cab.${r.hab}</td>
       <td>${fmtMoney(r.precio*nightsBetween(r.entrada,r.salida),r.moneda)}</td>
       <td>${estadoBadge(r.estado)}</td>
     </tr>`).join('')||'<tr><td colspan="5" style="text-align:center;color:var(--text3)">Sin reservas</td></tr>'}</tbody></table>
@@ -2814,7 +2838,7 @@ function renderAcct(tab) {
         <thead><tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Monto</th><th>Método</th></tr></thead>
         <tbody>${filtered.length
           ? filtered.sort((a,b)=>b.fecha>a.fecha?1:-1).map(m=>`<tr>
-              <td style="font-family:'DM Mono';font-size:12px">${m.fecha}</td>
+              <td style="font-family:'DM Mono';font-size:12px">${fmtFecha(m.fecha)}</td>
               <td>${m.concepto}</td>
               <td><span class="badge ${m.tipo==='ingreso'?'green':'red'}">${m.cat}</span></td>
               <td style="font-weight:500;color:${m.tipo==='ingreso'?'#34d399':'#f87171'}">${m.tipo==='ingreso'?'+':'-'}${fmtMoney(m.monto,m.moneda)}</td>
@@ -2847,7 +2871,7 @@ function renderCaja() {
   document.getElementById('caja-balance-usd').textContent = 'USD '+ingUSD.toLocaleString('es-AR');
   document.getElementById('tablaCaja').innerHTML = movs.length
     ? movs.map(m=>`<tr>
-        <td style="font-family:'DM Mono';font-size:12px">${m.fecha}</td>
+        <td style="font-family:'DM Mono';font-size:12px">${fmtFecha(m.fecha)}</td>
         <td>${m.concepto}</td>
         <td><span class="badge ${m.tipo==='ingreso'?'green':'red'}">${m.tipo}</span></td>
         <td style="font-weight:500;color:${m.tipo==='ingreso'?'#34d399':'#f87171'}">${m.tipo==='ingreso'?'+':'-'}${fmtMoney(m.monto,m.moneda)}</td>
@@ -2858,7 +2882,7 @@ function renderCaja() {
   const cierres = DB.get('cierres',[]);
   document.getElementById('historialCierres').innerHTML = cierres.slice(-3).reverse().map(c=>`
     <div style="padding:8px 0;border-top:1px solid var(--border);font-size:12px;color:var(--text2)">
-      <strong style="color:var(--text)">${c.fecha}</strong> — ${fmtMoney(c.balanceARS)} / USD ${c.balanceUSD} <span style="color:var(--text3)">(TC: $${c.tc})</span>
+      <strong style="color:var(--text)">${fmtFecha(c.fecha)}</strong> — ${fmtMoney(c.balanceARS)} / USD ${c.balanceUSD} <span style="color:var(--text3)">(TC: $${c.tc})</span>
     </div>`).join('');
 }
 
@@ -3181,7 +3205,7 @@ function openCambioCama(rid) {
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
       <div><span style="color:var(--text3);display:block;font-size:11px">Huésped</span><strong>${getHuespedNombre(r.huespedId)}</strong></div>
       <div><span style="color:var(--text3);display:block;font-size:11px">Cama actual</span><strong style="color:#fbbf24">Cab.${r.hab} — Cama ${camaLabel(r.cabaña)}</strong></div>
-      <div><span style="color:var(--text3);display:block;font-size:11px">Período</span><strong>${r.entrada} → ${r.salida}</strong></div>
+      <div><span style="color:var(--text3);display:block;font-size:11px">Período</span><strong>${fmtFecha(r.entrada)} → ${fmtFecha(r.salida)}</strong></div>
     </div>`;
   updateCambioCamaSelect();
   openModal('modalCambioCama');
@@ -3368,7 +3392,7 @@ function openHorario(rid, tipo) {
       <div><span style="color:var(--text3);display:block;font-size:11px">Huésped</span><strong>${getHuespedNombre(r.huespedId)}</strong></div>
       <div><span style="color:var(--text3);display:block;font-size:11px">Cab. / Cama</span><strong>Cabaña ${r.hab}</strong></div>
       <div><span style="color:var(--text3);display:block;font-size:11px">${isLate?'Salida estándar':'Entrada estándar'}</span><strong style="color:#fbbf24">${isLate?'10:00 hs':'14:00 hs'}</strong></div>
-      <div><span style="color:var(--text3);display:block;font-size:11px">${isLate?'Fecha de salida':'Fecha de entrada'}</span><strong>${isLate?r.salida:r.entrada}</strong></div>
+      <div><span style="color:var(--text3);display:block;font-size:11px">${isLate?'Fecha de salida':'Fecha de entrada'}</span><strong>${isLate?fmtFecha(r.salida):fmtFecha(r.entrada)}</strong></div>
     </div>`;
   openModal('modalHorario');
 }
@@ -4096,7 +4120,8 @@ loadAllData().then(() => {
 // ===== EXPONER FUNCIONES GLOBALMENTE (requerido por type="module") =====
 // ===================== BASE DE CONOCIMIENTO =====================
 function renderKnowledge(filtro) {
-  let kb = DB.get('knowledge_base', []);
+  const rawKb = DB.get('knowledge_base', []);
+  let kb = Array.isArray(rawKb) ? rawKb : (rawKb && typeof rawKb === 'object' ? Object.values(rawKb) : []);
   const list = document.getElementById('kbList');
   if (!list) return;
   const searchVal = (filtro ?? document.getElementById('kbSearch')?.value ?? '').toLowerCase();
@@ -4166,7 +4191,8 @@ async function saveKb(idx) {
   const q   = document.getElementById('kbQ').value.trim();
   const a   = document.getElementById('kbA').value.trim();
   if(!q || !a) { showNotif('Completá pregunta y respuesta', 'error'); return; }
-  const kb = DB.get('knowledge_base', []);
+  const raw = DB.get('knowledge_base', []);
+  const kb = Array.isArray(raw) ? raw : (raw && typeof raw === 'object' ? Object.values(raw) : []);
   const ahora = new Date().toISOString();
   const autor = currentUser?.email || 'desconocido';
   if(idx >= 0) {
@@ -4182,7 +4208,8 @@ async function saveKb(idx) {
 
 async function deleteKb(idx) {
   if(!confirm('¿Eliminar esta entrada?')) return;
-  const kb = DB.get('knowledge_base', []);
+  const raw = DB.get('knowledge_base', []);
+  const kb = Array.isArray(raw) ? raw : (raw && typeof raw === 'object' ? Object.values(raw) : []);
   kb.splice(idx, 1);
   await DB.set('knowledge_base', kb);
   renderKnowledge();
@@ -4263,7 +4290,7 @@ Object.assign(window, {
   renderBotConfig, saveBotConfig, saveQuickReplies, addQuickReply, removeQuickReply,
   renderListaNegra, copyListaNegraLink, renderScoreStars, setScore,
   mapaNavegar, renderMapaFecha,
-  today,
+  today, fmtFecha,
   confirmCheckin, doCheckin, doCheckout, editUsuario, openExtender, openHorario, openNuevoUsuario, openPago,
   openModal, closeModal,
   renderReservas, renderDashboard, renderMapa, renderMapaFecha, renderCheckin,
