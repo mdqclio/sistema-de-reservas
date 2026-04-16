@@ -131,10 +131,10 @@ nav { flex: 1; padding: 12px 0; overflow-y: auto; }
 .room-badge.free { background: rgba(5,150,105,0.15); color: #34d399; }
 .beds-grid { display: grid; grid-template-columns: 1fr; gap: 4px; }
 .bed {
-  height: 28px; border-radius: 5px; display: flex; flex-direction: row;
-  align-items: center; justify-content: center; gap: 4px; font-size: 11px; font-weight: 600;
+  height: 60px; border-radius: 5px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 2px; font-size: 11px; font-weight: 600;
   cursor: pointer; transition: all 0.15s; position: relative; border: 1px solid transparent;
-  padding: 0 8px;
+  padding: 4px 8px;
 }
 .bed.free { background: rgba(5,150,105,0.18); color: #34d399; border-color: rgba(5,150,105,0.3); }
 .bed.free:hover { background: rgba(5,150,105,0.35); }
@@ -144,8 +144,9 @@ nav { flex: 1; padding: 12px 0; overflow-y: auto; }
 .bed.occupied-confirmed:hover { background: rgba(13,148,136,0.35); }
 .bed.dirty { background: rgba(217,119,6,0.2); color: #fbbf24; border-color: rgba(217,119,6,0.3); }
 .bed.maintenance { background: rgba(220,12,12,0.15); color: #f87171; border-color: rgba(220,12,12,0.25); }
-.bed .bed-num { font-size: 11px; font-weight: 700; }
-.bed .bed-guest { font-size: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 90%; text-align: center; }
+.bed .bed-num { font-size: 12px; font-weight: 700; }
+.bed .bed-guest { font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 95%; text-align: center; }
+.bed .bed-info { font-size: 9px; opacity: 0.8; text-align: center; }
 .beds-legend { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
 .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text2); }
 .legend-dot { width: 10px; height: 10px; border-radius: 3px; }
@@ -706,9 +707,11 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
     <!-- PRECIOS -->
     <div id="section-precios" class="section">
       <div class="tabs">
-        <div class="tab active" onclick="switchPricingTab('temporada',this)">Por Temporada</div>
-        <div class="tab" onclick="switchPricingTab('habitacion',this)">Por Habitación</div>
-        <div class="tab" onclick="switchPricingTab('plataforma',this)">Por Plataforma</div>
+        <div class="tab active" onclick="switchPricingTab('temporada',this)">🗓 Temporadas</div>
+        <div class="tab" onclick="switchPricingTab('habitacion',this)">🏕 Por Cabaña</div>
+        <div class="tab" onclick="switchPricingTab('finde',this)">📅 Fines de semana largos</div>
+        <div class="tab" onclick="switchPricingTab('promo',this)">🎯 Promociones</div>
+        <div class="tab" onclick="switchPricingTab('plataforma',this)">📱 Plataformas</div>
       </div>
       <div id="pricingContent"></div>
     </div>
@@ -825,7 +828,8 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
 <!-- MODAL RESERVA -->
 <div class="modal-overlay" id="modalReserva">
   <div class="modal">
-    <h2>Nueva Reserva</h2>
+    <h2 id="modalReservaTitle">Nueva Reserva</h2>
+    <input type="hidden" id="res-edit-id">
     <div class="form-row">
       <div class="form-group"><label>Huésped *</label>
         <select id="res-huesped"><option value="">Seleccionar...</option></select>
@@ -912,6 +916,18 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
         <select id="res-estado">
           <option value="confirmada">Confirmada</option>
           <option value="checkin">Check-in realizado</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Cantidad de pasajeros</label>
+        <input type="number" id="res-pasajeros" min="1" max="12" placeholder="Ej: 4">
+      </div>
+    </div>
+    <div class="form-row" style="align-items:center;">
+      <div class="form-group">
+        <label>¿Incluye desayuno?</label>
+        <select id="res-desayuno">
+          <option value="si">Sí, incluye desayuno</option>
+          <option value="no">No incluye desayuno</option>
         </select>
       </div>
     </div>
@@ -1485,10 +1501,13 @@ async function initData() {
   ]);
   await DB.set('precios', {
     temporadas: [
-      { id:'t1', nombre:'Alta', meses:'Dic-Feb', precio:35000, moneda:'ARS' },
-      { id:'t2', nombre:'Media', meses:'Mar-Nov (exc.jul-ago)', precio:27000, moneda:'ARS' },
-      { id:'t3', nombre:'Baja', meses:'Abr-May, Sep-Oct', precio:22000, moneda:'ARS' },
+      { id:'t1', nombre:'Temporada Alta (verano)', fecha_inicio:'2024-12-15', fecha_fin:'2025-02-28', tipo:'alta', anual:true },
+      { id:'t2', nombre:'Temporada Alta (invierno)', fecha_inicio:'2025-07-01', fecha_fin:'2025-08-31', tipo:'alta', anual:true },
+      { id:'t3', nombre:'Temporada Baja', fecha_inicio:'2025-04-01', fecha_fin:'2025-05-31', tipo:'baja', anual:true },
+      { id:'t4', nombre:'Temporada Baja (sep-oct)', fecha_inicio:'2025-09-01', fecha_fin:'2025-10-31', tipo:'baja', anual:true },
     ],
+    fines_semana_largos: [],
+    promociones: [],
     habitaciones: [
       { hab:'1',  nombre:'Cabaña 1',  capacidad:3, precio_base:510000, precio_alta:637500, precio_baja:400000, moneda:'ARS' },
       { hab:'2',  nombre:'Cabaña 2',  capacidad:3, precio_base:510000, precio_alta:637500, precio_baja:400000, moneda:'ARS' },
@@ -1835,13 +1854,19 @@ function renderMapa(fechaVer) {
             r.entrada.substring(0,10) <= fechaConsulta && r.salida.substring(0,10) > fechaConsulta
           );
           const guestName = res ? getHuespedNombre(res.huespedId).split(' ')[0] : '';
-          const bunk = '🏕️';
+          const pasajeros = res?.pasajeros || '';
+          const desayuno = res?.desayuno;
           const clickable = !esModoConsulta;
-          const tooltipText = guestName ? `Cabaña ${b.label} — ${guestName}` : `Cabaña ${b.label} — Libre`;
+          const tooltipText = guestName
+            ? `Cabaña ${b.label} — ${guestName}${pasajeros ? ' · '+pasajeros+' pax' : ''}${desayuno ? ' · 🥐' : ''}`
+            : `Cabaña ${b.label} — Libre`;
+          const infoLine = guestName && (pasajeros || desayuno !== undefined)
+            ? `${pasajeros ? pasajeros+' pax' : ''}${pasajeros && desayuno ? ' · ' : ''}${desayuno ? '🥐' : (desayuno===false ? 'sin desay.' : '')}`
+            : '';
           return `<div class="bed ${state} tooltip-wrap" ${clickable?`onclick="cycleBed('${b.id}')"`:'style="cursor:default"'}>
-            <span style="font-size:8px">${bunk}</span>
             <span class="bed-num">Cab. ${b.label}</span>
             ${guestName ? `<span class="bed-guest">${guestName}</span>` : ''}
+            ${infoLine ? `<span class="bed-info">${infoLine}</span>` : ''}
             <div class="tooltip-box">${tooltipText}</div>
           </div>`;
         }).join('')}
@@ -1978,25 +2003,53 @@ function renderReservas() {
         ${(canCheckin||canCheckout) ? `<button class="btn btn-ghost btn-sm" onclick="openCambioCama('${r.id}')">🔄 Cabaña</button>` : ''}
         ${canCheckout ? `<button class="btn btn-blue btn-sm" onclick="openExtender('${r.id}')">+ Días</button>` : ''}
         ${(canCheckin||canCheckout) && hasSaldo ? `<button class="btn btn-green btn-sm" onclick="openPago('${r.id}')">💰 Cobrar</button>` : ''}
+        <button class="btn btn-ghost btn-sm" onclick="editReserva('${r.id}')">✏️ Editar</button>
         <button class="btn btn-red btn-sm" onclick="confirmDelete('reserva','${r.id}','reserva de ${getHuespedNombre(r.huespedId, r)}')">🗑</button>
       </td>
     </tr>`;
   }).join('');
 }
 
+function getTipoTemporada(fecha) {
+  // Devuelve 'alta', 'media' o 'baja' según las temporadas configuradas en precios
+  const precios = DB.get('precios', {});
+  const temporadas = precios.temporadas || [];
+  const d = fecha || today();
+  for (const t of temporadas) {
+    if (!t.fecha_inicio || !t.fecha_fin) continue;
+    let desde = t.fecha_inicio;
+    let hasta = t.fecha_fin;
+    if (t.anual) {
+      // Comparar solo MM-DD (ignorar año)
+      const mmddD = desde.slice(5); // MM-DD
+      const mmddH = hasta.slice(5);
+      const mmddFecha = d.slice(5);
+      const crosses = mmddD > mmddH; // el rango cruza el año (ej: 12-15 al 02-28)
+      if (crosses) {
+        if (mmddFecha >= mmddD || mmddFecha <= mmddH) return t.tipo;
+      } else {
+        if (mmddFecha >= mmddD && mmddFecha <= mmddH) return t.tipo;
+      }
+    } else {
+      if (d >= desde && d <= hasta) return t.tipo;
+    }
+  }
+  return 'media';
+}
+
 function onHabChange() {
   const hab = document.getElementById('res-hab').value;
   const precioEl = document.getElementById('res-precio');
+  const entradaEl = document.getElementById('res-entrada');
   if (!hab) return;
   const precios = DB.get('precios', {});
   const cabana = (precios.habitaciones || []).find(h => h.hab === hab);
   if (cabana) {
-    // Determinar temporada por mes actual
-    const mes = new Date().getMonth(); // 0-11
+    const fecha = entradaEl?.value || today();
+    const tipo = getTipoTemporada(fecha);
     let precio = cabana.precio_base;
-    if ([11, 0, 1].includes(mes)) precio = cabana.precio_alta;       // Dic-Feb
-    else if ([6, 7].includes(mes)) precio = cabana.precio_alta;       // Jul-Ago (alta)
-    else if ([3, 4, 8, 9].includes(mes)) precio = cabana.precio_baja; // Abr-May, Sep-Oct
+    if (tipo === 'alta') precio = cabana.precio_alta;
+    else if (tipo === 'baja') precio = cabana.precio_baja;
     precioEl.value = precio;
   }
 }
@@ -2044,19 +2097,53 @@ function calcTotalReserva() {
 }
 
 function openNuevaReserva() {
+  document.getElementById('modalReservaTitle').textContent = 'Nueva Reserva';
+  document.getElementById('res-edit-id').value = '';
+  document.getElementById('btnGuardarReserva').textContent = 'Guardar Reserva';
   const huespedes = DB.get('huespedes', []);
   const sel = document.getElementById('res-huesped');
   sel.innerHTML = '<option value="">Seleccionar...</option>' +
     huespedes.map(h => `<option value="${h.id}">${h.nombre} ${h.apellido}</option>`).join('');
-  // Fecha de entrada = hoy por defecto
-  const entradaEl = document.getElementById('res-entrada');
-  if (!entradaEl.value) {
-    entradaEl.value = today();
-    const manana = new Date(); manana.setDate(manana.getDate()+1);
-    document.getElementById('res-salida').value = manana.toISOString().split('T')[0];
-  }
-  // Precio se auto-completa al seleccionar la cabaña (ver onHabChange)
+  document.getElementById('res-hab').value = '';
+  document.getElementById('res-entrada').value = today();
+  const manana = new Date(); manana.setDate(manana.getDate()+1);
+  document.getElementById('res-salida').value = manana.toISOString().split('T')[0];
   document.getElementById('res-precio').value = '';
+  document.getElementById('res-pagado').value = '';
+  document.getElementById('res-notas').value = '';
+  document.getElementById('res-pasajeros').value = '';
+  document.getElementById('res-desayuno').value = 'si';
+  calcTotalReserva();
+  openModal('modalReserva');
+}
+
+function editReserva(rid) {
+  const reservas = DB.get('reservas', []);
+  const r = reservas.find(x => x.id === rid);
+  if (!r) return;
+  document.getElementById('modalReservaTitle').textContent = 'Editar Reserva';
+  document.getElementById('res-edit-id').value = rid;
+  document.getElementById('btnGuardarReserva').textContent = 'Guardar cambios';
+  const huespedes = DB.get('huespedes', []);
+  const sel = document.getElementById('res-huesped');
+  sel.innerHTML = '<option value="">Seleccionar...</option>' +
+    huespedes.map(h => `<option value="${h.id}">${h.nombre} ${h.apellido}</option>`).join('');
+  sel.value = r.huespedId;
+  document.getElementById('res-hab').value = r.hab;
+  updateBedsSelect();
+  document.getElementById('res-cabaña').value = r.cabaña;
+  document.getElementById('res-entrada').value = r.entrada;
+  document.getElementById('res-salida').value = r.salida;
+  document.getElementById('res-precio').value = r.precio;
+  document.getElementById('res-moneda').value = r.moneda || 'ARS';
+  document.getElementById('res-pagado').value = r.pagado || '';
+  document.getElementById('res-pago').value = r.pago || 'efectivo';
+  document.getElementById('res-estado-pago').value = r.estadoPago || 'total';
+  document.getElementById('res-estado').value = r.estado || 'confirmada';
+  document.getElementById('res-plat').value = r.plataforma || 'directo';
+  document.getElementById('res-notas').value = r.notas || '';
+  document.getElementById('res-pasajeros').value = r.pasajeros || '';
+  document.getElementById('res-desayuno').value = r.desayuno === false ? 'no' : 'si';
   calcTotalReserva();
   openModal('modalReserva');
 }
@@ -2077,8 +2164,10 @@ async function saveReserva() {
     showNotif('Completá todos los campos obligatorios','error'); return;
   }
   // Verificar disponibilidad de la cabaña para esas fechas
+  const editId = document.getElementById('res-edit-id').value;
   const reservasExist = DB.get('reservas',[]);
   const conflicto = reservasExist.some(r =>
+    r.id !== editId &&
     r.cabaña === cabaña &&
     (r.estado === 'checkin' || r.estado === 'confirmada') &&
     r.entrada < salida && r.salida > entrada
@@ -2098,9 +2187,9 @@ async function saveReserva() {
   const estadoPago = document.getElementById('res-estado-pago').value;
   const reservas = DB.get('reservas',[]);
   const huespedData = DB.get('huespedes',[]).find(x=>x.id===h);
-  const r = {
-    id: 'r'+Date.now(),
-    huespedId: h, 
+  const desayunoVal = document.getElementById('res-desayuno').value;
+  const newData = {
+    huespedId: h,
     guestName: huespedData ? huespedData.nombre+' '+huespedData.apellido : h,
     hab, cabaña, entrada, salida,
     precio, moneda,
@@ -2108,9 +2197,18 @@ async function saveReserva() {
     plataforma: document.getElementById('res-plat').value,
     estado: document.getElementById('res-estado').value,
     estadoPago, pagado, saldo,
+    pasajeros: Number(document.getElementById('res-pasajeros').value)||null,
+    desayuno: desayunoVal === 'si',
     notas: document.getElementById('res-notas').value,
   };
-  reservas.push(r);
+  if (editId) {
+    // Editar reserva existente
+    const idx = reservas.findIndex(x => x.id === editId);
+    if (idx >= 0) reservas[idx] = { ...reservas[idx], ...newData };
+  } else {
+    // Nueva reserva
+    reservas.push({ id: 'r'+Date.now(), ...newData });
+  }
   await DB.set('reservas', reservas);
   if(pagado > 0) {
     const movs = DB.get('movimientos',[]);
@@ -2121,6 +2219,8 @@ async function saveReserva() {
   if(btnGuardar) { btnGuardar.disabled = false; btnGuardar.textContent = 'Guardar Reserva'; }
   closeModal('modalReserva');
   renderReservas();
+  if (document.getElementById('section-grilla')?.classList.contains('active')) renderGrilla();
+  if (document.getElementById('section-mapa')?.classList.contains('active')) renderMapa(document.getElementById('mapaFecha')?.value);
   showNotif('Reserva guardada correctamente');
 }
 
@@ -2442,42 +2542,138 @@ function saveHuesped() {
 }
 
 // ===================== PRECIOS =====================
+const INP = `style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;"`;
+
 function renderPrecios(tab) {
   const precios = DB.get('precios',{});
   const c = document.getElementById('pricingContent');
+
   if(tab==='temporada') {
+    const rows = (precios.temporadas||[]).map(t=>`<tr>
+      <td><input ${INP} style="width:130px" value="${t.nombre}" onchange="updateTemporada('${t.id}','nombre',this.value)"></td>
+      <td>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <label style="font-size:11px;color:var(--text3)">Desde</label>
+          <input type="date" ${INP} style="width:145px" value="${t.fecha_inicio||''}" onchange="updateTemporada('${t.id}','fecha_inicio',this.value)">
+          <label style="font-size:11px;color:var(--text3)">Hasta</label>
+          <input type="date" ${INP} style="width:145px" value="${t.fecha_fin||''}" onchange="updateTemporada('${t.id}','fecha_fin',this.value)">
+          <label style="font-size:11px;color:var(--text3)" title="Si está marcado, el período se repite cada año en las mismas fechas (ignora el año)">🔁 Anual</label>
+          <input type="checkbox" ${t.anual?'checked':''} onchange="updateTemporada('${t.id}','anual',this.checked)" style="width:16px;height:16px;cursor:pointer;">
+        </div>
+      </td>
+      <td>
+        <select ${INP} onchange="updateTemporada('${t.id}','tipo',this.value)">
+          <option value="alta" ${t.tipo==='alta'?'selected':''}>Alta</option>
+          <option value="media" ${t.tipo==='media'?'selected':''}>Media</option>
+          <option value="baja" ${t.tipo==='baja'?'selected':''}>Baja</option>
+        </select>
+      </td>
+      <td><button class="btn btn-red btn-sm" onclick="deleteTemporada('${t.id}')">🗑</button></td>
+    </tr>`).join('');
     c.innerHTML = `
       <div class="card">
-        <div class="card-header"><h3>Temporadas</h3><button class="btn btn-blue btn-sm" onclick="addTemporada()">+ Agregar</button></div>
+        <div class="card-header">
+          <div>
+            <h3>Temporadas</h3>
+            <p style="font-size:12px;color:var(--text3);margin-top:4px">Definí los rangos de fechas de cada temporada. Si marcás "Anual", el rango se repite todos los años (por ejemplo, Alta = 15/dic al 28/feb).</p>
+          </div>
+          <button class="btn btn-blue btn-sm" onclick="addTemporada()">+ Agregar temporada</button>
+        </div>
         <table class="pricing-table">
-          <thead><tr><th>Temporada</th><th>Período</th><th>Precio base</th><th>Moneda</th><th>Acción</th></tr></thead>
-          <tbody>${(precios.temporadas||[]).map(t=>`<tr>
-            <td><strong style="color:var(--text)">${t.nombre}</strong></td>
-            <td>${t.meses}</td>
-            <td><input type="number" value="${t.precio}" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;width:120px" onchange="updateTemporada('${t.id}','precio',this.value)"></td>
-            <td>
-              <select style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px" onchange="updateTemporada('${t.id}','moneda',this.value)">
-                <option ${t.moneda==='ARS'?'selected':''}>ARS</option>
-                <option ${t.moneda==='USD'?'selected':''}>USD</option>
-              </select>
-            </td>
-            <td><button class="btn btn-red btn-sm" onclick="deleteTemporada('${t.id}')">Eliminar</button></td>
-          </tr>`).join('')}</tbody>
+          <thead><tr><th>Nombre</th><th>Período</th><th>Tipo</th><th></th></tr></thead>
+          <tbody>${rows}</tbody>
         </table>
       </div>`;
+
   } else if(tab==='habitacion') {
+    const rows = (precios.habitaciones||[]).map(h=>`<tr>
+      <td><strong style="color:var(--text)">Cabaña ${h.hab}</strong> <span style="font-size:11px;color:var(--text3)">${h.nombre||''}</span></td>
+      <td><input type="number" ${INP} style="width:120px" value="${h.precio_base||0}" onchange="updateHabPrecio('${h.hab}','precio_base',this.value)"></td>
+      <td><input type="number" ${INP} style="width:120px" value="${h.precio_alta||0}" onchange="updateHabPrecio('${h.hab}','precio_alta',this.value)"></td>
+      <td><input type="number" ${INP} style="width:120px" value="${h.precio_baja||0}" onchange="updateHabPrecio('${h.hab}','precio_baja',this.value)"></td>
+    </tr>`).join('');
     c.innerHTML = `
       <div class="card">
-        <div class="card-header"><h3>Precios por Habitación</h3></div>
+        <div class="card-header">
+          <div>
+            <h3>Precios por Cabaña</h3>
+            <p style="font-size:12px;color:var(--text3);margin-top:4px">Precio por noche en ARS según la temporada configurada.</p>
+          </div>
+        </div>
         <table class="pricing-table">
-          <thead><tr><th>Habitación</th><th>Precio Base</th><th>Temporada Alta</th><th>Temporada Baja</th><th>Moneda</th></tr></thead>
-          <tbody>${(precios.habitaciones||[]).map(h=>`<tr>
-            <td><strong style="color:var(--text)">${h.nombre}</strong> <span style="font-size:11px;color:var(--text3)">(${h.hab==='1'?'8':'6'} cabañas)</span></td>
-            ${['precio_base','precio_alta','precio_baja'].map(f=>`<td><input type="number" value="${h[f]}" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;width:110px" onchange="updateHabPrecio('${h.hab}','${f}',this.value)"></td>`).join('')}
-            <td>ARS</td>
-          </tr>`).join('')}</tbody>
+          <thead><tr><th>Cabaña</th><th>Precio Base (media)</th><th>Temporada Alta</th><th>Temporada Baja</th></tr></thead>
+          <tbody>${rows}</tbody>
         </table>
       </div>`;
+
+  } else if(tab==='finde') {
+    const fines = precios.fines_semana_largos || [];
+    const rows = fines.map(f=>`<tr>
+      <td><input ${INP} style="width:180px" value="${f.nombre}" onchange="updateFinde('${f.id}','nombre',this.value)"></td>
+      <td><input type="date" ${INP} style="width:145px" value="${f.fecha_inicio||''}" onchange="updateFinde('${f.id}','fecha_inicio',this.value)"></td>
+      <td><input type="date" ${INP} style="width:145px" value="${f.fecha_fin||''}" onchange="updateFinde('${f.id}','fecha_fin',this.value)"></td>
+      <td>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <input type="number" ${INP} style="width:100px" value="${f.recargo_pct||0}" onchange="updateFinde('${f.id}','recargo_pct',this.value)">
+          <span style="color:var(--text3);font-size:12px">%</span>
+        </div>
+      </td>
+      <td><button class="btn btn-red btn-sm" onclick="deleteFinde('${f.id}')">🗑</button></td>
+    </tr>`).join('');
+    c.innerHTML = `
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h3>Fines de semana largos</h3>
+            <p style="font-size:12px;color:var(--text3);margin-top:4px">Definí los feriados puente y fines de semana largos con su recargo porcentual sobre el precio base de la cabaña.</p>
+          </div>
+          <button class="btn btn-blue btn-sm" onclick="addFinde()">+ Agregar</button>
+        </div>
+        <table class="pricing-table">
+          <thead><tr><th>Nombre</th><th>Desde</th><th>Hasta</th><th>Recargo (%)</th><th></th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+
+  } else if(tab==='promo') {
+    const promos = precios.promociones || [];
+    const rows = promos.map(p=>`<tr>
+      <td><input ${INP} style="width:180px" value="${p.nombre}" onchange="updatePromo('${p.id}','nombre',this.value)"></td>
+      <td><input type="date" ${INP} style="width:145px" value="${p.fecha_inicio||''}" onchange="updatePromo('${p.id}','fecha_inicio',this.value)"></td>
+      <td><input type="date" ${INP} style="width:145px" value="${p.fecha_fin||''}" onchange="updatePromo('${p.id}','fecha_fin',this.value)"></td>
+      <td>
+        <select ${INP} onchange="updatePromo('${p.id}','tipo',this.value)">
+          <option value="descuento_pct" ${p.tipo==='descuento_pct'?'selected':''}>Descuento %</option>
+          <option value="precio_fijo" ${p.tipo==='precio_fijo'?'selected':''}>Precio fijo por noche</option>
+          <option value="noches_gratis" ${p.tipo==='noches_gratis'?'selected':''}>Noches gratis (X+Y)</option>
+        </select>
+      </td>
+      <td>
+        <div style="display:flex;align-items:center;gap:4px;">
+          <input type="number" ${INP} style="width:90px" value="${p.valor||0}" onchange="updatePromo('${p.id}','valor',this.value)">
+          <span style="color:var(--text3);font-size:11px">${p.tipo==='descuento_pct'?'%':p.tipo==='precio_fijo'?'ARS':'noches'}</span>
+        </div>
+      </td>
+      <td>
+        <input ${INP} style="width:200px" placeholder="ej: solo para cabañas 1-4" value="${p.condicion||''}" onchange="updatePromo('${p.id}','condicion',this.value)">
+      </td>
+      <td><button class="btn btn-red btn-sm" onclick="deletePromo('${p.id}')">🗑</button></td>
+    </tr>`).join('');
+    c.innerHTML = `
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h3>Promociones especiales</h3>
+            <p style="font-size:12px;color:var(--text3);margin-top:4px">Promociones con fecha de vigencia. Se aplican sobre el precio de la cabaña durante el período indicado.</p>
+          </div>
+          <button class="btn btn-blue btn-sm" onclick="addPromo()">+ Agregar</button>
+        </div>
+        <table class="pricing-table">
+          <thead><tr><th>Nombre</th><th>Desde</th><th>Hasta</th><th>Tipo</th><th>Valor</th><th>Condición / Nota</th><th></th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+
   } else {
     c.innerHTML = `
       <div class="card">
@@ -2486,8 +2682,8 @@ function renderPrecios(tab) {
           <thead><tr><th>Plataforma</th><th>Comisión (%)</th><th>Descuento ofrecido (%)</th></tr></thead>
           <tbody>${(precios.plataformas||[]).map(p=>`<tr>
             <td>${platBadge(p.plat)}</td>
-            <td><input type="number" value="${p.comision}" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;width:80px" onchange="updatePlatPrecio('${p.plat}','comision',this.value)"></td>
-            <td><input type="number" value="${p.descuento}" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;width:80px" onchange="updatePlatPrecio('${p.plat}','descuento',this.value)"></td>
+            <td><input type="number" ${INP} style="width:80px" value="${p.comision}" onchange="updatePlatPrecio('${p.plat}','comision',this.value)"></td>
+            <td><input type="number" ${INP} style="width:80px" value="${p.descuento}" onchange="updatePlatPrecio('${p.plat}','descuento',this.value)"></td>
           </tr>`).join('')}</tbody>
         </table>
       </div>`;
@@ -2502,33 +2698,79 @@ function switchPricingTab(tab, el) {
 
 function updateTemporada(id, field, val) {
   const p = DB.get('precios',{});
+  if(!p.temporadas) p.temporadas=[];
   const t = p.temporadas.find(x=>x.id===id);
-  if(t) t[field] = val;
-  DB.set('precios', p);
-}
-function updateHabPrecio(hab, field, val) {
-  const p = DB.get('precios',{});
-  const h = p.habitaciones.find(x=>x.hab===hab);
-  if(h) h[field] = Number(val);
-  DB.set('precios', p);
-}
-function updatePlatPrecio(plat, field, val) {
-  const p = DB.get('precios',{});
-  const h = p.plataformas.find(x=>x.plat===plat);
-  if(h) h[field] = Number(val);
+  if(t) t[field] = (field==='anual') ? val : val;
   DB.set('precios', p);
 }
 function deleteTemporada(id) {
   const p = DB.get('precios',{});
-  p.temporadas = p.temporadas.filter(x=>x.id!==id);
+  p.temporadas = (p.temporadas||[]).filter(x=>x.id!==id);
   DB.set('precios', p);
   renderPrecios('temporada');
 }
 function addTemporada() {
   const p = DB.get('precios',{});
-  p.temporadas.push({ id:'t'+Date.now(), nombre:'Nueva', meses:'', precio:27000, moneda:'ARS' });
+  if(!p.temporadas) p.temporadas=[];
+  p.temporadas.push({ id:'t'+Date.now(), nombre:'Nueva temporada', fecha_inicio:'', fecha_fin:'', tipo:'media', anual:true });
   DB.set('precios', p);
   renderPrecios('temporada');
+}
+
+function updateHabPrecio(hab, field, val) {
+  const p = DB.get('precios',{});
+  const h = (p.habitaciones||[]).find(x=>x.hab===hab);
+  if(h) h[field] = Number(val);
+  DB.set('precios', p);
+}
+function updatePlatPrecio(plat, field, val) {
+  const p = DB.get('precios',{});
+  const h = (p.plataformas||[]).find(x=>x.plat===plat);
+  if(h) h[field] = Number(val);
+  DB.set('precios', p);
+}
+
+function addFinde() {
+  const p = DB.get('precios',{});
+  if(!p.fines_semana_largos) p.fines_semana_largos=[];
+  p.fines_semana_largos.push({ id:'f'+Date.now(), nombre:'Feriado puente', fecha_inicio:'', fecha_fin:'', recargo_pct:20 });
+  DB.set('precios', p);
+  renderPrecios('finde');
+}
+function updateFinde(id, field, val) {
+  const p = DB.get('precios',{});
+  if(!p.fines_semana_largos) p.fines_semana_largos=[];
+  const f = p.fines_semana_largos.find(x=>x.id===id);
+  if(f) f[field] = field==='recargo_pct' ? Number(val) : val;
+  DB.set('precios', p);
+}
+function deleteFinde(id) {
+  const p = DB.get('precios',{});
+  p.fines_semana_largos = (p.fines_semana_largos||[]).filter(x=>x.id!==id);
+  DB.set('precios', p);
+  renderPrecios('finde');
+}
+
+function addPromo() {
+  const p = DB.get('precios',{});
+  if(!p.promociones) p.promociones=[];
+  p.promociones.push({ id:'pr'+Date.now(), nombre:'Promo', fecha_inicio:'', fecha_fin:'', tipo:'descuento_pct', valor:10, condicion:'' });
+  DB.set('precios', p);
+  renderPrecios('promo');
+}
+function updatePromo(id, field, val) {
+  const p = DB.get('precios',{});
+  if(!p.promociones) p.promociones=[];
+  const pr = p.promociones.find(x=>x.id===id);
+  if(pr) pr[field] = field==='valor' ? Number(val) : val;
+  DB.set('precios', p);
+  if(field==='tipo') renderPrecios('promo');
+}
+function deletePromo(id) {
+  const p = DB.get('precios',{});
+  p.promociones = (p.promociones||[]).filter(x=>x.id!==id);
+  DB.set('precios', p);
+  renderPrecios('promo');
 }
 
 // ===================== CONTABILIDAD =====================
@@ -3424,13 +3666,20 @@ function buildSystemPrompt() {
   // Precios actuales desde Firebase
   let preciosTexto = '';
   if (precios.temporadas && precios.temporadas.length) {
-    preciosTexto = precios.temporadas.map(t =>
-      `- ${t.nombre} (${t.meses}): $${t.precio.toLocaleString('es-AR')} ARS/noche`
-    ).join('\n');
+    preciosTexto = precios.temporadas.map(t => {
+      const periodo = t.fecha_inicio && t.fecha_fin
+        ? `${t.fecha_inicio.slice(5)} al ${t.fecha_fin.slice(5)}${t.anual?' (anual)':''}`
+        : (t.meses || 'sin rango');
+      return `- ${t.nombre} [${t.tipo||'media'}] (${periodo})`;
+    }).join('\n');
+    // Agregar precios por cabaña si están disponibles
+    if (precios.habitaciones && precios.habitaciones.length) {
+      preciosTexto += '\nPrecios por noche (ARS): ' + precios.habitaciones.map(h =>
+        `Cab.${h.hab}: alta $${(h.precio_alta||0).toLocaleString('es-AR')} / base $${(h.precio_base||0).toLocaleString('es-AR')} / baja $${(h.precio_baja||0).toLocaleString('es-AR')}`
+      ).join(' | ');
+    }
   } else {
-    preciosTexto = `- Temporada alta (Dic-Feb): $637.500 ARS/noche
-- Temporada media (Mar-Nov exc.Jul-Ago): $510.000 ARS/noche
-- Temporada baja (Abr-May, Sep-Oct): $400.000 ARS/noche`;
+    preciosTexto = `- Temporada alta (Dic-Feb): $637.500 ARS/noche\n- Temporada media: $510.000 ARS/noche\n- Temporada baja: $400.000 ARS/noche`;
   }
 
   // Función para calcular disponibilidad en una fecha
@@ -4014,6 +4263,7 @@ Object.assign(window, {
   renderReservas, renderDashboard, renderMapa, renderMapaFecha, renderCheckin,
   renderHuespedes, renderPrecios, renderAcct, renderCaja, renderRoles, renderUsuarios,
   saveReserva, saveHuesped, saveMovimiento, saveRol, saveUsuario, savePago, saveExtension, saveHorario,
+  editReserva,
   openEditHuesped, saveEditHuesped, confirmDelete, deleteHuesped, deleteReserva,
   openCambioCama, updateCambioCamaSelect, saveCambioCama,
   limpiarDuplicados,
@@ -4022,6 +4272,8 @@ Object.assign(window, {
   cycleBed, showGuestDetail, previewDoc, populateRolSelect,
   switchPricingTab, switchAcctTab, cerrarCaja,
   addTemporada, deleteTemporada, updateTemporada, updateHabPrecio, updatePlatPrecio,
+  addFinde, updateFinde, deleteFinde,
+  addPromo, updatePromo, deletePromo,
   togglePerm, deleteRol, toggleUsuarioEstado,
 });
 </script>
