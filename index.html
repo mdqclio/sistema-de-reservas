@@ -863,6 +863,64 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
       <div class="roles-grid" id="rolesGrid"></div>
     </div>
 
+    <!-- BASE DE CONOCIMIENTO -->
+    <div id="section-knowledge" class="section">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <h2 style="font-size:20px;font-weight:600;">🧠 Base de Conocimiento</h2>
+      </div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:20px;">
+        <p style="font-size:13px;color:var(--text2);margin-bottom:12px;">Esta información se inyecta automáticamente en cada conversación del chatbot. Agregá datos sobre políticas, servicios especiales, eventos, respuestas frecuentes, o cualquier info que quieras que el asistente conozca.</p>
+        <div style="display:flex;gap:10px;margin-bottom:10px;">
+          <input type="text" id="kb-nueva-entrada" placeholder="Ej: Los jueves hay descuento para grupos de más de 4 personas" style="flex:1;padding:10px 14px;background:var(--surface3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:14px;">
+          <button class="btn btn-blue" onclick="saveKnowledgeEntry()">+ Agregar</button>
+        </div>
+      </div>
+      <div id="kb-lista" style="display:flex;flex-direction:column;gap:8px;">
+        <p style="color:var(--text3);font-size:13px;">Cargando...</p>
+      </div>
+    </div>
+
+    <!-- PIPELINE CRM -->
+    <div id="section-pipeline" class="section">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
+        <div>
+          <h2 style="font-size:20px;font-weight:600;">🎯 Pipeline de Ventas</h2>
+          <p style="font-size:13px;color:var(--text3);margin-top:2px;">Seguimiento de consultas y oportunidades</p>
+        </div>
+        <button class="btn btn-blue" onclick="openLeadModal()">+ Nueva consulta</button>
+      </div>
+      <div class="kanban-board" id="kanbanBoard"></div>
+    </div>
+
+    <!-- CONFIGURACIÓN DEL BOT -->
+    <div id="section-botconfig" class="section">
+      <div style="display:grid;gap:20px;">
+        <div class="card">
+          <div class="card-header"><h3>🏨 Información del Hostel</h3><span style="font-size:12px;color:var(--text3)">Usada por el asistente virtual</span></div>
+          <div style="padding:20px;display:grid;gap:12px;">
+            <div class="form-group"><label>Nombre del hostel</label><input type="text" id="bcf-nombre" placeholder="Cabañas Puerto Delfín"></div>
+            <div class="form-group"><label>Ubicación</label><textarea id="bcf-ubicacion" rows="2" placeholder="Mar de las Pampas, Buenos Aires..."></textarea></div>
+            <div class="form-row">
+              <div class="form-group"><label>Check-in</label><input type="time" id="bcf-checkin"></div>
+              <div class="form-group"><label>Check-out</label><input type="time" id="bcf-checkout"></div>
+            </div>
+            <div class="form-group"><label>Descripción de cabañas</label><textarea id="bcf-cabanas" rows="3" placeholder="Cabañas 1-4: hasta 3 personas..."></textarea></div>
+            <div class="form-group"><label>Servicios incluidos</label><textarea id="bcf-servicios" rows="3" placeholder="Desayuno, WiFi, parrilla..."></textarea></div>
+            <div class="form-group"><label>Información adicional (aparece en el prompt del bot)</label><textarea id="bcf-adicional" rows="4" placeholder="Políticas especiales, restricciones, info de temporada..."></textarea></div>
+            <button class="btn btn-blue btn-sm" onclick="saveBotConfig()" style="align-self:flex-start;">Guardar configuración del hostel</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>💬 Respuestas rápidas del chat</h3><span style="font-size:12px;color:var(--text3)">Botones que aparecen al abrir el chat</span></div>
+          <div style="padding:20px;">
+            <div id="qr-list" style="display:grid;gap:8px;margin-bottom:14px;"></div>
+            <button class="btn btn-ghost btn-sm" onclick="addQuickReply()">+ Agregar respuesta rápida</button>
+            <button class="btn btn-blue btn-sm" style="margin-left:8px;" onclick="saveQuickReplies()">Guardar respuestas rápidas</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -1420,64 +1478,6 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
     </div>
   </div>
 </div>
-
-    <!-- BASE DE CONOCIMIENTO -->
-    <div id="section-knowledge" class="section">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-        <h2 style="font-size:20px;font-weight:600;">🧠 Base de Conocimiento</h2>
-      </div>
-      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:20px;">
-        <p style="font-size:13px;color:var(--text2);margin-bottom:12px;">Esta información se inyecta automáticamente en cada conversación del chatbot. Agregá datos sobre políticas, servicios especiales, eventos, respuestas frecuentes, o cualquier info que quieras que el asistente conozca.</p>
-        <div style="display:flex;gap:10px;margin-bottom:10px;">
-          <input type="text" id="kb-nueva-entrada" placeholder="Ej: Los jueves hay descuento para grupos de más de 4 personas" style="flex:1;padding:10px 14px;background:var(--surface3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:14px;">
-          <button class="btn btn-blue" onclick="saveKnowledgeEntry()">+ Agregar</button>
-        </div>
-      </div>
-      <div id="kb-lista" style="display:flex;flex-direction:column;gap:8px;">
-        <p style="color:var(--text3);font-size:13px;">Cargando...</p>
-      </div>
-    </div>
-
-    <!-- PIPELINE CRM -->
-    <div id="section-pipeline" class="section">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
-        <div>
-          <h2 style="font-size:20px;font-weight:600;">🎯 Pipeline de Ventas</h2>
-          <p style="font-size:13px;color:var(--text3);margin-top:2px;">Seguimiento de consultas y oportunidades</p>
-        </div>
-        <button class="btn btn-blue" onclick="openLeadModal()">+ Nueva consulta</button>
-      </div>
-      <div class="kanban-board" id="kanbanBoard"></div>
-    </div>
-
-    <!-- CONFIGURACIÓN DEL BOT -->
-    <div id="section-botconfig" class="section">
-      <div style="display:grid;gap:20px;">
-        <div class="card">
-          <div class="card-header"><h3>🏨 Información del Hostel</h3><span style="font-size:12px;color:var(--text3)">Usada por el asistente virtual</span></div>
-          <div style="padding:20px;display:grid;gap:12px;">
-            <div class="form-group"><label>Nombre del hostel</label><input type="text" id="bcf-nombre" placeholder="Cabañas Puerto Delfín"></div>
-            <div class="form-group"><label>Ubicación</label><textarea id="bcf-ubicacion" rows="2" placeholder="Mar de las Pampas, Buenos Aires..."></textarea></div>
-            <div class="form-row">
-              <div class="form-group"><label>Check-in</label><input type="time" id="bcf-checkin"></div>
-              <div class="form-group"><label>Check-out</label><input type="time" id="bcf-checkout"></div>
-            </div>
-            <div class="form-group"><label>Descripción de cabañas</label><textarea id="bcf-cabanas" rows="3" placeholder="Cabañas 1-4: hasta 3 personas..."></textarea></div>
-            <div class="form-group"><label>Servicios incluidos</label><textarea id="bcf-servicios" rows="3" placeholder="Desayuno, WiFi, parrilla..."></textarea></div>
-            <div class="form-group"><label>Información adicional (aparece en el prompt del bot)</label><textarea id="bcf-adicional" rows="4" placeholder="Políticas especiales, restricciones, info de temporada..."></textarea></div>
-            <button class="btn btn-blue btn-sm" onclick="saveBotConfig()" style="align-self:flex-start;">Guardar configuración del hostel</button>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card-header"><h3>💬 Respuestas rápidas del chat</h3><span style="font-size:12px;color:var(--text3)">Botones que aparecen al abrir el chat</span></div>
-          <div style="padding:20px;">
-            <div id="qr-list" style="display:grid;gap:8px;margin-bottom:14px;"></div>
-            <button class="btn btn-ghost btn-sm" onclick="addQuickReply()">+ Agregar respuesta rápida</button>
-            <button class="btn btn-blue btn-sm" style="margin-left:8px;" onclick="saveQuickReplies()">Guardar respuestas rápidas</button>
-          </div>
-        </div>
-      </div>
-    </div>
 
 <!-- NOTIFICATION -->
 <div class="notif" id="notif"></div>
