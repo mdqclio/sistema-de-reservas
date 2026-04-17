@@ -3927,6 +3927,7 @@ function editBotMsg(btn) {
       </div>
     </div>`;
   document.body.appendChild(modal);
+  setTimeout(() => modal.classList.add('open'), 10);
   modal.addEventListener('click', e => { if(e.target===modal) modal.remove(); });
 }
 
