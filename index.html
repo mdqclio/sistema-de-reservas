@@ -1374,18 +1374,19 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
 
     <!-- BASE DE CONOCIMIENTO -->
     <div id="section-knowledge" class="section">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px;">
-        <div>
-          <p style="color:var(--text2);font-size:13px;margin-bottom:4px;">Estas entradas alimentan al asistente virtual. El bot las usa para responder consultas.</p>
-          <p style="color:var(--text3);font-size:12px;">💡 También podés corregir cualquier respuesta del chat con el botón "✏️ Corregir → KB"</p>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <h2 style="font-size:20px;font-weight:600;">🧠 Base de Conocimiento</h2>
+      </div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:20px;">
+        <p style="font-size:13px;color:var(--text2);margin-bottom:12px;">Esta información se inyecta automáticamente en cada conversación del chatbot. Agregá datos sobre políticas, servicios especiales, eventos, respuestas frecuentes, o cualquier info que quieras que el asistente conozca.</p>
+        <div style="display:flex;gap:10px;margin-bottom:10px;">
+          <input type="text" id="kb-nueva-entrada" placeholder="Ej: Los jueves hay descuento para grupos de más de 4 personas" style="flex:1;padding:10px 14px;background:var(--surface3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:14px;">
+          <button class="btn btn-blue" onclick="saveKnowledgeEntry()">+ Agregar</button>
         </div>
-        <button class="btn btn-blue btn-sm" onclick="openKbModal()">+ Nueva entrada</button>
       </div>
-      <div style="margin-bottom:12px;">
-        <input id="kbSearch" type="text" placeholder="🔍 Buscar en la base de conocimiento..." oninput="renderKnowledge()"
-          style="width:100%;padding:9px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:13px;">
+      <div id="kb-lista" style="display:flex;flex-direction:column;gap:8px;">
+        <p style="color:var(--text3);font-size:13px;">Cargando...</p>
       </div>
-      <div id="kbList"></div>
     </div>
 
     <!-- CONFIGURACIÓN DEL BOT -->
@@ -1666,7 +1667,7 @@ function showSection(s) {
   if (s === 'caja') renderCaja();
   if (s === 'usuarios') renderUsuarios();
   if (s === 'roles') renderRoles();
-  if (s === 'knowledge') loadKnowledgeBase().then(() => renderKnowledge());
+  if (s === 'knowledge') loadKnowledgeBase().then(() => setTimeout(() => renderKnowledge(), 50));
   if (s === 'botconfig') renderBotConfig();
 }
 
@@ -3729,7 +3730,7 @@ function buildSystemPrompt() {
   // Base de conocimiento desde Firebase
   const kb = DB.get('knowledge_base', []);
   const kbTexto = kb.length
-    ? kb.map(k => `[${k.category||'Info'}] ${k.question}: ${k.answer}`).join('\n')
+    ? kb.map(k => k.texto || (k.question ? `[${k.category||'Info'}] ${k.question}: ${k.answer}` : '')).filter(Boolean).join('\n')
     : '';
 
   // Configuración del hostel desde Firebase (editable sin tocar el código)
@@ -3906,20 +3907,13 @@ function editBotMsg(btn) {
   const modal = document.createElement('div');
   modal.className = 'modal-overlay';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:1000;';
+  const textoSugerido = lastQ ? `Pregunta: ${lastQ} — Respuesta: ${originalText}` : originalText;
   modal.innerHTML = `
     <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius2);padding:28px;width:520px;max-width:95vw;max-height:90vh;overflow-y:auto;">
       <h2 style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text)">✏️ Corregir respuesta → Base de Conocimiento</h2>
       <div class="form-group">
-        <label>Categoría</label>
-        <input id="ebCat" value="" placeholder="Precios, Servicios, Políticas..." style="width:100%;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;">
-      </div>
-      <div class="form-group" style="margin-top:10px;">
-        <label>Pregunta / Tema</label>
-        <input id="ebQ" value="${lastQ.replace(/"/g,'&quot;')}" placeholder="¿Cuál es la pregunta?" style="width:100%;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;">
-      </div>
-      <div class="form-group" style="margin-top:10px;">
-        <label>Respuesta correcta</label>
-        <textarea id="ebA" rows="6" style="width:100%;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;resize:vertical;">${originalText.replace(/</g,'&lt;')}</textarea>
+        <label>Información a guardar</label>
+        <textarea id="ebTexto" rows="6" style="width:100%;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;resize:vertical;">${textoSugerido.replace(/</g,'&lt;')}</textarea>
       </div>
       <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
         <button onclick="this.closest('.modal-overlay').remove()" style="padding:8px 16px;background:transparent;border:1px solid var(--border);color:var(--text2);border-radius:var(--radius);cursor:pointer;">Cancelar</button>
@@ -3932,25 +3926,13 @@ function editBotMsg(btn) {
 }
 
 async function saveEditedBotMsg() {
-  const cat = document.getElementById('ebCat').value.trim();
-  const q   = document.getElementById('ebQ').value.trim();
-  const a   = document.getElementById('ebA').value.trim();
-  if (!q || !a) { showNotif('Completá pregunta y respuesta', 'error'); return; }
+  const texto = document.getElementById('ebTexto').value.trim();
+  if (!texto) { showNotif('El texto no puede estar vacío', 'error'); return; }
   const kb = DB.get('knowledge_base', []);
-  const ahora = new Date().toISOString();
-  const autor = currentUser?.email || 'desconocido';
-  // Si ya existe una entrada con la misma pregunta, actualizarla
-  const existing = kb.findIndex(k => k.question.toLowerCase() === q.toLowerCase());
-  if (existing >= 0) {
-    kb[existing] = { ...kb[existing], category: cat || kb[existing].category, answer: a, actualizadoEn: ahora, actualizadoPor: autor };
-    showNotif('✅ Entrada de KB actualizada');
-  } else {
-    kb.push({ category: cat || 'General', question: q, answer: a, creadoEn: ahora, creadoPor: autor });
-    showNotif('✅ Nueva entrada guardada en KB');
-  }
+  kb.push({ texto, fecha: today(), origen: 'corrección' });
   await DB.set('knowledge_base', kb);
   document.querySelector('.modal-overlay')?.remove();
-  await loadAllData();
+  showNotif('✅ Corrección guardada en la base de conocimiento');
 }
 
 function showQuickReplies() {
@@ -4104,121 +4086,95 @@ loadAllData().then(() => {
 async function loadKnowledgeBase() {
   try {
     const snap = await get(ref(db, 'cabanas/knowledge_base'));
-    console.log('[KB] snap.exists():', snap.exists());
     let data = snap.exists() ? snap.val() : null;
-    console.log('[KB] data tipo:', typeof data, '| isArray:', Array.isArray(data), '| valor:', data);
     let entries = [];
     if (Array.isArray(data)) {
       entries = data.filter(x => x !== null && x !== undefined);
     } else if (data && typeof data === 'object') {
       entries = Object.values(data).filter(x => x !== null && x !== undefined);
     }
-    console.log('[KB] entries cargadas:', entries.length);
     cache['knowledge_base'] = entries;
   } catch(e) {
     console.error('[KB] Error cargando knowledge_base:', e);
   }
 }
 
-function esc(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-function renderKnowledge(filtro) {
-  const rawKb = DB.get('knowledge_base', []);
-  let kb = Array.isArray(rawKb) ? rawKb : (rawKb && typeof rawKb === 'object' ? Object.values(rawKb) : []);
-  kb = kb.filter(k => k && typeof k === 'object');
-  const list = document.getElementById('kbList');
-  if (!list) return;
-  console.log('[renderKnowledge] kb.length:', kb.length);
-  const searchVal = (filtro ?? document.getElementById('kbSearch')?.value ?? '').toLowerCase();
-  if (searchVal) kb = kb.filter(k =>
-    (k.question||'').toLowerCase().includes(searchVal) ||
-    (k.answer||'').toLowerCase().includes(searchVal) ||
-    (k.category||'').toLowerCase().includes(searchVal)
-  );
-  if (!kb.length) {
-    list.innerHTML = `<div class="card" style="padding:40px;text-align:center;color:var(--text3)">${searchVal ? 'Sin resultados para esa búsqueda.' : 'Sin entradas. Agregá la primera con el botón de arriba.'}</div>`;
+function renderKnowledge() {
+  const items = DB.get('knowledge_base', []);
+  const lista = document.getElementById('kb-lista');
+  if (!lista) { console.warn('kb-lista no encontrado'); return; }
+  if (!Array.isArray(items) || !items.length) {
+    lista.innerHTML = '<p style="color:var(--text3);font-size:13px;">No hay entradas todavía. Usá el campo de arriba para agregar info que el asistente usará en sus respuestas.</p>';
     return;
   }
-  const fmt = iso => iso ? new Date(iso).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
-  list.innerHTML = kb.map((k, i) => {
-    const meta = k.actualizadoEn
-      ? `Actualizado ${fmt(k.actualizadoEn)} por ${esc(k.actualizadoPor||'?')}`
-      : k.creadoEn ? `Creado ${fmt(k.creadoEn)} por ${esc(k.creadoPor||'?')}` : '';
+  lista.innerHTML = items.map((item, idx) => {
+    const texto = item.texto || (item.question ? `[${item.category||'Info'}] ${item.question}: ${item.answer}` : '');
+    const fecha = item.fecha || (item.creadoEn ? item.creadoEn.slice(0,10) : '');
+    const origen = item.origen || '';
     return `
-    <div class="card" style="margin-bottom:10px;padding:16px 20px;">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;" id="kb-item-${idx}">
+      <div style="display:flex;align-items:flex-start;gap:10px;">
         <div style="flex:1;">
-          <div style="font-size:10px;color:var(--accent2);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">${esc(k.category||'General')}</div>
-          <div style="font-weight:600;margin-bottom:6px;">${esc(k.question)}</div>
-          <div style="font-size:13px;color:var(--text2);line-height:1.5;white-space:pre-wrap;margin-bottom:${meta?'6':'0'}px;">${esc(k.answer)}</div>
-          ${meta ? `<div style="font-size:10px;color:var(--text3);">🕐 ${meta}</div>` : ''}
+          <div class="kb-text-view" id="kb-text-${idx}" style="font-size:14px;color:var(--text);line-height:1.5;">${texto}</div>
+          <textarea class="kb-text-edit" id="kb-edit-${idx}" style="display:none;width:100%;padding:8px;background:var(--surface3);border:1px solid var(--accent);border-radius:var(--radius);color:var(--text);font-size:13px;font-family:inherit;resize:vertical;min-height:60px;">${texto}</textarea>
         </div>
-        <div style="display:flex;gap:6px;flex-shrink:0;">
-          <button class="btn btn-ghost btn-sm" onclick="openKbModal(${i})">✏️</button>
-          <button class="btn btn-red btn-sm" onclick="deleteKb(${i})">🗑️</button>
+        <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;flex-shrink:0;">
+          <div style="font-size:11px;color:var(--text3);">${fecha} ${origen==='corrección'?'<span style="color:var(--amber);">✏️ corrección</span>':''}</div>
+          <div style="display:flex;gap:4px;" id="kb-btns-${idx}">
+            <button class="btn btn-ghost btn-sm" onclick="editKnowledgeEntry(${idx})">✏️ editar</button>
+            <button class="btn btn-red btn-sm" onclick="deleteKnowledgeEntry(${idx})">✕</button>
+          </div>
+          <div style="display:none;gap:4px;" id="kb-edit-btns-${idx}">
+            <button class="btn btn-ghost btn-sm" onclick="cancelEditKnowledge(${idx})">Cancelar</button>
+            <button class="btn btn-blue btn-sm" onclick="saveEditKnowledge(${idx})">Guardar</button>
+          </div>
         </div>
       </div>
     </div>`;
   }).join('');
 }
 
-function openKbModal(idx) {
-  const kb = DB.get('knowledge_base', []);
-  const k = idx !== undefined ? kb[idx] : null;
-  const modal = document.createElement('div');
-  modal.className = 'modal-overlay';
-  modal.id = 'modalKb';
-  modal.innerHTML = `
-  <div class="modal">
-    <h2>${k ? 'Editar entrada' : 'Nueva entrada'}</h2>
-    <div class="form-group"><label>Categoría</label><input id="kbCat" value="${k?.category||''}" placeholder="Precios, Políticas, Servicios..."></div>
-    <div class="form-group"><label>Pregunta / Tema</label><input id="kbQ" value="${k?.question||''}" placeholder="¿Cuál es el precio por noche?"></div>
-    <div class="form-group"><label>Respuesta</label><textarea id="kbA" rows="5" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:9px 12px;width:100%;font-size:13px;">${k?.answer||''}</textarea></div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeKbModal()">Cancelar</button>
-      <button class="btn btn-blue" onclick="saveKb(${idx ?? -1})">Guardar</button>
-    </div>
-  </div>`;
-  document.body.appendChild(modal);
-  setTimeout(() => modal.classList.add('open'), 10);
-  modal.addEventListener('click', e => { if(e.target===modal) closeKbModal(); });
+function editKnowledgeEntry(idx) {
+  document.getElementById('kb-text-' + idx).style.display = 'none';
+  document.getElementById('kb-edit-' + idx).style.display = 'block';
+  document.getElementById('kb-btns-' + idx).style.display = 'none';
+  document.getElementById('kb-edit-btns-' + idx).style.display = 'flex';
+  document.getElementById('kb-edit-' + idx).focus();
 }
 
-function closeKbModal() {
-  const m = document.getElementById('modalKb');
-  if(m) m.remove();
+function cancelEditKnowledge(idx) {
+  document.getElementById('kb-text-' + idx).style.display = 'block';
+  document.getElementById('kb-edit-' + idx).style.display = 'none';
+  document.getElementById('kb-btns-' + idx).style.display = 'flex';
+  document.getElementById('kb-edit-btns-' + idx).style.display = 'none';
 }
 
-async function saveKb(idx) {
-  const cat = document.getElementById('kbCat').value.trim();
-  const q   = document.getElementById('kbQ').value.trim();
-  const a   = document.getElementById('kbA').value.trim();
-  if(!q || !a) { showNotif('Completá pregunta y respuesta', 'error'); return; }
-  const raw = DB.get('knowledge_base', []);
-  const kb = Array.isArray(raw) ? raw : (raw && typeof raw === 'object' ? Object.values(raw) : []);
-  const ahora = new Date().toISOString();
-  const autor = currentUser?.email || 'desconocido';
-  if(idx >= 0) {
-    kb[idx] = { ...kb[idx], category: cat, question: q, answer: a, actualizadoEn: ahora, actualizadoPor: autor };
-  } else {
-    kb.push({ category: cat || 'General', question: q, answer: a, creadoEn: ahora, creadoPor: autor });
-  }
-  await DB.set('knowledge_base', kb);
-  closeKbModal();
-  await loadKnowledgeBase();
+async function saveEditKnowledge(idx) {
+  const nuevo = document.getElementById('kb-edit-' + idx).value.trim();
+  if (!nuevo) { showNotif('El texto no puede estar vacío', 'error'); return; }
+  const items = DB.get('knowledge_base', []);
+  items[idx] = { texto: nuevo, fecha: today() };
+  await DB.set('knowledge_base', items);
   renderKnowledge();
-  showNotif('✅ Entrada guardada');
+  showNotif('✅ Entrada actualizada');
 }
 
-async function deleteKb(idx) {
-  if(!confirm('¿Eliminar esta entrada?')) return;
-  const raw = DB.get('knowledge_base', []);
-  const kb = Array.isArray(raw) ? raw : (raw && typeof raw === 'object' ? Object.values(raw) : []);
-  kb.splice(idx, 1);
-  await DB.set('knowledge_base', kb);
-  await loadKnowledgeBase();
+async function saveKnowledgeEntry() {
+  const input = document.getElementById('kb-nueva-entrada');
+  const texto = input.value.trim();
+  if (!texto) { showNotif('Escribí algo antes de agregar', 'error'); return; }
+  const items = DB.get('knowledge_base', []);
+  items.push({ texto, fecha: today() });
+  await DB.set('knowledge_base', items);
+  input.value = '';
+  renderKnowledge();
+  showNotif('✅ Entrada agregada a la base de conocimiento');
+}
+
+async function deleteKnowledgeEntry(idx) {
+  const items = DB.get('knowledge_base', []);
+  items.splice(idx, 1);
+  await DB.set('knowledge_base', items);
   renderKnowledge();
   showNotif('Entrada eliminada');
 }
@@ -4291,7 +4247,7 @@ async function saveQuickReplies() {
 }
 
 Object.assign(window, {
-  doLogin, doLogout, renderKnowledge, openKbModal, closeKbModal, saveKb, deleteKb, showSection, closeSidebar, toggleSidebar, openNuevaReserva, onHabChange,
+  doLogin, doLogout, renderKnowledge, saveKnowledgeEntry, deleteKnowledgeEntry, editKnowledgeEntry, cancelEditKnowledge, saveEditKnowledge, showSection, closeSidebar, toggleSidebar, openNuevaReserva, onHabChange,
   toggleChatFloat, initChatbot, clearChat, sendChat, sendQuickReply, saveApiKey, copyMsg, editBotMsg, saveEditedBotMsg,
   grillaNavegar, grillaHoy, renderGrilla,
   renderBotConfig, saveBotConfig, saveQuickReplies, addQuickReply, removeQuickReply,
