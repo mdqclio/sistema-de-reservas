@@ -460,10 +460,20 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
 .kanban-card-detail { font-size: 12px; color: var(--text3); line-height: 1.6; }
 .kanban-card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
 .kanban-pill { font-size: 10px; padding: 2px 8px; border-radius: 20px; font-weight: 600; }
-.kanban-pill.consulta { background: rgba(59,130,246,0.15); color: var(--accent2); }
+.kanban-pill.nuevo_lead  { background: rgba(139,92,246,0.15); color: #a78bfa; }
+.kanban-pill.respondido  { background: rgba(59,130,246,0.15); color: var(--accent2); }
+.kanban-pill.interesado  { background: rgba(234,88,12,0.18); color: #fb923c; }
+.kanban-pill.pre_reserva { background: rgba(217,119,6,0.18); color: #fbbf24; }
+.kanban-pill.reservado   { background: rgba(5,150,105,0.18); color: #34d399; }
+.kanban-pill.hospedado   { background: rgba(13,148,136,0.18); color: #2dd4bf; }
+.kanban-pill.finalizado  { background: rgba(99,102,241,0.18); color: #818cf8; }
+.kanban-pill.perdido     { background: rgba(220,38,38,0.12); color: #f87171; }
+/* compat con etapas viejas */
+.kanban-pill.consulta    { background: rgba(139,92,246,0.15); color: #a78bfa; }
 .kanban-pill.presupuesto { background: rgba(217,119,6,0.15); color: #fbbf24; }
-.kanban-pill.confirmada { background: rgba(5,150,105,0.15); color: #34d399; }
-.kanban-pill.perdida { background: rgba(220,38,38,0.12); color: #f87171; }
+.kanban-pill.confirmada  { background: rgba(5,150,105,0.15); color: #34d399; }
+.kanban-pill.perdida     { background: rgba(220,38,38,0.12); color: #f87171; }
+.kanban-col-hint { font-size: 10px; color: var(--text3); margin-top: 2px; font-style: italic; }
 .kanban-move-btns { display: flex; gap: 4px; }
 
 /* ===== FICHA 360° ===== */
@@ -545,12 +555,14 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
         <span class="icon">🎯</span> Pipeline CRM
       </div>
       <div class="nav-section">Operaciones</div>
+      <!-- CHAT DESACTIVADO TEMPORALMENTE
       <div class="nav-item" onclick="toggleChatFloat();closeSidebar()" id="nav-chatbot">
         <span class="icon">💬</span> Chat Asistente
       </div>
       <div class="nav-item admin-only" onclick="showSection('knowledge');closeSidebar()" id="nav-knowledge" style="display:none;">
         <span class="icon">🧠</span> Base de Conocimiento
       </div>
+      -->
       <div class="nav-item" onclick="showSection('huespedes');closeSidebar()" id="nav-huespedes">
         <span class="icon">👤</span> Huéspedes
       </div>
@@ -1447,7 +1459,7 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
   </div>
 </div>
 
-<!-- CHAT FLOTANTE -->
+<!-- CHAT FLOTANTE DESACTIVADO TEMPORALMENTE
 <div id="chatFloat">
   <div class="chat-float-header" id="chatFloatHeader">
     <div class="chat-title">
@@ -1463,7 +1475,7 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
   <div id="chatMessages" class="chat-messages"></div>
   <div class="chat-bottom">
     <div id="chatApiWarning" class="chat-api-warning" style="display:none;">
-      ⚠️ Ingresá tu API key de <a href="https://console.groq.com" target="_blank">Groq</a> (gratis)
+      ⚠️ Ingresá tu API key de Groq (gratis)
       <div class="chat-key-row">
         <input type="password" id="chatApiKeyInput" placeholder="gsk_...">
         <button class="btn btn-amber btn-sm" onclick="saveApiKey()">OK</button>
@@ -1478,6 +1490,7 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
     </div>
   </div>
 </div>
+-->
 
 <!-- NOTIFICATION -->
 <div class="notif" id="notif"></div>
@@ -1535,7 +1548,7 @@ async function loadAllData() {
       });
     }
     await initData();
-    await loadApiKeyFromDB();
+    // await loadApiKeyFromDB(); // CHAT DESACTIVADO TEMPORALMENTE
   } catch(e) {
     console.error('Firebase read error:', e);
     showNotif('Error conectando con Firebase. Verificá tu conexión.', 'error');
