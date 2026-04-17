@@ -4173,7 +4173,7 @@ function editBotMsg(btn) {
       </div>
       <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
         <button onclick="this.closest('.modal-overlay').remove()" style="padding:8px 16px;background:transparent;border:1px solid var(--border);color:var(--text2);border-radius:var(--radius);cursor:pointer;">Cancelar</button>
-        <button onclick="saveEditedBotMsg()" style="padding:8px 16px;background:var(--blue2);color:white;border:none;border-radius:var(--radius);cursor:pointer;font-weight:600;">💾 Guardar en KB</button>
+        <button onclick="saveEditedBotMsg(this)" style="padding:8px 16px;background:var(--blue2);color:white;border:none;border-radius:var(--radius);cursor:pointer;font-weight:600;">💾 Guardar en KB</button>
       </div>
     </div>`;
   document.body.appendChild(modal);
@@ -4181,15 +4181,20 @@ function editBotMsg(btn) {
   modal.addEventListener('click', e => { if(e.target===modal) modal.remove(); });
 }
 
-async function saveEditedBotMsg() {
+async function saveEditedBotMsg(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando...'; }
   const texto = document.getElementById('ebTexto').value.trim();
-  if (!texto) { showNotif('El texto no puede estar vacío', 'error'); return; }
+  if (!texto) {
+    showNotif('El texto no puede estar vacío', 'error');
+    if (btn) { btn.disabled = false; btn.textContent = '💾 Guardar en KB'; }
+    return;
+  }
   await loadKnowledgeBase();
   const raw = DB.get('knowledge_base', []);
   const kb = Array.isArray(raw) ? raw : (raw && typeof raw === 'object' ? Object.values(raw) : []);
   kb.push({ texto, fecha: today(), origen: 'corrección' });
   await DB.set('knowledge_base', kb);
-  document.getElementById('modalEditBot')?.remove();
+  btn?.closest('.modal-overlay')?.remove();
   showNotif('✅ Corrección guardada en la base de conocimiento');
 }
 
