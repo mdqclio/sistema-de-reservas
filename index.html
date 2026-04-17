@@ -3928,7 +3928,9 @@ function editBotMsg(btn) {
 async function saveEditedBotMsg() {
   const texto = document.getElementById('ebTexto').value.trim();
   if (!texto) { showNotif('El texto no puede estar vacío', 'error'); return; }
-  const kb = DB.get('knowledge_base', []);
+  await loadKnowledgeBase();
+  const raw = DB.get('knowledge_base', []);
+  const kb = Array.isArray(raw) ? raw : (raw && typeof raw === 'object' ? Object.values(raw) : []);
   kb.push({ texto, fecha: today(), origen: 'corrección' });
   await DB.set('knowledge_base', kb);
   document.querySelector('.modal-overlay')?.remove();
@@ -4100,10 +4102,12 @@ async function loadKnowledgeBase() {
 }
 
 function renderKnowledge() {
-  const items = DB.get('knowledge_base', []);
+  const raw = DB.get('knowledge_base', []);
+  let items = Array.isArray(raw) ? raw : (raw && typeof raw === 'object' ? Object.values(raw) : []);
+  items = items.filter(x => x !== null && x !== undefined);
   const lista = document.getElementById('kb-lista');
   if (!lista) { console.warn('kb-lista no encontrado'); return; }
-  if (!Array.isArray(items) || !items.length) {
+  if (!items.length) {
     lista.innerHTML = '<p style="color:var(--text3);font-size:13px;">No hay entradas todavía. Usá el campo de arriba para agregar info que el asistente usará en sus respuestas.</p>';
     return;
   }
@@ -4163,9 +4167,12 @@ async function saveKnowledgeEntry() {
   const input = document.getElementById('kb-nueva-entrada');
   const texto = input.value.trim();
   if (!texto) { showNotif('Escribí algo antes de agregar', 'error'); return; }
-  const items = DB.get('knowledge_base', []);
+  await loadKnowledgeBase();
+  const raw = DB.get('knowledge_base', []);
+  const items = Array.isArray(raw) ? raw : (raw && typeof raw === 'object' ? Object.values(raw) : []);
   items.push({ texto, fecha: today() });
   await DB.set('knowledge_base', items);
+  cache['knowledge_base'] = items;
   input.value = '';
   renderKnowledge();
   showNotif('✅ Entrada agregada a la base de conocimiento');
