@@ -395,7 +395,7 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
 .chat-bubble { max-width: 85%; padding: 10px 14px; border-radius: 14px; font-size: 13px; line-height: 1.5; word-break: break-word; }
 .chat-bubble.user { background: var(--blue2); color: white; border-bottom-right-radius: 3px; align-self: flex-end; }
 .chat-bubble.bot { background: var(--surface3); color: var(--text); border-bottom-left-radius: 3px; align-self: flex-start; border: 1px solid var(--border); position: relative; }
-.chat-bubble.bot .copy-btn { display: none; }
+.chat-bubble.bot .copy-btn { display: none; } /* reemplazado por action-row */
 .chat-action-row {
   display: flex; gap: 6px; margin-top: 4px; opacity: 0; transition: opacity 0.2s;
 }
@@ -669,7 +669,7 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
         </div>
         <div class="card">
           <div class="card-header"><h3>🚪 Check-Out Pendientes</h3></div>
-          <tr>
+          <table>
             <thead><tr><th>Huésped</th><th>Cab.</th><th>Salida</th><th>Acción</th></tr></thead>
             <tbody id="tablaCheckout"></tbody>
           </table>
@@ -783,6 +783,8 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
       </div>
     </div>
 
+    <!-- (sección chatbot eliminada — ahora es ventana flotante) -->
+
     <!-- GRILLA DE RESERVAS -->
     <div id="section-grilla" class="section">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
@@ -823,7 +825,597 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
   </div>
 </div>
 
-<!-- MODALES (abreviados por longitud) -->
+<!-- MODAL RESERVA -->
+<div class="modal-overlay" id="modalReserva">
+  <div class="modal">
+    <h2 id="modalReservaTitle">Nueva Reserva</h2>
+    <input type="hidden" id="res-edit-id">
+    <div class="form-row">
+      <div class="form-group"><label>Huésped *</label>
+        <select id="res-huesped"><option value="">Seleccionar...</option></select>
+      </div>
+      <div class="form-group"><label>Plataforma *</label>
+        <select id="res-plat">
+          <option value="directo">Directo</option>
+          <option value="booking">Booking.com</option>
+          <option value="airbnb">Airbnb</option>
+          <option value="otro">Otro</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Cabaña *</label>
+        <select id="res-hab" onchange="updateBedsSelect();onHabChange();calcTotalReserva()" style="font-size:14px">
+          <option value="">Seleccionar...</option>
+          <option value="1">Cabaña 1 (3 personas)</option>
+          <option value="2">Cabaña 2 (3 personas)</option>
+          <option value="3">Cabaña 3 (3 personas)</option>
+          <option value="4">Cabaña 4 (3 personas)</option>
+          <option value="5">Cabaña 5 (4 personas)</option>
+          <option value="6">Cabaña 6 (4 personas)</option>
+          <option value="7">Cabaña 7 (4 personas)</option>
+          <option value="8">Cabaña 8 (4 personas)</option>
+          <option value="9">Cabaña 9 (6 personas)</option>
+          <option value="10">Cabaña 10 (6 personas)</option>
+          <option value="11">Cabaña 11 (6 personas)</option>
+          <option value="12">Cabaña 12 (6 personas)</option>
+        </select>
+      </div>
+      <div class="form-group" style="display:none">
+        <select id="res-cabaña"><option value="">auto</option></select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Fecha Entrada *</label><input type="date" id="res-entrada" onchange="onEntradaChange()"></div>
+      <div class="form-group"><label>Fecha Salida *</label><input type="date" id="res-salida" onchange="updateBedsSelect();calcTotalReserva()"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Moneda</label>
+        <select id="res-moneda"><option value="ARS">ARS</option><option value="USD">USD</option></select>
+      </div>
+      <div class="form-group"><label>Precio por noche</label><input type="number" id="res-precio" placeholder="510000" oninput="calcTotalReserva()"></div>
+    </div>
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:12px;">
+      <p style="font-size:12px;color:var(--text3);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;">Pagos</p>
+      <div class="form-row" style="margin-bottom:8px;">
+        <div class="form-group">
+          <label>Total de la estadía</label>
+          <input type="text" id="res-total-display" readonly style="background:var(--surface3);color:var(--accent2);font-weight:600;" placeholder="Se calcula automático">
+        </div>
+        <div class="form-group">
+          <label>Monto abonado ahora</label>
+          <input type="number" id="res-pagado" placeholder="0" oninput="calcTotalReserva()">
+        </div>
+      </div>
+      <div class="form-row" style="margin-bottom:8px;">
+        <div class="form-group">
+          <label>Método de pago</label>
+          <select id="res-pago">
+            <option value="efectivo">Efectivo</option>
+            <option value="transferencia">Transferencia</option>
+            <option value="mercadopago">Mercado Pago</option>
+            <option value="tarjeta">Tarjeta</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Saldo pendiente</label>
+          <input type="text" id="res-saldo-display" readonly style="background:var(--surface3);color:#fbbf24;font-weight:600;" placeholder="$0">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Estado de pago</label>
+        <select id="res-estado-pago">
+          <option value="total">Pago total</option>
+          <option value="senia">Seña / Pago parcial</option>
+          <option value="pendiente">Sin pago (pendiente)</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Estado reserva</label>
+        <select id="res-estado">
+          <option value="confirmada">Confirmada</option>
+          <option value="checkin">Check-in realizado</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Cantidad de pasajeros</label>
+        <input type="number" id="res-pasajeros" min="1" max="12" placeholder="Ej: 4">
+      </div>
+    </div>
+    <div class="form-row" style="align-items:center;">
+      <div class="form-group">
+        <label>¿Incluye desayuno?</label>
+        <select id="res-desayuno">
+          <option value="si">Sí, incluye desayuno</option>
+          <option value="no">No incluye desayuno</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group"><label>Notas</label><textarea id="res-notas" rows="2"></textarea></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalReserva')">Cancelar</button>
+      <button class="btn btn-blue" id="btnGuardarReserva" onclick="saveReserva()">Guardar Reserva</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EDITAR HUÉSPED -->
+<div class="modal-overlay" id="modalEditHuesped">
+  <div class="modal">
+    <h2>Editar Huésped</h2>
+    <input type="hidden" id="eh-id">
+    <div class="form-row">
+      <div class="form-group"><label>Nombre *</label><input type="text" id="eh-nombre"></div>
+      <div class="form-group"><label>Apellido *</label><input type="text" id="eh-apellido"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>DNI / Pasaporte *</label><input type="text" id="eh-dni"></div>
+      <div class="form-group"><label>Nacionalidad</label><input type="text" id="eh-nac"></div>
+      <div class="form-group"><label>Ciudad</label><input type="text" id="eh-ciudad"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Teléfono</label><input type="text" id="eh-tel"></div>
+      <div class="form-group"><label>Email</label><input type="email" id="eh-email"></div>
+    </div>
+    <div class="form-group" style="margin-top:12px;">
+      <label>Puntuación de comportamiento (1-10)</label>
+      <div id="eh-stars" style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;"></div>
+      <input type="hidden" id="eh-score" value="">
+    </div>
+    <div class="form-group">
+      <label>Observaciones</label>
+      <textarea id="eh-obs" rows="2" placeholder="Ej: Dejó el baño sucio, problemas con otros huéspedes..."></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalEditHuesped')">Cancelar</button>
+      <button class="btn btn-blue" onclick="saveEditHuesped()">Guardar cambios</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CAMBIO DE CAMA -->
+<div class="modal-overlay" id="modalCambioCama">
+  <div class="modal">
+    <h2>🔄 Cambio de Cama</h2>
+    <input type="hidden" id="cc-res-id">
+    <div id="cc-resumen" style="background:var(--surface2);border-radius:var(--radius);padding:12px;margin-bottom:16px;font-size:13px;"></div>
+    <div class="form-row">
+      <div class="form-group"><label>Nueva Cabaña</label>
+        <select id="cc-hab" onchange="updateCambioCamaSelect()">
+          <option value="1">Cabaña 1 (3 personas)</option>
+          <option value="2">Cabaña 2 (3 personas)</option>
+          <option value="3">Cabaña 3 (3 personas)</option>
+          <option value="4">Cabaña 4 (3 personas)</option>
+          <option value="5">Cabaña 5 (4 personas)</option>
+          <option value="6">Cabaña 6 (4 personas)</option>
+          <option value="7">Cabaña 7 (4 personas)</option>
+          <option value="8">Cabaña 8 (4 personas)</option>
+          <option value="9">Cabaña 9 (6 personas)</option>
+          <option value="10">Cabaña 10 (6 personas)</option>
+          <option value="11">Cabaña 11 (6 personas)</option>
+          <option value="12">Cabaña 12 (6 personas)</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Unidad</label>
+        <select id="cc-cabaña"></select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="display:none"><input type="text" id="cc-llave" value=""></div>
+      <div class="form-group"><label>Motivo (opcional)</label><input type="text" id="cc-motivo" placeholder="Ej: solicitud especial......"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalCambioCama')">Cancelar</button>
+      <button class="btn btn-blue" onclick="saveCambioCama()">Confirmar cambio</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CONFIRMAR BORRADO -->
+<div class="modal-overlay" id="modalConfirmDelete">
+  <div class="modal" style="max-width:400px;">
+    <h2>⚠️ Confirmar eliminación</h2>
+    <p id="confirmDeleteMsg" style="color:var(--text2);font-size:14px;margin-bottom:20px;line-height:1.6;"></p>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalConfirmDelete')">Cancelar</button>
+      <button class="btn btn-red" id="confirmDeleteBtn">Eliminar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL LINK FORMULARIO PÚBLICO -->
+<div class="modal-overlay" id="modalPublicForm">
+  <div class="modal" style="max-width:480px;">
+    <h2>🔗 Formulario de auto-registro</h2>
+    <p style="color:var(--text2);font-size:13px;margin-bottom:16px;">Compartí este link con los huéspedes para que carguen sus datos antes de llegar. Los datos quedan guardados y aparecen en el sistema para que vos los confirmes.</p>
+    <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);padding:12px;font-family:'DM Mono';font-size:12px;color:var(--accent2);word-break:break-all;" id="publicFormUrl"></div>
+    <div style="display:flex;gap:8px;margin-top:12px;">
+      <button class="btn btn-blue btn-sm" onclick="copyPublicLink()">📋 Copiar link</button>
+      <button class="btn btn-ghost btn-sm" onclick="openPublicFormPreview()">👁 Ver formulario</button>
+    </div>
+    <p style="font-size:11px;color:var(--text3);margin-top:12px;">Los huéspedes que se registren aparecerán en la lista con estado "Pendiente confirmar".</p>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalPublicForm')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CHECKIN CON LLAVE -->
+<div class="modal-overlay" id="modalCheckin">
+  <div class="modal">
+    <h2>✅ Confirmar Check-in</h2>
+    <input type="hidden" id="ci-res-id">
+    <div id="ci-resumen" style="background:var(--surface2);border-radius:var(--radius);padding:12px;margin-bottom:16px;font-size:13px;"></div>
+    <div class="form-row">
+      <div class="form-group" style="display:none">
+        <input type="text" id="ci-llave" value="">
+      </div>
+      <div class="form-group">
+        <label>Hora de ingreso</label>
+        <input type="time" id="ci-hora">
+      </div>
+    </div>
+    <div class="form-group"><label>Observaciones</label><input type="text" id="ci-obs" placeholder="Opcional"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalCheckin')">Cancelar</button>
+      <button class="btn btn-green" onclick="confirmCheckin()">✅ Confirmar Check-in</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL PAGO PARCIAL -->
+<div class="modal-overlay" id="modalPago">
+  <div class="modal">
+    <h2>Registrar Pago</h2>
+    <input type="hidden" id="pago-res-id">
+    <div id="pago-resumen" style="background:var(--surface2);border-radius:var(--radius);padding:12px;margin-bottom:16px;font-size:13px;"></div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Monto a cobrar *</label>
+        <input type="number" id="pago-monto" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label>Método de pago</label>
+        <select id="pago-metodo">
+          <option value="efectivo">Efectivo</option>
+          <option value="transferencia">Transferencia</option>
+          <option value="mercadopago">Mercado Pago</option>
+          <option value="tarjeta">Tarjeta</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group"><label>Concepto</label><input type="text" id="pago-concepto" placeholder="Ej: Saldo restante estadía"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalPago')">Cancelar</button>
+      <button class="btn btn-green" onclick="savePago()">Registrar Pago</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EXTENDER ESTADÍA -->
+<div class="modal-overlay" id="modalExtender">
+  <div class="modal">
+    <h2>Extender Estadía</h2>
+    <input type="hidden" id="ext-res-id">
+    <div id="ext-resumen" style="background:var(--surface2);border-radius:var(--radius);padding:12px;margin-bottom:16px;font-size:13px;"></div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Nueva fecha de salida *</label>
+        <input type="date" id="ext-nueva-salida">
+      </div>
+      <div class="form-group">
+        <label>Noches adicionales</label>
+        <input type="text" id="ext-noches-extra" readonly style="background:var(--surface3);color:var(--accent2);font-weight:600;">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Monto adicional</label>
+        <input type="text" id="ext-monto-extra" readonly style="background:var(--surface3);color:#34d399;font-weight:600;">
+      </div>
+      <div class="form-group">
+        <label>¿Cobrar ahora?</label>
+        <select id="ext-cobrar">
+          <option value="si">Sí, cobrar ahora</option>
+          <option value="no">No, agregar al saldo pendiente</option>
+        </select>
+      </div>
+    </div>
+    <div id="ext-pago-row" class="form-row">
+      <div class="form-group">
+        <label>Método de pago</label>
+        <select id="ext-metodo">
+          <option value="efectivo">Efectivo</option>
+          <option value="transferencia">Transferencia</option>
+          <option value="mercadopago">Mercado Pago</option>
+          <option value="tarjeta">Tarjeta</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalExtender')">Cancelar</button>
+      <button class="btn btn-blue" onclick="saveExtension()">Confirmar Extensión</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL HUESPED -->
+<div class="modal-overlay" id="modalHuesped">
+  <div class="modal">
+    <h2>Registrar Huésped</h2>
+    <div class="form-row">
+      <div class="form-group"><label>Nombre *</label><input type="text" id="h-nombre" placeholder="Juan"></div>
+      <div class="form-group"><label>Apellido *</label><input type="text" id="h-apellido" placeholder="García"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>DNI / Pasaporte *</label><input type="text" id="h-dni" placeholder="12345678"></div>
+      <div class="form-group"><label>Nacionalidad *</label><input type="text" id="h-nac" placeholder="Argentina"></div>
+      <div class="form-group"><label>Ciudad</label><input type="text" id="h-ciudad" placeholder="Buenos Aires"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Teléfono</label><input type="text" id="h-tel" placeholder="+54 9 223..."></div>
+      <div class="form-group"><label>Email</label><input type="email" id="h-email" placeholder="email@ejemplo.com"></div>
+    </div>
+    <div class="form-group">
+      <label>Foto del Documento</label>
+      <div class="upload-zone" onclick="document.getElementById('h-foto').click()" id="uploadZone">
+        📷 Hacé clic para subir foto del documento
+        <input type="file" id="h-foto" accept="image/*" style="display:none" onchange="previewDoc(this)">
+        <img id="docPreview" style="display:none;">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalHuesped')">Cancelar</button>
+      <button class="btn btn-blue" onclick="saveHuesped()">Registrar Huésped</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL MOVIMIENTO CAJA -->
+<div class="modal-overlay" id="modalMovimiento">
+  <div class="modal">
+    <h2>Registrar Movimiento</h2>
+    <div class="form-row">
+      <div class="form-group"><label>Tipo</label>
+        <select id="mov-tipo">
+          <option value="ingreso">Ingreso</option>
+          <option value="egreso">Egreso</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Categoría</label>
+        <select id="mov-cat">
+          <option value="reserva">Reserva / Check-in</option>
+          <option value="servicio">Servicio (luz, gas, etc.)</option>
+          <option value="sueldo">Sueldo</option>
+          <option value="limpieza">Insumo / Limpieza</option>
+          <option value="mantenimiento">Mantenimiento</option>
+          <option value="otro">Otro</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Moneda</label>
+        <select id="mov-moneda"><option value="ARS">ARS</option><option value="USD">USD</option></select>
+      </div>
+      <div class="form-group"><label>Monto *</label><input type="number" id="mov-monto" placeholder="0"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Método</label>
+        <select id="mov-metodo">
+          <option value="efectivo">Efectivo</option>
+          <option value="transferencia">Transferencia</option>
+          <option value="mercadopago">Mercado Pago</option>
+          <option value="tarjeta">Tarjeta</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Fecha</label><input type="date" id="mov-fecha"></div>
+    </div>
+    <div class="form-group"><label>Concepto *</label><input type="text" id="mov-concepto" placeholder="Descripción del movimiento"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalMovimiento')">Cancelar</button>
+      <button class="btn btn-blue" onclick="saveMovimiento()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL USUARIO -->
+<div class="modal-overlay" id="modalUsuario">
+  <div class="modal">
+    <h2 id="modalUsuarioTitle">Nuevo Usuario</h2>
+    <input type="hidden" id="u-id">
+    <div class="form-row">
+      <div class="form-group"><label>Nombre completo *</label><input type="text" id="u-nombre" placeholder="Juan García"></div>
+      <div class="form-group"><label>Email / Usuario *</label><input type="email" id="u-email" placeholder="nombre@email.com"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Rol *</label>
+        <select id="u-rol"></select>
+      </div>
+      <div class="form-group">
+        <label>Estado</label>
+        <select id="u-estado">
+          <option value="activo">Activo</option>
+          <option value="inactivo">Inactivo</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label id="u-pass-label">Contraseña *</label>
+        <input type="password" id="u-pass" placeholder="Mínimo 6 caracteres">
+      </div>
+      <div class="form-group">
+        <label>Confirmar contraseña</label>
+        <input type="password" id="u-pass2" placeholder="Repetir contraseña">
+      </div>
+    </div>
+    <p style="font-size:11px;color:var(--text3);margin-top:-8px">⚠️ Las contraseñas se guardan localmente. Para producción, usar un backend seguro.</p>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalUsuario')">Cancelar</button>
+      <button class="btn btn-blue" onclick="saveUsuario()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ROL -->
+<div class="modal-overlay" id="modalRol">
+  <div class="modal">
+    <h2>Crear Nuevo Rol</h2>
+    <div class="form-group"><label>Nombre del Rol *</label><input type="text" id="rol-nombre" placeholder="Ej: Supervisor"></div>
+    <div style="margin-top:16px;">
+      <p style="font-size:13px;color:var(--text2);margin-bottom:12px;">Permisos del rol:</p>
+      <div id="rolPermisos"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalRol')">Cancelar</button>
+      <button class="btn btn-blue" onclick="saveRol()">Crear Rol</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL GUEST DETAIL -->
+<div class="modal-overlay" id="modalGuestDetail">
+  <div class="modal">
+    <h2>Detalle del Huésped</h2>
+    <div id="guestDetailContent"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalGuestDetail')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL LATE CHECK-OUT / EARLY CHECK-IN -->
+<div class="modal-overlay" id="modalHorario">
+  <div class="modal">
+    <h2 id="modalHorarioTitle">Late Check-out</h2>
+    <input type="hidden" id="horario-res-id">
+    <input type="hidden" id="horario-tipo">
+    <div id="horario-resumen" style="background:var(--surface2);border-radius:var(--radius);padding:12px;margin-bottom:16px;font-size:13px;"></div>
+    <div class="form-row">
+      <div class="form-group">
+        <label id="horario-hora-label">Hora de salida</label>
+        <input type="time" id="horario-hora">
+      </div>
+      <div class="form-group">
+        <label>Hora estándar</label>
+        <input type="time" id="horario-estandar" readonly style="background:var(--surface3);color:var(--text3);">
+      </div>
+    </div>
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:12px;">
+      <div class="form-row" style="margin-bottom:10px;">
+        <div class="form-group">
+          <label>¿Cobrar cargo adicional?</label>
+          <select id="horario-cobrar" onchange="toggleHorarioCobro()">
+            <option value="no">No cobrar (cortesía)</option>
+            <option value="si">Sí, cobrar</option>
+          </select>
+        </div>
+        <div class="form-group" id="horario-monto-group" style="display:none;">
+          <label>Monto</label>
+          <input type="number" id="horario-monto" placeholder="0">
+        </div>
+      </div>
+      <div class="form-row" id="horario-pago-group" style="display:none;">
+        <div class="form-group">
+          <label>Moneda</label>
+          <select id="horario-moneda"><option value="ARS">ARS</option><option value="USD">USD</option></select>
+        </div>
+        <div class="form-group">
+          <label>Método de pago</label>
+          <select id="horario-metodo">
+            <option value="efectivo">Efectivo</option>
+            <option value="transferencia">Transferencia</option>
+            <option value="mercadopago">Mercado Pago</option>
+            <option value="tarjeta">Tarjeta</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="form-group"><label>Notas</label><input type="text" id="horario-notas" placeholder="Opcional"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalHorario')">Cancelar</button>
+      <button class="btn btn-blue" onclick="saveHorario()">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- CHAT FLOTANTE -->
+<div id="chatFloat">
+  <div class="chat-float-header" id="chatFloatHeader">
+    <div class="chat-title">
+      <span>🤖</span>
+      <span>Asistente Puerto Delfín</span>
+      <span id="chatStatus" style="width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;"></span>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center;">
+      <button class="chat-close" onclick="clearChat()" title="Limpiar chat">🗑</button>
+      <button class="chat-close" onclick="toggleChatFloat()">✕</button>
+    </div>
+  </div>
+  <div id="chatMessages" class="chat-messages"></div>
+  <div class="chat-bottom">
+    <div id="chatApiWarning" class="chat-api-warning" style="display:none;">
+      ⚠️ Ingresá tu API key de <a href="https://console.groq.com" target="_blank">Groq</a> (gratis)
+      <div class="chat-key-row">
+        <input type="password" id="chatApiKeyInput" placeholder="gsk_...">
+        <button class="btn btn-amber btn-sm" onclick="saveApiKey()">OK</button>
+      </div>
+    </div>
+    <div id="chatQuickBtns" class="chat-quick-btns"></div>
+    <div class="chat-input-row">
+      <textarea id="chatInput" class="chat-input" placeholder="Pegá el mensaje del cliente..." rows="1"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"
+        oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"></textarea>
+      <button class="chat-send-btn" id="chatSendBtn" onclick="sendChat()">➤</button>
+    </div>
+  </div>
+</div>
+
+    <!-- BASE DE CONOCIMIENTO -->
+    <div id="section-knowledge" class="section">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px;">
+        <div>
+          <p style="color:var(--text2);font-size:13px;margin-bottom:4px;">Estas entradas alimentan al asistente virtual. El bot las usa para responder consultas.</p>
+          <p style="color:var(--text3);font-size:12px;">💡 También podés corregir cualquier respuesta del chat con el botón "✏️ Corregir → KB"</p>
+        </div>
+        <button class="btn btn-blue btn-sm" onclick="openKbModal()">+ Nueva entrada</button>
+      </div>
+      <div style="margin-bottom:12px;">
+        <input id="kbSearch" type="text" placeholder="🔍 Buscar en la base de conocimiento..." oninput="renderKnowledge()"
+          style="width:100%;padding:9px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:13px;">
+      </div>
+      <div id="kbList"></div>
+    </div>
+
+    <!-- CONFIGURACIÓN DEL BOT -->
+    <div id="section-botconfig" class="section">
+      <div style="display:grid;gap:20px;">
+        <div class="card">
+          <div class="card-header"><h3>🏨 Información del Hostel</h3><span style="font-size:12px;color:var(--text3)">Usada por el asistente virtual</span></div>
+          <div style="padding:20px;display:grid;gap:12px;">
+            <div class="form-group"><label>Nombre del hostel</label><input type="text" id="bcf-nombre" placeholder="Cabañas Puerto Delfín"></div>
+            <div class="form-group"><label>Ubicación</label><textarea id="bcf-ubicacion" rows="2" placeholder="Mar de las Pampas, Buenos Aires..."></textarea></div>
+            <div class="form-row">
+              <div class="form-group"><label>Check-in</label><input type="time" id="bcf-checkin"></div>
+              <div class="form-group"><label>Check-out</label><input type="time" id="bcf-checkout"></div>
+            </div>
+            <div class="form-group"><label>Descripción de cabañas</label><textarea id="bcf-cabanas" rows="3" placeholder="Cabañas 1-4: hasta 3 personas..."></textarea></div>
+            <div class="form-group"><label>Servicios incluidos</label><textarea id="bcf-servicios" rows="3" placeholder="Desayuno, WiFi, parrilla..."></textarea></div>
+            <div class="form-group"><label>Información adicional (aparece en el prompt del bot)</label><textarea id="bcf-adicional" rows="4" placeholder="Políticas especiales, restricciones, info de temporada..."></textarea></div>
+            <button class="btn btn-blue btn-sm" onclick="saveBotConfig()" style="align-self:flex-start;">Guardar configuración del hostel</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>💬 Respuestas rápidas del chat</h3><span style="font-size:12px;color:var(--text3)">Botones que aparecen al abrir el chat</span></div>
+          <div style="padding:20px;">
+            <div id="qr-list" style="display:grid;gap:8px;margin-bottom:14px;"></div>
+            <button class="btn btn-ghost btn-sm" onclick="addQuickReply()">+ Agregar respuesta rápida</button>
+            <button class="btn btn-blue btn-sm" style="margin-left:8px;" onclick="saveQuickReplies()">Guardar respuestas rápidas</button>
+          </div>
+        </div>
+      </div>
+    </div>
 
 <!-- NOTIFICATION -->
 <div class="notif" id="notif"></div>
@@ -848,8 +1440,9 @@ const db = getDatabase(firebaseApp);
 const auth = getAuth(firebaseApp);
 
 // ===================== DATA STORE =====================
+// Cache local para rendimiento
 const cache = {};
-const pendingWrites = new Set();
+const pendingWrites = new Set(); // Claves con escrituras pendientes a Firebase
 
 const DB = {
   get: (k, def) => {
@@ -874,12 +1467,12 @@ async function loadAllData() {
     const snapshot = await get(ref(db, 'cabanas'));
     if (snapshot.exists()) {
       const data = snapshot.val();
+      // No pisar claves con escrituras locales pendientes (evita race condition)
       Object.keys(data).forEach(k => {
         if (!pendingWrites.has(k)) cache[k] = data[k];
       });
     }
     await initData();
-    await loadKnowledgeBase(); // ✅ FORZAR CARGA DE KNOWLEDGE_BASE
     await loadApiKeyFromDB();
   } catch(e) {
     console.error('Firebase read error:', e);
@@ -903,16 +1496,9 @@ function showLoader(show) {
   loader.style.display = show ? 'flex' : 'none';
 }
 
-// INITIAL SEED DATA - CORREGIDO para no sobrescribir
+// INITIAL SEED DATA
 async function initData() {
-  // ✅ Verificar en Firebase directamente si ya existe la clave
-  const initSnapshot = await get(ref(db, 'cabanas/init_cabanas'));
-  if (initSnapshot.exists()) {
-    console.log('📦 Datos ya inicializados en Firebase');
-    return;
-  }
-  
-  console.log('🚀 Inicializando datos por primera vez...');
+  if (cache['init_cabanas']) return; // ya inicializado en Firebase
   await DB.set('huespedes', []);
   await DB.set('reservas', []);
   await DB.set('beds', {});
@@ -954,13 +1540,17 @@ async function initData() {
     { id:'rol-ventas', nombre:'Ventas', permisos: { dashboard:'r', mapa:'r', reservas:'rw', checkin:'r', huespedes:'r', precios:'r', contabilidad:'n', caja:'n', roles:'n' } },
     { id:'rol-limpieza', nombre:'Limpieza', permisos: { dashboard:'n', mapa:'rw', reservas:'n', checkin:'r', huespedes:'n', precios:'n', contabilidad:'n', caja:'n', roles:'n' } },
   ]);
+  // El usuario administrador debe crearse manualmente en Firebase Console → Authentication
+  // y luego agregarse aquí con su email real. No guardar contraseñas en el código.
   await DB.set('usuarios', [
     { id:'u1', nombre:'Administrador', email:'', rol:'rol-admin', estado:'activo', ultimoAcceso: null },
   ]);
   await DB.set('cierres', []);
+  // NO tocar knowledge_base si ya tiene datos
   if (!Array.isArray(cache['knowledge_base']) || cache['knowledge_base'].length === 0) {
     await DB.set('knowledge_base', []);
   }
+  // Config del bot/hostel — editable desde la sección Configuración
   await DB.set('bot_config', {
     nombre_hostel: 'Cabañas Puerto Delfín',
     ubicacion: 'Mar de las Pampas, Buenos Aires, Argentina. A 50m del mar, a 4 cuadras del centro.',
@@ -983,207 +1573,9 @@ async function initData() {
   await DB.set('init_cabanas', true);
 }
 
-// ===================== LOAD KNOWLEDGE BASE (CORREGIDO) =====================
-async function loadKnowledgeBase() {
-  try {
-    const snap = await get(ref(db, 'cabanas/knowledge_base'));
-    console.log('[KB] Datos desde Firebase:', snap.exists() ? snap.val() : 'null');
-    
-    let entries = [];
-    const raw = snap.exists() ? snap.val() : null;
-    
-    if (Array.isArray(raw)) {
-      entries = raw.filter(x => x !== null && x !== undefined);
-    } else if (raw && typeof raw === 'object') {
-      entries = Object.values(raw).filter(x => x !== null && x !== undefined);
-    }
-    
-    console.log('[KB] Entradas cargadas:', entries.length);
-    cache['knowledge_base'] = entries;
-    await DB.set('knowledge_base', entries);
-    return entries;
-  } catch(e) {
-    console.error('[KB] Error cargando knowledge_base:', e);
-    cache['knowledge_base'] = [];
-    return [];
-  }
-}
-
-// ===================== RENDER KNOWLEDGE (CORREGIDO) =====================
-async function renderKnowledge(filtro) {
-  await loadKnowledgeBase();
-  let kb = cache['knowledge_base'] || [];
-  if (!Array.isArray(kb)) kb = [];
-  
-  const list = document.getElementById('kbList');
-  if (!list) return;
-  
-  const searchVal = (filtro ?? document.getElementById('kbSearch')?.value ?? '').toLowerCase();
-  let filtered = [...kb];
-  if (searchVal) {
-    filtered = kb.filter(k =>
-      (k.question || '').toLowerCase().includes(searchVal) ||
-      (k.answer || '').toLowerCase().includes(searchVal) ||
-      (k.category || '').toLowerCase().includes(searchVal)
-    );
-  }
-  
-  if (!filtered.length) {
-    list.innerHTML = `<div class="card" style="padding:40px;text-align:center;color:var(--text3)">
-      ${searchVal ? '🔍 Sin resultados para esa búsqueda.' : '📭 Sin entradas. Agregá la primera con el botón de arriba.'}
-      ${kb.length ? `<br><span style="font-size:11px">(Hay ${kb.length} entrada(s) en total, pero no coinciden con el filtro)</span>` : ''}
-    </div>`;
-    return;
-  }
-  
-  const fmt = iso => iso ? new Date(iso).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
-  
-  list.innerHTML = filtered.map((k, idx) => {
-    const originalIdx = kb.findIndex(x => x === k);
-    const meta = k.actualizadoEn
-      ? `🕐 Actualizado ${fmt(k.actualizadoEn)} por ${k.actualizadoPor || '?'}`
-      : k.creadoEn ? `🕐 Creado ${fmt(k.creadoEn)} por ${k.creadoPor || '?'}` : '';
-    
-    return `
-    <div class="card" style="margin-bottom:10px;padding:16px 20px;">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
-        <div style="flex:1;">
-          <div style="font-size:10px;color:var(--accent2);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">
-            ${k.category || 'General'}
-          </div>
-          <div style="font-weight:600;margin-bottom:6px;">❓ ${k.question}</div>
-          <div style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:${meta ? '6' : '0'}px;">
-            💡 ${k.answer}
-          </div>
-          ${meta ? `<div style="font-size:10px;color:var(--text3);">${meta}</div>` : ''}
-        </div>
-        <div style="display:flex;gap:6px;flex-shrink:0;">
-          <button class="btn btn-ghost btn-sm" onclick="openKbModal(${originalIdx})">✏️</button>
-          <button class="btn btn-red btn-sm" onclick="deleteKb(${originalIdx})">🗑️</button>
-        </div>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-// ===================== EDIT BOT MSG (CORREGIDO) =====================
-function editBotMsg(btnElement) {
-  let btn = btnElement;
-  if (btnElement && btnElement.target) {
-    btn = btnElement.target;
-  }
-  
-  const msgWrap = btn.closest('.chat-msg-wrap');
-  if (!msgWrap) {
-    console.error('No se encontró el contenedor del mensaje');
-    showNotif('Error: no se pudo identificar el mensaje', 'error');
-    return;
-  }
-  
-  const bubble = msgWrap.querySelector('.chat-bubble.bot');
-  if (!bubble) {
-    console.error('No se encontró el bubble del bot');
-    showNotif('Error: no se encontró el mensaje del bot', 'error');
-    return;
-  }
-  
-  const originalText = (bubble.innerText || bubble.textContent).trim();
-  const userMsgs = document.querySelectorAll('.chat-bubble.user');
-  const lastQ = userMsgs.length ? (userMsgs[userMsgs.length - 1].innerText || '').trim() : '';
-  
-  const modal = document.createElement('div');
-  modal.className = 'modal-overlay';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:1000;';
-  modal.innerHTML = `
-    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius2);padding:28px;width:520px;max-width:95vw;max-height:90vh;overflow-y:auto;">
-      <h2 style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text)">✏️ Corregir respuesta → Base de Conocimiento</h2>
-      <div class="form-group">
-        <label>Categoría</label>
-        <input id="ebCat" value="" placeholder="Precios, Servicios, Políticas..." style="width:100%;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;">
-      </div>
-      <div class="form-group" style="margin-top:10px;">
-        <label>Pregunta / Tema</label>
-        <input id="ebQ" value="${escapeHtml(lastQ).replace(/"/g, '&quot;')}" placeholder="¿Cuál es la pregunta?" style="width:100%;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;">
-      </div>
-      <div class="form-group" style="margin-top:10px;">
-        <label>Respuesta correcta</label>
-        <textarea id="ebA" rows="6" style="width:100%;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;resize:vertical;">${escapeHtml(originalText)}</textarea>
-      </div>
-      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
-        <button onclick="this.closest('.modal-overlay').remove()" style="padding:8px 16px;background:transparent;border:1px solid var(--border);color:var(--text2);border-radius:var(--radius);cursor:pointer;">Cancelar</button>
-        <button onclick="saveEditedBotMsg()" style="padding:8px 16px;background:var(--blue2);color:white;border:none;border-radius:var(--radius);cursor:pointer;font-weight:600;">💾 Guardar en KB</button>
-      </div>
-    </div>`;
-  
-  document.body.appendChild(modal);
-  modal.addEventListener('click', e => {
-    if (e.target === modal) modal.remove();
-  });
-}
-
-async function saveEditedBotMsg() {
-  const modal = document.querySelector('.modal-overlay:not([id])');
-  if (!modal) {
-    showNotif('Error: no se encontró el formulario', 'error');
-    return;
-  }
-  
-  const cat = document.getElementById('ebCat')?.value.trim() || '';
-  const q = document.getElementById('ebQ')?.value.trim() || '';
-  const a = document.getElementById('ebA')?.value.trim() || '';
-  
-  if (!q || !a) {
-    showNotif('Completá pregunta y respuesta', 'error');
-    return;
-  }
-  
-  await loadKnowledgeBase();
-  let kb = cache['knowledge_base'] || [];
-  if (!Array.isArray(kb)) kb = [];
-  
-  const ahora = new Date().toISOString();
-  const autor = currentUser?.email || 'desconocido';
-  
-  const existingIdx = kb.findIndex(k => k.question?.toLowerCase() === q.toLowerCase());
-  
-  if (existingIdx >= 0) {
-    kb[existingIdx] = {
-      ...kb[existingIdx],
-      category: cat || kb[existingIdx].category,
-      answer: a,
-      actualizadoEn: ahora,
-      actualizadoPor: autor
-    };
-    showNotif('✅ Entrada de KB actualizada');
-  } else {
-    kb.push({
-      category: cat || 'General',
-      question: q,
-      answer: a,
-      creadoEn: ahora,
-      creadoPor: autor
-    });
-    showNotif('✅ Nueva entrada guardada en KB');
-  }
-  
-  await DB.set('knowledge_base', kb);
-  await loadKnowledgeBase();
-  if (modal) modal.remove();
-  if (document.getElementById('section-knowledge')?.classList.contains('active')) {
-    renderKnowledge();
-  }
-  
-  addBotMessage(`✅ Listo. He guardado esta información en mi base de conocimiento.\n\n**Pregunta:** ${q}\n**Respuesta:** ${a.substring(0, 100)}${a.length > 100 ? '...' : ''}`);
-}
-
-// Función auxiliar escapeHtml
-function escapeHtml(str) {
-  if (!str) return '';
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
 // ===================== AUTH =====================
 let currentUser = null;
+const ROLE_LABELS = { admin:'Administración', recepcion:'Recepción', ventas:'Ventas', limpieza:'Limpieza' };
 
 async function doLogin() {
   const email = document.getElementById('loginUser').value.trim();
@@ -1192,6 +1584,7 @@ async function doLogin() {
   try {
     showLoginError('Verificando...', '#60a5fa');
     const cred = await signInWithEmailAndPassword(auth, email, pass);
+    // Auth OK — cargar datos del usuario desde DB
     await loadAllData();
     const usuarios = DB.get('usuarios',[]);
     const u = usuarios.find(x => x.email.toLowerCase()===email.toLowerCase());
@@ -1265,6 +1658,7 @@ function showSection(s) {
   if (s === 'reservas') loadAllData().then(() => renderReservas());
   if (s === 'checkin') loadAllData().then(() => renderCheckin());
   if (s === 'grilla') loadAllData().then(() => renderGrilla());
+
   if (s === 'listanegra') loadAllData().then(() => renderListaNegra());
   if (s === 'huespedes') loadAllData().then(() => renderHuespedes());
   if (s === 'precios') renderPrecios('temporada');
@@ -1283,11 +1677,19 @@ function updateDate() {
 }
 
 // ===================== HELPERS =====================
+// Cabañas: 12 unidades, 1 unidad por cabaña
+function bedCount(hab) { return 1; }
+function habFirstBed(hab) { return Number(hab); }
 function habBeds(hab) {
   return [{ id: hab+'-1', label: String(hab) }];
 }
 function camaLabel(camaId) {
   return 'Cabaña ' + camaId.split('-')[0];
+}
+function allBeds() {
+  let beds = [];
+  for(let h=1;h<=12;h++) beds = beds.concat(habBeds(String(h)));
+  return beds;
 }
 function getHuespedNombre(id, reserva) {
   if (!id) return reserva?.guestName || '—';
@@ -1324,7 +1726,7 @@ function showNotif(msg, type='success') {
 }
 function openModal(id) { document.getElementById(id)?.classList.add('open'); }
 function closeModal(id) { document.getElementById(id)?.classList.remove('open'); }
-
+// Event listener para el selector de fecha del mapa
 document.addEventListener('change', function(e) {
   if (e.target && e.target.id === 'mapaFecha') {
     renderMapa(e.target.value);
@@ -1383,6 +1785,20 @@ function renderDashboard() {
     : '<tr><td colspan="4" style="text-align:center;color:var(--text3)">Sin check-outs pendientes</td></tr>';
 }
 
+function onEntradaChange() {
+  const entrada = document.getElementById('res-entrada').value;
+  const salidaEl = document.getElementById('res-salida');
+  // Forzar que la salida sea al menos 1 día después de la entrada
+  if(entrada) {
+    salidaEl.min = new Date(new Date(entrada).getTime() + 86400000).toISOString().split('T')[0];
+    if(salidaEl.value && salidaEl.value <= entrada) {
+      salidaEl.value = salidaEl.min;
+    }
+  }
+  updateBedsSelect();
+  calcTotalReserva();
+}
+
 // ===================== MAPA CAMAS =====================
 function renderMapa(fechaVer) {
   const reservas = DB.get('reservas',[]);
@@ -1391,6 +1807,7 @@ function renderMapa(fechaVer) {
   const fechaConsulta = (fechaVer || today()).substring(0, 10);
   const esModoConsulta = fechaVer && fechaVer.substring(0,10) !== today();
 
+  // Actualizar el selector de fecha si existe
   const fechaInput = document.getElementById('mapaFecha');
   if(fechaInput && !fechaVer) fechaInput.value = today();
 
@@ -1399,12 +1816,15 @@ function renderMapa(fechaVer) {
   for(let h=1;h<=12;h++) {
     const hs = String(h);
     const beds = habBeds(hs);
+
+    // Obtener IDs de cabañas de esta habitación que tienen reserva activa en la fecha
     const allBedIds = beds.map(b => b.id);
     const occupiedBeds = reservas.filter(r =>
       allBedIds.includes(r.cabaña) &&
       (r.estado === 'checkin' || r.estado === 'confirmada') &&
       r.entrada.substring(0,10) <= fechaConsulta && r.salida.substring(0,10) > fechaConsulta
     ).map(r => r.cabaña);
+
     const freeCount = beds.length - occupiedBeds.length;
     const allOcc = freeCount === 0;
     const allFree = occupiedBeds.length === 0;
@@ -1422,6 +1842,8 @@ function renderMapa(fechaVer) {
       <div class="beds-grid">
         ${beds.map((b,i) => {
           const isOccupied = occupiedBeds.includes(b.id);
+          // Las reservas tienen prioridad — si hay checkin activo, siempre es occupied
+          // bedStates solo aplica para sucia/mantenimiento en cabañas NO ocupadas
           let state;
           if(esModoConsulta) {
             state = isOccupied ? 'occupied' : 'free';
@@ -1434,7 +1856,7 @@ function renderMapa(fechaVer) {
               );
               state = (resActiva && resActiva.estado === 'checkin') ? 'occupied' : 'occupied-confirmed';
             } else {
-              state = bedStates[b.id] || 'free';
+              state = bedStates[b.id] || 'free'; // solo aplica dirty/maintenance si está libre
             }
           }
           const res = reservas.find(r =>
@@ -1463,6 +1885,7 @@ function renderMapa(fechaVer) {
     grid.appendChild(card);
   }
 
+  // Mostrar resumen de ocupación para la fecha consultada
   const totalOcc = reservas.filter(r =>
     (r.estado==='checkin'||r.estado==='confirmada') &&
     r.entrada.substring(0,10) <= fechaConsulta && r.salida.substring(0,10) > fechaConsulta
@@ -1481,6 +1904,7 @@ function renderMapa(fechaVer) {
     <span style="color:${pct>80?'#f87171':pct>50?'#fbbf24':'#34d399'};font-weight:600">${pct}% ocupación</span>
     ${esModoConsulta?`<span class="badge amber">Vista: ${fechaConsulta}</span>`:''}
   `;
+
 }
 
 function cycleBed(bedId) {
@@ -1492,6 +1916,7 @@ function cycleBed(bedId) {
     r.entrada.substring(0,10) <= today() && r.salida.substring(0,10) > today()
   );
   if(resOcupada) {
+    // Mostrar info del huésped en lugar de ciclar estado
     const h = DB.get('huespedes',[]).find(x=>x.id===resOcupada.huespedId);
     const saldo = Number(resOcupada.saldo||0);
     const nights = nightsBetween(resOcupada.entrada, resOcupada.salida);
@@ -1538,6 +1963,7 @@ function cycleBed(bedId) {
     openModal('modalGuestDetail');
     return;
   }
+  // Cabaña libre: ciclar estado
   const states = ['free','dirty','maintenance'];
   const cur = beds[bedId] || 'free';
   const next = states[(states.indexOf(cur)+1)%states.length];
@@ -1546,7 +1972,7 @@ function cycleBed(bedId) {
   renderMapa(document.getElementById('mapaFecha')?.value);
 }
 
-// ===================== RESERVAS (abreviado por longitud) =====================
+// ===================== RESERVAS =====================
 function renderReservas() {
   const reservas = DB.get('reservas',[]);
   const q = document.getElementById('filterReserva')?.value.toLowerCase()||'';
@@ -1595,24 +2021,75 @@ function renderReservas() {
   }).join('');
 }
 
-function openNuevaReserva() {
-  document.getElementById('modalReservaTitle').textContent = 'Nueva Reserva';
-  document.getElementById('res-edit-id').value = '';
-  document.getElementById('btnGuardarReserva').textContent = 'Guardar Reserva';
-  const huespedes = DB.get('huespedes', []);
-  const sel = document.getElementById('res-huesped');
-  sel.innerHTML = '<option value="">Seleccionar...</option>' + huespedes.map(h => `<option value="${h.id}">${h.nombre} ${h.apellido}</option>`).join('');
-  document.getElementById('res-hab').value = '';
-  document.getElementById('res-entrada').value = today();
-  const manana = new Date(); manana.setDate(manana.getDate()+1);
-  document.getElementById('res-salida').value = manana.toISOString().split('T')[0];
-  document.getElementById('res-precio').value = '';
-  document.getElementById('res-pagado').value = '';
-  document.getElementById('res-notas').value = '';
-  document.getElementById('res-pasajeros').value = '';
-  document.getElementById('res-desayuno').value = 'si';
-  calcTotalReserva();
-  openModal('modalReserva');
+function getTipoTemporada(fecha) {
+  // Devuelve 'alta', 'media' o 'baja' según las temporadas configuradas en precios
+  const precios = DB.get('precios', {});
+  const temporadas = precios.temporadas || [];
+  const d = fecha || today();
+  for (const t of temporadas) {
+    if (!t.fecha_inicio || !t.fecha_fin) continue;
+    let desde = t.fecha_inicio;
+    let hasta = t.fecha_fin;
+    if (t.anual) {
+      // Comparar solo MM-DD (ignorar año)
+      const mmddD = desde.slice(5); // MM-DD
+      const mmddH = hasta.slice(5);
+      const mmddFecha = d.slice(5);
+      const crosses = mmddD > mmddH; // el rango cruza el año (ej: 12-15 al 02-28)
+      if (crosses) {
+        if (mmddFecha >= mmddD || mmddFecha <= mmddH) return t.tipo;
+      } else {
+        if (mmddFecha >= mmddD && mmddFecha <= mmddH) return t.tipo;
+      }
+    } else {
+      if (d >= desde && d <= hasta) return t.tipo;
+    }
+  }
+  return 'media';
+}
+
+function onHabChange() {
+  const hab = document.getElementById('res-hab').value;
+  const precioEl = document.getElementById('res-precio');
+  const entradaEl = document.getElementById('res-entrada');
+  if (!hab) return;
+  const precios = DB.get('precios', {});
+  const cabana = (precios.habitaciones || []).find(h => h.hab === hab);
+  if (cabana) {
+    const fecha = entradaEl?.value || today();
+    const tipo = getTipoTemporada(fecha);
+    let precio = cabana.precio_base;
+    if (tipo === 'alta') precio = cabana.precio_alta;
+    else if (tipo === 'baja') precio = cabana.precio_baja;
+    precioEl.value = precio;
+  }
+}
+
+function updateBedsSelect() {
+  const hab = document.getElementById('res-hab').value;
+  const entrada = document.getElementById('res-entrada').value;
+  const salida = document.getElementById('res-salida').value;
+  const sel = document.getElementById('res-cabaña');
+  if(!hab) { sel.innerHTML='<option value="">auto</option>'; return; }
+  // Para cabañas: la unidad es siempre hab-1 (1 cabaña por habitación)
+  const bedId = hab + '-1';
+  sel.innerHTML = `<option value="${bedId}" selected>${bedId}</option>`;
+  // Verificar disponibilidad
+  const reservas = DB.get('reservas',[]);
+  const beds = habBeds(hab);
+  sel.innerHTML = beds.map(b => {
+    // Cama bloqueada si tiene checkin activo O reserva confirmada que se superpone con las fechas elegidas
+    const blocked = reservas.some(r => {
+      if(r.cabaña !== b.id) return false;
+      if(r.estado === 'checkin') return true;
+      if(r.estado === 'confirmada' && entrada && salida) {
+        // superposición de fechas
+        return r.entrada < salida && r.salida > entrada;
+      }
+      return false;
+    });
+    return `<option value="${b.id}" ${blocked?'disabled':''}>Cabaña ${b.label}${blocked?' (no disponible)':''}</option>`;
+  }).join('');
 }
 
 function calcTotalReserva() {
@@ -1630,40 +2107,56 @@ function calcTotalReserva() {
   }
 }
 
-function onEntradaChange() {
-  const entrada = document.getElementById('res-entrada').value;
-  const salidaEl = document.getElementById('res-salida');
-  if(entrada) {
-    salidaEl.min = new Date(new Date(entrada).getTime() + 86400000).toISOString().split('T')[0];
-    if(salidaEl.value && salidaEl.value <= entrada) {
-      salidaEl.value = salidaEl.min;
-    }
-  }
-  updateBedsSelect();
+function openNuevaReserva() {
+  document.getElementById('modalReservaTitle').textContent = 'Nueva Reserva';
+  document.getElementById('res-edit-id').value = '';
+  document.getElementById('btnGuardarReserva').textContent = 'Guardar Reserva';
+  const huespedes = DB.get('huespedes', []);
+  const sel = document.getElementById('res-huesped');
+  sel.innerHTML = '<option value="">Seleccionar...</option>' +
+    huespedes.map(h => `<option value="${h.id}">${h.nombre} ${h.apellido}</option>`).join('');
+  document.getElementById('res-hab').value = '';
+  document.getElementById('res-entrada').value = today();
+  const manana = new Date(); manana.setDate(manana.getDate()+1);
+  document.getElementById('res-salida').value = manana.toISOString().split('T')[0];
+  document.getElementById('res-precio').value = '';
+  document.getElementById('res-pagado').value = '';
+  document.getElementById('res-notas').value = '';
+  document.getElementById('res-pasajeros').value = '';
+  document.getElementById('res-desayuno').value = 'si';
   calcTotalReserva();
+  openModal('modalReserva');
 }
 
-function updateBedsSelect() {
-  const hab = document.getElementById('res-hab').value;
-  const entrada = document.getElementById('res-entrada').value;
-  const salida = document.getElementById('res-salida').value;
-  const sel = document.getElementById('res-cabaña');
-  if(!hab) { sel.innerHTML='<option value="">auto</option>'; return; }
-  const bedId = hab + '-1';
-  sel.innerHTML = `<option value="${bedId}" selected>${bedId}</option>`;
-  const reservas = DB.get('reservas',[]);
-  const beds = habBeds(hab);
-  sel.innerHTML = beds.map(b => {
-    const blocked = reservas.some(r => {
-      if(r.cabaña !== b.id) return false;
-      if(r.estado === 'checkin') return true;
-      if(r.estado === 'confirmada' && entrada && salida) {
-        return r.entrada < salida && r.salida > entrada;
-      }
-      return false;
-    });
-    return `<option value="${b.id}" ${blocked?'disabled':''}>Cabaña ${b.label}${blocked?' (no disponible)':''}</option>`;
-  }).join('');
+function editReserva(rid) {
+  const reservas = DB.get('reservas', []);
+  const r = reservas.find(x => x.id === rid);
+  if (!r) return;
+  document.getElementById('modalReservaTitle').textContent = 'Editar Reserva';
+  document.getElementById('res-edit-id').value = rid;
+  document.getElementById('btnGuardarReserva').textContent = 'Guardar cambios';
+  const huespedes = DB.get('huespedes', []);
+  const sel = document.getElementById('res-huesped');
+  sel.innerHTML = '<option value="">Seleccionar...</option>' +
+    huespedes.map(h => `<option value="${h.id}">${h.nombre} ${h.apellido}</option>`).join('');
+  sel.value = r.huespedId;
+  document.getElementById('res-hab').value = r.hab;
+  updateBedsSelect();
+  document.getElementById('res-cabaña').value = r.cabaña;
+  document.getElementById('res-entrada').value = r.entrada;
+  document.getElementById('res-salida').value = r.salida;
+  document.getElementById('res-precio').value = r.precio;
+  document.getElementById('res-moneda').value = r.moneda || 'ARS';
+  document.getElementById('res-pagado').value = r.pagado || '';
+  document.getElementById('res-pago').value = r.pago || 'efectivo';
+  document.getElementById('res-estado-pago').value = r.estadoPago || 'total';
+  document.getElementById('res-estado').value = r.estado || 'confirmada';
+  document.getElementById('res-plat').value = r.plataforma || 'directo';
+  document.getElementById('res-notas').value = r.notas || '';
+  document.getElementById('res-pasajeros').value = r.pasajeros || '';
+  document.getElementById('res-desayuno').value = r.desayuno === false ? 'no' : 'si';
+  calcTotalReserva();
+  openModal('modalReserva');
 }
 
 let savingReserva = false;
@@ -1681,6 +2174,7 @@ async function saveReserva() {
     if(btnGuardar) { btnGuardar.disabled = false; btnGuardar.textContent = 'Guardar Reserva'; }
     showNotif('Completá todos los campos obligatorios','error'); return;
   }
+  // Verificar disponibilidad de la cabaña para esas fechas
   const editId = document.getElementById('res-edit-id').value;
   const reservasExist = DB.get('reservas',[]);
   const conflicto = reservasExist.some(r =>
@@ -1719,9 +2213,11 @@ async function saveReserva() {
     notas: document.getElementById('res-notas').value,
   };
   if (editId) {
+    // Editar reserva existente
     const idx = reservas.findIndex(x => x.id === editId);
     if (idx >= 0) reservas[idx] = { ...reservas[idx], ...newData };
   } else {
+    // Nueva reserva
     reservas.push({ id: 'r'+Date.now(), ...newData });
   }
   await DB.set('reservas', reservas);
@@ -1739,15 +2235,11 @@ async function saveReserva() {
   showNotif('Reserva guardada correctamente');
 }
 
-// ===================== CHECKIN / CHECKOUT (abreviado) =====================
 function doCheckin(rid) {
   const reservas = DB.get('reservas',[]);
   const r = reservas.find(x=>x.id===rid);
   if(!r) return;
-  if(r.estado !== 'confirmada') {
-    showNotif('Esta reserva ya tiene check-in realizado o no está confirmada', 'error');
-    return;
-  }
+  // Advertir si el check-in es antes de la fecha de entrada
   if(r.entrada > today()) {
     if(!confirm(`La fecha de entrada es ${r.entrada}. ¿Confirmar check-in anticipado?`)) return;
   }
@@ -1773,15 +2265,11 @@ async function confirmCheckin() {
   const reservas = DB.get('reservas',[]);
   const r = reservas.find(x=>x.id===rid);
   if(!r) return;
-  if(r.estado === 'checkin') {
-    showNotif('Esta reserva ya tiene check-in realizado', 'error');
-    closeModal('modalCheckin');
-    return;
-  }
   r.estado = 'checkin';
   r.llave = llave;
   r.horaCheckin = hora;
   r.obsCheckin = obs;
+  // Registrar pago si no había pago previo
   if(!r.pagado || r.pagado === 0) {
     const nights = nightsBetween(r.entrada, r.salida);
     const movs = DB.get('movimientos',[]);
@@ -1792,6 +2280,7 @@ async function confirmCheckin() {
     r.estadoPago = 'total';
   }
   await DB.set('reservas', reservas);
+  // Actualizar estado de cabaña en beds
   const beds = DB.get('beds',{});
   beds[r.cabaña] = 'occupied';
   await DB.set('beds', beds);
@@ -1800,6 +2289,106 @@ async function confirmCheckin() {
   renderCheckin();
   renderMapa();
   showNotif(`✅ Check-in realizado: ${getHuespedNombre(r.huespedId, r)}${llave?' — Llave: '+llave:''}`);
+}
+
+function openPago(rid) {
+  const reservas = DB.get('reservas',[]);
+  const r = reservas.find(x=>x.id===rid);
+  if(!r) return;
+  const nights = nightsBetween(r.entrada, r.salida);
+  const total = r.precio * nights;
+  document.getElementById('pago-res-id').value = rid;
+  document.getElementById('pago-monto').value = r.saldo || '';
+  document.getElementById('pago-concepto').value = `Saldo estadía ${getHuespedNombre(r.huespedId)}`;
+  document.getElementById('pago-resumen').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+      <div><span style="color:var(--text3);display:block;font-size:11px">Huésped</span><strong>${getHuespedNombre(r.huespedId)}</strong></div>
+      <div><span style="color:var(--text3);display:block;font-size:11px">Total estadía</span><strong style="color:var(--accent2)">${fmtMoney(total,r.moneda)}</strong></div>
+      <div><span style="color:var(--text3);display:block;font-size:11px">Saldo pendiente</span><strong style="color:#fbbf24">${fmtMoney(r.saldo||0,r.moneda)}</strong></div>
+    </div>`;
+  openModal('modalPago');
+}
+
+function savePago() {
+  const rid = document.getElementById('pago-res-id').value;
+  const monto = Number(document.getElementById('pago-monto').value);
+  const metodo = document.getElementById('pago-metodo').value;
+  const concepto = document.getElementById('pago-concepto').value;
+  if(!monto||monto<=0) { showNotif('Ingresá un monto válido','error'); return; }
+  const reservas = DB.get('reservas',[]);
+  const r = reservas.find(x=>x.id===rid);
+  if(!r) return;
+  r.pagado = (Number(r.pagado)||0) + monto;
+  r.saldo = Math.max((Number(r.saldo)||0) - monto, 0);
+  r.estadoPago = r.saldo <= 0 ? 'total' : 'senia';
+  DB.set('reservas', reservas);
+  const movs = DB.get('movimientos',[]);
+  movs.push({ id:'m'+Date.now(), tipo:'ingreso', cat:'reserva', moneda:r.moneda, monto, metodo, fecha:today(), concepto });
+  DB.set('movimientos', movs);
+  closeModal('modalPago');
+  renderReservas();
+  showNotif('💰 Pago registrado: '+fmtMoney(monto, r.moneda));
+}
+
+function openExtender(rid) {
+  const reservas = DB.get('reservas',[]);
+  const r = reservas.find(x=>x.id===rid);
+  if(!r) return;
+  document.getElementById('ext-res-id').value = rid;
+  document.getElementById('ext-nueva-salida').value = r.salida;
+  document.getElementById('ext-nueva-salida').min = r.salida;
+  document.getElementById('ext-noches-extra').value = '0';
+  document.getElementById('ext-monto-extra').value = fmtMoney(0, r.moneda);
+  document.getElementById('ext-resumen').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+      <div><span style="color:var(--text3);display:block;font-size:11px">Huésped</span><strong>${getHuespedNombre(r.huespedId)}</strong></div>
+      <div><span style="color:var(--text3);display:block;font-size:11px">Salida actual</span><strong style="color:#fbbf24">${fmtFecha(r.salida)}</strong></div>
+      <div><span style="color:var(--text3);display:block;font-size:11px">Precio/noche</span><strong style="color:var(--accent2)">${fmtMoney(r.precio,r.moneda)}</strong></div>
+    </div>`;
+  document.getElementById('ext-nueva-salida').addEventListener('input', () => calcExtension(r));
+  document.getElementById('ext-cobrar').addEventListener('change', function() {
+    document.getElementById('ext-pago-row').style.display = this.value==='si' ? '' : 'none';
+  });
+  openModal('modalExtender');
+}
+
+function calcExtension(r) {
+  const nuevaSalida = document.getElementById('ext-nueva-salida').value;
+  if(!nuevaSalida || nuevaSalida <= r.salida) {
+    document.getElementById('ext-noches-extra').value = '0';
+    document.getElementById('ext-monto-extra').value = fmtMoney(0, r.moneda);
+    return;
+  }
+  const extra = nightsBetween(r.salida, nuevaSalida);
+  const montoExtra = extra * r.precio;
+  document.getElementById('ext-noches-extra').value = extra + ' noche(s)';
+  document.getElementById('ext-monto-extra').value = fmtMoney(montoExtra, r.moneda);
+}
+
+async function saveExtension() {
+  const rid = document.getElementById('ext-res-id').value;
+  const nuevaSalida = document.getElementById('ext-nueva-salida').value;
+  const cobrar = document.getElementById('ext-cobrar').value;
+  const metodo = document.getElementById('ext-metodo').value;
+  const reservas = DB.get('reservas',[]);
+  const r = reservas.find(x=>x.id===rid);
+  if(!r || !nuevaSalida || nuevaSalida <= r.salida) { showNotif('Elegí una fecha posterior a la salida actual','error'); return; }
+  const extra = nightsBetween(r.salida, nuevaSalida);
+  const montoExtra = extra * r.precio;
+  r.salida = nuevaSalida;
+  if(cobrar === 'si') {
+    r.pagado = (Number(r.pagado)||0) + montoExtra;
+    const movs = DB.get('movimientos',[]);
+    movs.push({ id:'m'+Date.now(), tipo:'ingreso', cat:'reserva', moneda:r.moneda, monto:montoExtra, metodo, fecha:today(), concepto:`Extensión ${extra} noche(s) - ${getHuespedNombre(r.huespedId)} Cab.${r.hab}` });
+    await DB.set('movimientos', movs);
+  } else {
+    r.saldo = (Number(r.saldo)||0) + montoExtra;
+    r.estadoPago = 'senia';
+  }
+  await DB.set('reservas', reservas);
+  closeModal('modalExtender');
+  renderReservas();
+  showNotif(`📅 Estadía extendida ${extra} noche(s) hasta ${nuevaSalida}`);
 }
 
 async function doCheckout(rid) {
@@ -1817,6 +2406,7 @@ async function doCheckout(rid) {
   showNotif('🚪 Check-out realizado: '+getHuespedNombre(r.huespedId));
 }
 
+// ===================== CHECKIN SECTION =====================
 function renderCheckin() {
   const reservas = DB.get('reservas',[]);
   const tod = today();
@@ -1855,6 +2445,7 @@ function renderCheckin() {
           <td>${h?.nac||'—'}</td>
           <td>${h?.ciudad||'—'}</td>
           <td>Cabaña ${r.hab}</td>
+
           <td>${fmtFecha(r.entrada)}${r.horaCheckin?` <span style="color:var(--text3);font-size:11px">${r.horaCheckin}hs</span>`:''}</td>
           <td>${fmtFecha(r.salida)}</td>
           <td>${saldo>0?`<span class="badge amber">Debe ${fmtMoney(saldo,r.moneda)}</span>`:`<span class="badge green">Al día</span>`}</td>
@@ -1868,13 +2459,16 @@ function renderCheckin() {
     : '<tr><td colspan="8" style="text-align:center;color:var(--text3)">Sin huéspedes activos</td></tr>';
 }
 
-// ===================== HUÉSPEDES (abreviado) =====================
+// ===================== HUÉSPEDES =====================
 function renderHuespedes() {
   const huespedes = DB.get('huespedes',[]);
   const q = document.getElementById('filterHuesped')?.value.toLowerCase()||'';
   const filtered = q ? huespedes.filter(h=>(h.nombre+' '+h.apellido+h.dni).toLowerCase().includes(q)) : huespedes;
+
+  // populate modal select
   const sel = document.getElementById('res-huesped');
   sel.innerHTML = '<option value="">Seleccionar...</option>'+huespedes.map(h=>`<option value="${h.id}">${h.nombre} ${h.apellido}</option>`).join('');
+
   document.getElementById('tablaHuespedes').innerHTML = filtered.length
     ? filtered.map(h=>`<tr>
         <td><strong style="color:var(--text)">${h.nombre} ${h.apellido}</strong>${h.pendiente?` <span class="badge amber" style="font-size:10px">Por confirmar</span>`:''}</td>
@@ -1891,21 +2485,676 @@ function renderHuespedes() {
     : '<tr><td colspan="7" style="text-align:center;color:var(--text3)">Sin huéspedes</td></tr>';
 }
 
-function getScoreBadge(score) {
-  if (!score) return '<span style="font-size:11px;color:var(--text3)">Sin calificar</span>';
-  const color = score <= 3 ? '#f87171' : score <= 5 ? '#fbbf24' : score <= 7 ? '#60a5fa' : '#34d399';
-  const emoji = score <= 3 ? '🔴' : score <= 5 ? '🟡' : score <= 7 ? '🔵' : '🟢';
-  return `<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:12px;font-weight:700;background:${color}22;color:${color}">${emoji} ${score}/10</span>`;
+function showGuestDetail(id) {
+  const h = DB.get('huespedes',[]).find(x=>x.id===id);
+  if(!h) return;
+  const reservas = DB.get('reservas',[]).filter(r=>r.huespedId===id);
+  document.getElementById('guestDetailContent').innerHTML = `
+    <div class="guest-detail" style="margin-bottom:20px">
+      <div class="guest-avatar">${h.nombre[0]}${h.apellido[0]}</div>
+      <div class="guest-info">
+        <h3>${h.nombre} ${h.apellido}</h3>
+        <div class="guest-meta">
+          <span class="meta-chip">🪪 ${h.dni}</span>
+          <span class="meta-chip">🌍 ${h.nac}</span>
+          ${h.tel?`<span class="meta-chip"><a href="https://wa.me/${h.tel.replace(/\D/g,'')}" target="_blank" style="color:inherit;text-decoration:none;">📱 ${h.tel}</a></span>`:''}
+          ${h.email?`<span class="meta-chip">✉️ ${h.email}</span>`:''}
+          <span class="meta-chip">🏨 ${reservas.length} estadía(s)</span>
+        </div>
+      </div>
+    </div>
+    ${h.foto ? `<div style="margin-bottom:16px"><p style="font-size:12px;color:var(--text3);margin-bottom:6px">Documento:</p><img src="${h.foto}" style="max-width:100%;border-radius:8px;max-height:160px"></div>` : ''}
+    <p style="font-size:12px;color:var(--text3);margin-bottom:8px">Historial de reservas:</p>
+    <table><thead><tr><th>Entrada</th><th>Salida</th><th>Cab.</th><th>Total</th><th>Estado</th></tr></thead>
+    <tbody>${reservas.map(r=>`<tr>
+      <td>${fmtFecha(r.entrada)}</td><td>${fmtFecha(r.salida)}</td><td>Cab.${r.hab}</td>
+      <td>${fmtMoney(r.precio*nightsBetween(r.entrada,r.salida),r.moneda)}</td>
+      <td>${estadoBadge(r.estado)}</td>
+    </tr>`).join('')||'<tr><td colspan="5" style="text-align:center;color:var(--text3)">Sin reservas</td></tr>'}</tbody></table>
+  `;
+  openModal('modalGuestDetail');
+}
+
+function previewDoc(input) {
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = document.getElementById('docPreview');
+    img.src = e.target.result;
+    img.style.display = 'block';
+    document.getElementById('uploadZone').querySelector('span')?.remove();
+  };
+  reader.readAsDataURL(file);
+}
+
+function saveHuesped() {
+  const nombre = document.getElementById('h-nombre').value.trim();
+  const apellido = document.getElementById('h-apellido').value.trim();
+  const dni = document.getElementById('h-dni').value.trim();
+  if(!nombre||!apellido||!dni) { showNotif('Nombre, apellido y DNI son obligatorios','error'); return; }
+  const foto = document.getElementById('docPreview').src || null;
+  const huespedes = DB.get('huespedes',[]);
+  huespedes.push({
+    id: 'h'+Date.now(), nombre, apellido, dni,
+    nac: document.getElementById('h-nac').value,
+    tel: document.getElementById('h-tel').value,
+    email: document.getElementById('h-email').value,
+    foto: foto && foto !== window.location.href ? foto : null,
+    estadias: 0
+  });
+  DB.set('huespedes', huespedes);
+  closeModal('modalHuesped');
+  renderHuespedes();
+  showNotif('Huésped registrado: '+nombre+' '+apellido);
+  // reset form
+  ['h-nombre','h-apellido','h-dni','h-nac','h-tel','h-email'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('docPreview').style.display='none';
+}
+
+// ===================== PRECIOS =====================
+const INP = `style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;"`;
+
+function renderPrecios(tab) {
+  const precios = DB.get('precios',{});
+  const c = document.getElementById('pricingContent');
+
+  if(tab==='temporada') {
+    const rows = (precios.temporadas||[]).map(t=>`<tr>
+      <td><input ${INP} style="width:130px" value="${t.nombre}" onchange="updateTemporada('${t.id}','nombre',this.value)"></td>
+      <td>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <label style="font-size:11px;color:var(--text3)">Desde</label>
+          <input type="date" ${INP} style="width:145px" value="${t.fecha_inicio||''}" onchange="updateTemporada('${t.id}','fecha_inicio',this.value)">
+          <label style="font-size:11px;color:var(--text3)">Hasta</label>
+          <input type="date" ${INP} style="width:145px" value="${t.fecha_fin||''}" onchange="updateTemporada('${t.id}','fecha_fin',this.value)">
+          <label style="font-size:11px;color:var(--text3)" title="Si está marcado, el período se repite cada año en las mismas fechas (ignora el año)">🔁 Anual</label>
+          <input type="checkbox" ${t.anual?'checked':''} onchange="updateTemporada('${t.id}','anual',this.checked)" style="width:16px;height:16px;cursor:pointer;">
+        </div>
+      </td>
+      <td>
+        <select ${INP} onchange="updateTemporada('${t.id}','tipo',this.value)">
+          <option value="alta" ${t.tipo==='alta'?'selected':''}>Alta</option>
+          <option value="media" ${t.tipo==='media'?'selected':''}>Media</option>
+          <option value="baja" ${t.tipo==='baja'?'selected':''}>Baja</option>
+        </select>
+      </td>
+      <td><button class="btn btn-red btn-sm" onclick="deleteTemporada('${t.id}')">🗑</button></td>
+    </tr>`).join('');
+    c.innerHTML = `
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h3>Temporadas</h3>
+            <p style="font-size:12px;color:var(--text3);margin-top:4px">Definí los rangos de fechas de cada temporada. Si marcás "Anual", el rango se repite todos los años (por ejemplo, Alta = 15/dic al 28/feb).</p>
+          </div>
+          <button class="btn btn-blue btn-sm" onclick="addTemporada()">+ Agregar temporada</button>
+        </div>
+        <table class="pricing-table">
+          <thead><tr><th>Nombre</th><th>Período</th><th>Tipo</th><th></th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+
+  } else if(tab==='habitacion') {
+    const rows = (precios.habitaciones||[]).map(h=>`<tr>
+      <td><strong style="color:var(--text)">Cabaña ${h.hab}</strong> <span style="font-size:11px;color:var(--text3)">${h.nombre||''}</span></td>
+      <td><input type="number" ${INP} style="width:120px" value="${h.precio_base||0}" onchange="updateHabPrecio('${h.hab}','precio_base',this.value)"></td>
+      <td><input type="number" ${INP} style="width:120px" value="${h.precio_alta||0}" onchange="updateHabPrecio('${h.hab}','precio_alta',this.value)"></td>
+      <td><input type="number" ${INP} style="width:120px" value="${h.precio_baja||0}" onchange="updateHabPrecio('${h.hab}','precio_baja',this.value)"></td>
+    </tr>`).join('');
+    c.innerHTML = `
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h3>Precios por Cabaña</h3>
+            <p style="font-size:12px;color:var(--text3);margin-top:4px">Precio por noche en ARS según la temporada configurada.</p>
+          </div>
+        </div>
+        <table class="pricing-table">
+          <thead><tr><th>Cabaña</th><th>Precio Base (media)</th><th>Temporada Alta</th><th>Temporada Baja</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+
+  } else if(tab==='finde') {
+    const fines = precios.fines_semana_largos || [];
+    const rows = fines.map(f=>`<tr>
+      <td><input ${INP} style="width:180px" value="${f.nombre}" onchange="updateFinde('${f.id}','nombre',this.value)"></td>
+      <td><input type="date" ${INP} style="width:145px" value="${f.fecha_inicio||''}" onchange="updateFinde('${f.id}','fecha_inicio',this.value)"></td>
+      <td><input type="date" ${INP} style="width:145px" value="${f.fecha_fin||''}" onchange="updateFinde('${f.id}','fecha_fin',this.value)"></td>
+      <td>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <input type="number" ${INP} style="width:100px" value="${f.recargo_pct||0}" onchange="updateFinde('${f.id}','recargo_pct',this.value)">
+          <span style="color:var(--text3);font-size:12px">%</span>
+        </div>
+      </td>
+      <td><button class="btn btn-red btn-sm" onclick="deleteFinde('${f.id}')">🗑</button></td>
+    </tr>`).join('');
+    c.innerHTML = `
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h3>Fines de semana largos</h3>
+            <p style="font-size:12px;color:var(--text3);margin-top:4px">Definí los feriados puente y fines de semana largos con su recargo porcentual sobre el precio base de la cabaña.</p>
+          </div>
+          <button class="btn btn-blue btn-sm" onclick="addFinde()">+ Agregar</button>
+        </div>
+        <table class="pricing-table">
+          <thead><tr><th>Nombre</th><th>Desde</th><th>Hasta</th><th>Recargo (%)</th><th></th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+
+  } else if(tab==='promo') {
+    const promos = precios.promociones || [];
+    const rows = promos.map(p=>`<tr>
+      <td><input ${INP} style="width:180px" value="${p.nombre}" onchange="updatePromo('${p.id}','nombre',this.value)"></td>
+      <td><input type="date" ${INP} style="width:145px" value="${p.fecha_inicio||''}" onchange="updatePromo('${p.id}','fecha_inicio',this.value)"></td>
+      <td><input type="date" ${INP} style="width:145px" value="${p.fecha_fin||''}" onchange="updatePromo('${p.id}','fecha_fin',this.value)"></td>
+      <td>
+        <select ${INP} onchange="updatePromo('${p.id}','tipo',this.value)">
+          <option value="descuento_pct" ${p.tipo==='descuento_pct'?'selected':''}>Descuento %</option>
+          <option value="precio_fijo" ${p.tipo==='precio_fijo'?'selected':''}>Precio fijo por noche</option>
+          <option value="noches_gratis" ${p.tipo==='noches_gratis'?'selected':''}>Noches gratis (X+Y)</option>
+        </select>
+      </td>
+      <td>
+        <div style="display:flex;align-items:center;gap:4px;">
+          <input type="number" ${INP} style="width:90px" value="${p.valor||0}" onchange="updatePromo('${p.id}','valor',this.value)">
+          <span style="color:var(--text3);font-size:11px">${p.tipo==='descuento_pct'?'%':p.tipo==='precio_fijo'?'ARS':'noches'}</span>
+        </div>
+      </td>
+      <td>
+        <input ${INP} style="width:200px" placeholder="ej: solo para cabañas 1-4" value="${p.condicion||''}" onchange="updatePromo('${p.id}','condicion',this.value)">
+      </td>
+      <td><button class="btn btn-red btn-sm" onclick="deletePromo('${p.id}')">🗑</button></td>
+    </tr>`).join('');
+    c.innerHTML = `
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h3>Promociones especiales</h3>
+            <p style="font-size:12px;color:var(--text3);margin-top:4px">Promociones con fecha de vigencia. Se aplican sobre el precio de la cabaña durante el período indicado.</p>
+          </div>
+          <button class="btn btn-blue btn-sm" onclick="addPromo()">+ Agregar</button>
+        </div>
+        <table class="pricing-table">
+          <thead><tr><th>Nombre</th><th>Desde</th><th>Hasta</th><th>Tipo</th><th>Valor</th><th>Condición / Nota</th><th></th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+
+  } else {
+    c.innerHTML = `
+      <div class="card">
+        <div class="card-header"><h3>Comisiones y Descuentos por Plataforma</h3></div>
+        <table class="pricing-table">
+          <thead><tr><th>Plataforma</th><th>Comisión (%)</th><th>Descuento ofrecido (%)</th></tr></thead>
+          <tbody>${(precios.plataformas||[]).map(p=>`<tr>
+            <td>${platBadge(p.plat)}</td>
+            <td><input type="number" ${INP} style="width:80px" value="${p.comision}" onchange="updatePlatPrecio('${p.plat}','comision',this.value)"></td>
+            <td><input type="number" ${INP} style="width:80px" value="${p.descuento}" onchange="updatePlatPrecio('${p.plat}','descuento',this.value)"></td>
+          </tr>`).join('')}</tbody>
+        </table>
+      </div>`;
+  }
+}
+
+function switchPricingTab(tab, el) {
+  document.querySelectorAll('#section-precios .tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  renderPrecios(tab);
+}
+
+function updateTemporada(id, field, val) {
+  const p = DB.get('precios',{});
+  if(!p.temporadas) p.temporadas=[];
+  const t = p.temporadas.find(x=>x.id===id);
+  if(t) t[field] = (field==='anual') ? val : val;
+  DB.set('precios', p);
+}
+function deleteTemporada(id) {
+  const p = DB.get('precios',{});
+  p.temporadas = (p.temporadas||[]).filter(x=>x.id!==id);
+  DB.set('precios', p);
+  renderPrecios('temporada');
+}
+function addTemporada() {
+  const p = DB.get('precios',{});
+  if(!p.temporadas) p.temporadas=[];
+  p.temporadas.push({ id:'t'+Date.now(), nombre:'Nueva temporada', fecha_inicio:'', fecha_fin:'', tipo:'media', anual:true });
+  DB.set('precios', p);
+  renderPrecios('temporada');
+}
+
+function updateHabPrecio(hab, field, val) {
+  const p = DB.get('precios',{});
+  const h = (p.habitaciones||[]).find(x=>x.hab===hab);
+  if(h) h[field] = Number(val);
+  DB.set('precios', p);
+}
+function updatePlatPrecio(plat, field, val) {
+  const p = DB.get('precios',{});
+  const h = (p.plataformas||[]).find(x=>x.plat===plat);
+  if(h) h[field] = Number(val);
+  DB.set('precios', p);
+}
+
+function addFinde() {
+  const p = DB.get('precios',{});
+  if(!p.fines_semana_largos) p.fines_semana_largos=[];
+  p.fines_semana_largos.push({ id:'f'+Date.now(), nombre:'Feriado puente', fecha_inicio:'', fecha_fin:'', recargo_pct:20 });
+  DB.set('precios', p);
+  renderPrecios('finde');
+}
+function updateFinde(id, field, val) {
+  const p = DB.get('precios',{});
+  if(!p.fines_semana_largos) p.fines_semana_largos=[];
+  const f = p.fines_semana_largos.find(x=>x.id===id);
+  if(f) f[field] = field==='recargo_pct' ? Number(val) : val;
+  DB.set('precios', p);
+}
+function deleteFinde(id) {
+  const p = DB.get('precios',{});
+  p.fines_semana_largos = (p.fines_semana_largos||[]).filter(x=>x.id!==id);
+  DB.set('precios', p);
+  renderPrecios('finde');
+}
+
+function addPromo() {
+  const p = DB.get('precios',{});
+  if(!p.promociones) p.promociones=[];
+  p.promociones.push({ id:'pr'+Date.now(), nombre:'Promo', fecha_inicio:'', fecha_fin:'', tipo:'descuento_pct', valor:10, condicion:'' });
+  DB.set('precios', p);
+  renderPrecios('promo');
+}
+function updatePromo(id, field, val) {
+  const p = DB.get('precios',{});
+  if(!p.promociones) p.promociones=[];
+  const pr = p.promociones.find(x=>x.id===id);
+  if(pr) pr[field] = field==='valor' ? Number(val) : val;
+  DB.set('precios', p);
+  if(field==='tipo') renderPrecios('promo');
+}
+function deletePromo(id) {
+  const p = DB.get('precios',{});
+  p.promociones = (p.promociones||[]).filter(x=>x.id!==id);
+  DB.set('precios', p);
+  renderPrecios('promo');
+}
+
+// ===================== CONTABILIDAD =====================
+function renderAcct(tab) {
+  const movs = DB.get('movimientos',[]);
+  const c = document.getElementById('acctContent');
+  if(tab==='resumen') {
+    const mes = new Date().getMonth();
+    const year = new Date().getFullYear();
+    const movsmes = movs.filter(m => { const d=new Date(m.fecha); return d.getMonth()===mes && d.getFullYear()===year; });
+    const ingARS = movsmes.filter(m=>m.tipo==='ingreso'&&m.moneda==='ARS').reduce((a,b)=>a+Number(b.monto),0);
+    const ingUSD = movsmes.filter(m=>m.tipo==='ingreso'&&m.moneda==='USD').reduce((a,b)=>a+Number(b.monto),0);
+    const egARS = movsmes.filter(m=>m.tipo==='egreso'&&m.moneda==='ARS').reduce((a,b)=>a+Number(b.monto),0);
+    const bal = ingARS - egARS;
+    c.innerHTML = `
+      <div class="acct-grid">
+        <div class="stat-card green"><div class="label">Ingresos ARS (mes)</div><div class="value">${fmtMoney(ingARS)}</div></div>
+        <div class="stat-card green"><div class="label">Ingresos USD (mes)</div><div class="value">USD ${ingUSD.toLocaleString('es-AR')}</div></div>
+        <div class="stat-card red"><div class="label">Egresos ARS (mes)</div><div class="value">${fmtMoney(egARS)}</div></div>
+        <div class="stat-card blue"><div class="label">Balance neto ARS</div><div class="value">${fmtMoney(bal)}</div></div>
+        <div class="stat-card amber"><div class="label">Transacciones</div><div class="value">${movsmes.length}</div></div>
+      </div>`;
+    return;
+  }
+  const tipoMap = { ingresos:'ingreso', egresos:'egreso', sueldos:'egreso', servicios:'egreso' };
+  const catMap = { sueldos:'sueldo', servicios:'servicio' };
+  let filtered = movs.filter(m=>m.tipo===(tipoMap[tab]||m.tipo));
+  if(catMap[tab]) filtered = filtered.filter(m=>m.cat===catMap[tab]);
+  c.innerHTML = `
+    <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+      <button class="btn btn-blue btn-sm" onclick="openModal('modalMovimiento')">+ Agregar</button>
+    </div>
+    <div class="card">
+      <table>
+        <thead><tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Monto</th><th>Método</th></tr></thead>
+        <tbody>${filtered.length
+          ? filtered.sort((a,b)=>b.fecha>a.fecha?1:-1).map(m=>`<tr>
+              <td style="font-family:'DM Mono';font-size:12px">${fmtFecha(m.fecha)}</td>
+              <td>${m.concepto}</td>
+              <td><span class="badge ${m.tipo==='ingreso'?'green':'red'}">${m.cat}</span></td>
+              <td style="font-weight:500;color:${m.tipo==='ingreso'?'#34d399':'#f87171'}">${m.tipo==='ingreso'?'+':'-'}${fmtMoney(m.monto,m.moneda)}</td>
+              <td>${m.metodo}</td>
+            </tr>`).join('')
+          : '<tr><td colspan="5" style="text-align:center;color:var(--text3)">Sin movimientos</td></tr>'
+        }</tbody>
+      </table>
+    </div>`;
+}
+
+function switchAcctTab(tab, el) {
+  document.querySelectorAll('#section-contabilidad .tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  renderAcct(tab);
+}
+
+// ===================== CAJA DIARIA =====================
+function renderCaja() {
+  const tod = today();
+  document.getElementById('mov-fecha').value = tod;
+  const movs = DB.get('movimientos',[]).filter(m=>m.fecha===tod);
+  const ingARS = movs.filter(m=>m.tipo==='ingreso'&&m.moneda==='ARS').reduce((a,b)=>a+Number(b.monto),0);
+  const ingUSD = movs.filter(m=>m.tipo==='ingreso'&&m.moneda==='USD').reduce((a,b)=>a+Number(b.monto),0);
+  const egARS = movs.filter(m=>m.tipo==='egreso'&&m.moneda==='ARS').reduce((a,b)=>a+Number(b.monto),0);
+  document.getElementById('caja-ingresos').textContent = fmtMoney(ingARS);
+  document.getElementById('caja-ingresos-usd').textContent = 'USD '+ingUSD.toLocaleString('es-AR');
+  document.getElementById('caja-egresos').textContent = fmtMoney(egARS);
+  document.getElementById('caja-balance').textContent = fmtMoney(ingARS-egARS);
+  document.getElementById('caja-balance-usd').textContent = 'USD '+ingUSD.toLocaleString('es-AR');
+  document.getElementById('tablaCaja').innerHTML = movs.length
+    ? movs.map(m=>`<tr>
+        <td style="font-family:'DM Mono';font-size:12px">${fmtFecha(m.fecha)}</td>
+        <td>${m.concepto}</td>
+        <td><span class="badge ${m.tipo==='ingreso'?'green':'red'}">${m.tipo}</span></td>
+        <td style="font-weight:500;color:${m.tipo==='ingreso'?'#34d399':'#f87171'}">${m.tipo==='ingreso'?'+':'-'}${fmtMoney(m.monto,m.moneda)}</td>
+        <td>${m.metodo}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="5" style="text-align:center;color:var(--text3)">Sin movimientos hoy</td></tr>';
+
+  const cierres = DB.get('cierres',[]);
+  document.getElementById('historialCierres').innerHTML = cierres.slice(-3).reverse().map(c=>`
+    <div style="padding:8px 0;border-top:1px solid var(--border);font-size:12px;color:var(--text2)">
+      <strong style="color:var(--text)">${fmtFecha(c.fecha)}</strong> — ${fmtMoney(c.balanceARS)} / USD ${c.balanceUSD} <span style="color:var(--text3)">(TC: $${c.tc})</span>
+    </div>`).join('');
+}
+
+function saveMovimiento() {
+  const monto = document.getElementById('mov-monto').value;
+  const concepto = document.getElementById('mov-concepto').value;
+  if(!monto||!concepto) { showNotif('Monto y concepto son obligatorios','error'); return; }
+  const movs = DB.get('movimientos',[]);
+  movs.push({
+    id:'m'+Date.now(),
+    tipo: document.getElementById('mov-tipo').value,
+    cat: document.getElementById('mov-cat').value,
+    moneda: document.getElementById('mov-moneda').value,
+    monto: Number(monto),
+    metodo: document.getElementById('mov-metodo').value,
+    fecha: document.getElementById('mov-fecha').value,
+    concepto
+  });
+  DB.set('movimientos', movs);
+  closeModal('modalMovimiento');
+  renderCaja();
+  showNotif('Movimiento registrado');
+}
+
+function cerrarCaja() {
+  const tod = today();
+  const movs = DB.get('movimientos',[]).filter(m=>m.fecha===tod);
+  const ingARS = movs.filter(m=>m.tipo==='ingreso'&&m.moneda==='ARS').reduce((a,b)=>a+Number(b.monto),0);
+  const egARS = movs.filter(m=>m.tipo==='egreso'&&m.moneda==='ARS').reduce((a,b)=>a+Number(b.monto),0);
+  const ingUSD = movs.filter(m=>m.tipo==='ingreso'&&m.moneda==='USD').reduce((a,b)=>a+Number(b.monto),0);
+  const cierres = DB.get('cierres',[]);
+  cierres.push({
+    fecha: tod,
+    balanceARS: ingARS-egARS,
+    balanceUSD: ingUSD,
+    tc: document.getElementById('cajaTipoCambio').value,
+    obs: document.getElementById('cajaObs').value
+  });
+  DB.set('cierres', cierres);
+  renderCaja();
+  showNotif('✅ Caja cerrada correctamente');
+}
+
+// ===================== ROLES =====================
+const MODULES = ['dashboard','mapa','reservas','checkin','huespedes','precios','contabilidad','caja'];
+const MODULE_LABELS = { dashboard:'Dashboard', mapa:'Mapa Camas', reservas:'Reservas', checkin:'Check-in/out', huespedes:'Huéspedes', precios:'Precios', contabilidad:'Contabilidad', caja:'Caja' };
+
+function renderRoles() {
+  const roles = DB.get('roles',[]);
+  const grid = document.getElementById('rolesGrid');
+  grid.innerHTML = roles.map(r => `
+    <div class="role-card">
+      <h4>${r.nombre} ${r.id==='rol-admin'?'<span class="badge blue" style="font-size:10px">Admin</span>':''}</h4>
+      <div class="perm-list">
+        ${MODULES.map(m => {
+          const perm = r.permisos[m]||'n';
+          return `<div class="perm-item">
+            <span>${MODULE_LABELS[m]}</span>
+            <div class="toggle">
+              <button class="toggle-btn read ${perm==='r'||perm==='rw'?'on':''}" onclick="togglePerm('${r.id}','${m}','r')">Leer</button>
+              <button class="toggle-btn write ${perm==='rw'?'on':''}" onclick="togglePerm('${r.id}','${m}','w')">Editar</button>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+      ${r.id!=='rol-admin'?`<button class="btn btn-red btn-sm" style="margin-top:12px;width:100%" onclick="deleteRol('${r.id}')">Eliminar rol</button>`:''}
+    </div>`).join('');
+
+  // populate modal permisos
+  document.getElementById('rolPermisos').innerHTML = MODULES.map(m=>`
+    <div class="perm-item" style="border-bottom:1px solid var(--border);padding-bottom:8px;margin-bottom:8px">
+      <label style="font-size:13px;color:var(--text2)">${MODULE_LABELS[m]}</label>
+      <div class="toggle">
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text2);cursor:pointer">
+          <input type="checkbox" id="np-${m}-r" style="accent-color:var(--accent)"> Leer
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text2);cursor:pointer;margin-left:8px">
+          <input type="checkbox" id="np-${m}-w" style="accent-color:var(--green)"> Editar
+        </label>
+      </div>
+    </div>`).join('');
+}
+
+function togglePerm(roleId, module, type) {
+  const roles = DB.get('roles',[]);
+  const r = roles.find(x=>x.id===roleId);
+  if(!r||r.id==='rol-admin') return;
+  const cur = r.permisos[module]||'n';
+  if(type==='r') {
+    r.permisos[module] = (cur==='r'||cur==='rw') ? 'n' : (cur==='n'?'r':'r');
+  } else {
+    r.permisos[module] = cur==='rw' ? 'r' : 'rw';
+  }
+  DB.set('roles', roles);
+  renderRoles();
+}
+
+function deleteRol(id) {
+  const roles = DB.get('roles',[]).filter(r=>r.id!==id);
+  DB.set('roles', roles);
+  renderRoles();
+  showNotif('Rol eliminado');
+}
+
+function saveRol() {
+  const nombre = document.getElementById('rol-nombre').value.trim();
+  if(!nombre) { showNotif('Ingresá un nombre para el rol','error'); return; }
+  const permisos = {};
+  MODULES.forEach(m => {
+    const r = document.getElementById('np-'+m+'-r')?.checked;
+    const w = document.getElementById('np-'+m+'-w')?.checked;
+    permisos[m] = w ? 'rw' : r ? 'r' : 'n';
+  });
+  const roles = DB.get('roles',[]);
+  roles.push({ id:'rol-'+Date.now(), nombre, permisos });
+  DB.set('roles', roles);
+  closeModal('modalRol');
+  renderRoles();
+  showNotif('Rol creado: '+nombre);
+}
+
+// ===================== USUARIOS =====================
+function renderUsuarios() {
+  const usuarios = DB.get('usuarios',[]);
+  const roles = DB.get('roles',[]);
+  document.getElementById('tablaUsuarios').innerHTML = usuarios.length
+    ? usuarios.map(u => {
+        const rol = roles.find(r=>r.id===u.rol);
+        const lastAccess = u.ultimoAcceso ? new Date(u.ultimoAcceso).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+        const isSelf = currentUser && currentUser.id === u.id;
+        return `<tr>
+          <td><strong style="color:var(--text)">${u.nombre}</strong>${isSelf?' <span class="badge blue" style="font-size:10px">Vos</span>':''}</td>
+          <td style="font-family:'DM Mono';font-size:12px">${u.email}</td>
+          <td>${rol?`<span class="badge blue">${rol.nombre}</span>`:'—'}</td>
+          <td><span class="badge ${u.estado==='activo'?'green':'gray'}">${u.estado}</span></td>
+          <td style="font-size:12px;color:var(--text3)">${lastAccess}</td>
+          <td style="display:flex;gap:6px">
+            <button class="btn btn-ghost btn-sm" onclick="editUsuario('${u.id}')">Editar</button>
+            ${!isSelf?`<button class="btn btn-red btn-sm" onclick="toggleUsuarioEstado('${u.id}')">${u.estado==='activo'?'Desactivar':'Activar'}</button>`:''}
+          </td>
+        </tr>`;
+      }).join('')
+    : '<tr><td colspan="6" style="text-align:center;color:var(--text3)">Sin usuarios registrados</td></tr>';
+}
+
+function openNuevoUsuario() {
+  document.getElementById('u-id').value = '';
+  document.getElementById('u-nombre').value = '';
+  document.getElementById('u-email').value = '';
+  document.getElementById('u-pass').value = '';
+  document.getElementById('u-pass2').value = '';
+  document.getElementById('u-estado').value = 'activo';
+  document.getElementById('modalUsuarioTitle').textContent = 'Nuevo Usuario';
+  document.getElementById('u-pass-label').textContent = 'Contraseña *';
+  populateRolSelect();
+  openModal('modalUsuario');
+}
+
+function editUsuario(id) {
+  const u = DB.get('usuarios',[]).find(x=>x.id===id);
+  if(!u) return;
+  document.getElementById('u-id').value = u.id;
+  document.getElementById('u-nombre').value = u.nombre;
+  document.getElementById('u-email').value = u.email;
+  document.getElementById('u-pass').value = '';
+  document.getElementById('u-pass2').value = '';
+  document.getElementById('u-estado').value = u.estado;
+  document.getElementById('modalUsuarioTitle').textContent = 'Editar Usuario';
+  document.getElementById('u-pass-label').textContent = 'Nueva contraseña (dejar vacío para no cambiar)';
+  populateRolSelect(u.rol);
+  openModal('modalUsuario');
+}
+
+function populateRolSelect(selected) {
+  const roles = DB.get('roles',[]);
+  document.getElementById('u-rol').innerHTML = roles.map(r=>`<option value="${r.id}" ${r.id===selected?'selected':''}>${r.nombre}</option>`).join('');
+}
+
+function toggleUsuarioEstado(id) {
+  const usuarios = DB.get('usuarios',[]);
+  const u = usuarios.find(x=>x.id===id);
+  if(!u) return;
+  u.estado = u.estado==='activo' ? 'inactivo' : 'activo';
+  DB.set('usuarios', usuarios);
+  renderUsuarios();
+  showNotif(`Usuario ${u.estado==='activo'?'activado':'desactivado'}: ${u.nombre}`);
+}
+
+async function saveUsuario() {
+  const id = document.getElementById('u-id').value;
+  const nombre = document.getElementById('u-nombre').value.trim();
+  const email = document.getElementById('u-email').value.trim();
+  const pass = document.getElementById('u-pass').value;
+  const pass2 = document.getElementById('u-pass2').value;
+  const rol = document.getElementById('u-rol').value;
+  const estado = document.getElementById('u-estado').value;
+  if(!nombre||!email) { showNotif('Nombre y email son obligatorios','error'); return; }
+  const usuarios = DB.get('usuarios',[]);
+  const dupEmail = usuarios.find(u=>u.email.toLowerCase()===email.toLowerCase() && u.id!==id);
+  if(dupEmail) { showNotif('Ya existe un usuario con ese email','error'); return; }
+  if(id) {
+    // Editar usuario existente
+    const u = usuarios.find(x=>x.id===id);
+    if(!u) return;
+    u.nombre = nombre; u.email = email; u.rol = rol; u.estado = estado;
+    if(pass) {
+      if(pass.length<6) { showNotif('La contraseña debe tener al menos 6 caracteres','error'); return; }
+      if(pass!==pass2) { showNotif('Las contraseñas no coinciden','error'); return; }
+      u.pass = pass;
+      // Actualizar contraseña en Firebase Auth si es el usuario actual
+      if(auth.currentUser && auth.currentUser.email.toLowerCase()===email.toLowerCase()) {
+        try { await updatePassword(auth.currentUser, pass); } catch(e) { console.warn('No se pudo actualizar pass en Auth:', e); }
+      }
+    }
+    await DB.set('usuarios', usuarios);
+    showNotif('Usuario actualizado: '+nombre);
+  } else {
+    // Nuevo usuario — crear en Firebase Auth
+    if(!pass) { showNotif('La contraseña es obligatoria','error'); return; }
+    if(pass.length<6) { showNotif('La contraseña debe tener al menos 6 caracteres','error'); return; }
+    if(pass!==pass2) { showNotif('Las contraseñas no coinciden','error'); return; }
+    try {
+      await createUserWithEmailAndPassword(auth, email, pass);
+      // Volver a logear al admin actual (createUser hace login automático)
+      // Re-autenticar con las credenciales del admin actual no es trivial sin guardar pass
+      // En cambio, solo guardamos en DB y el nuevo usuario podrá logear normalmente
+      usuarios.push({ id:'u'+Date.now(), nombre, email, rol, estado, ultimoAcceso: null });
+      await DB.set('usuarios', usuarios);
+      showNotif('✅ Usuario creado en Firebase: '+nombre);
+    } catch(e) {
+      const msg = e.code==='auth/email-already-in-use' ? 'Ese email ya existe en Firebase Auth' : 'Error al crear usuario: '+e.message;
+      showNotif(msg,'error'); return;
+    }
+  }
+  closeModal('modalUsuario');
+  renderUsuarios();
+}
+
+// ===================== EDITAR / BORRAR HUÉSPEDES =====================
+function openEditHuesped(id) {
+  const h = DB.get('huespedes',[]).find(x=>x.id===id);
+  if(!h) return;
+  document.getElementById('eh-id').value = h.id;
+  document.getElementById('eh-nombre').value = h.nombre;
+  document.getElementById('eh-apellido').value = h.apellido;
+  document.getElementById('eh-dni').value = h.dni;
+  document.getElementById('eh-nac').value = h.nac||'';
+  if(document.getElementById('eh-ciudad')) document.getElementById('eh-ciudad').value = h.ciudad||'';
+  document.getElementById('eh-tel').value = h.tel||'';
+  document.getElementById('eh-email').value = h.email||'';
+  document.getElementById('eh-score').value = h.score||'';
+  document.getElementById('eh-obs').value = h.obs||'';
+  renderScoreStars('eh-stars', 'eh-score', h.score||null);
+  openModal('modalEditHuesped');
+}
+
+async function saveEditHuesped() {
+  const id = document.getElementById('eh-id').value;
+  const nombre = document.getElementById('eh-nombre').value.trim();
+  const apellido = document.getElementById('eh-apellido').value.trim();
+  const dni = document.getElementById('eh-dni').value.trim();
+  if(!nombre||!apellido||!dni) { showNotif('Nombre, apellido y DNI son obligatorios','error'); return; }
+  const huespedes = DB.get('huespedes',[]);
+  const h = huespedes.find(x=>x.id===id);
+  if(!h) return;
+  h.nombre = nombre; h.apellido = apellido; h.dni = dni;
+  h.nac = document.getElementById('eh-nac').value;
+  h.tel = document.getElementById('eh-tel').value;
+  h.email = document.getElementById('eh-email').value;
+  const sc = document.getElementById('eh-score').value;
+  h.score = sc ? Number(sc) : null;
+  h.obs = document.getElementById('eh-obs').value.trim();
+  h.pendiente = false;
+  await DB.set('huespedes', huespedes);
+  closeModal('modalEditHuesped');
+  renderHuespedes();
+  showNotif('Huésped actualizado: '+nombre+' '+apellido);
+}
+
+function confirmDelete(tipo, id, nombre) {
+  const msgs = {
+    huesped: `¿Borrar al huésped <strong>${nombre}</strong>? También se eliminarán sus reservas asociadas.`,
+    reserva: `¿Eliminar la <strong>${nombre}</strong>? Esta acción no se puede deshacer.`
+  };
+  document.getElementById('confirmDeleteMsg').innerHTML = msgs[tipo] || `¿Eliminar ${nombre}?`;
+  const btn = document.getElementById('confirmDeleteBtn');
+  btn.onclick = () => tipo === 'huesped' ? deleteHuesped(id) : deleteReserva(id);
+  openModal('modalConfirmDelete');
 }
 
 async function deleteHuesped(id) {
-  const reservasActivas = DB.get('reservas',[]).filter(r => 
-    r.huespedId === id && (r.estado === 'checkin' || r.estado === 'confirmada')
-  );
-  if (reservasActivas.length) {
-    showNotif(`No se puede eliminar: ${reservasActivas.length} reserva(s) activa(s)`, 'error');
-    return;
-  }
   const huespedes = DB.get('huespedes',[]).filter(h=>h.id!==id);
   const reservas = DB.get('reservas',[]).filter(r=>r.huespedId!==id);
   await DB.set('huespedes', huespedes);
@@ -1924,70 +3173,374 @@ async function deleteReserva(id) {
   showNotif('Reserva eliminada');
 }
 
-function confirmDelete(tipo, id, nombre) {
-  const msgs = {
-    huesped: `¿Borrar al huésped <strong>${nombre}</strong>? También se eliminarán sus reservas asociadas.`,
-    reserva: `¿Eliminar la <strong>${nombre}</strong>? Esta acción no se puede deshacer.`
-  };
-  document.getElementById('confirmDeleteMsg').innerHTML = msgs[tipo] || `¿Eliminar ${nombre}?`;
-  const btn = document.getElementById('confirmDeleteBtn');
-  btn.onclick = () => tipo === 'huesped' ? deleteHuesped(id) : deleteReserva(id);
-  openModal('modalConfirmDelete');
+// ===================== CAMBIO DE CAMA =====================
+function openCambioCama(rid) {
+  const reservas = DB.get('reservas',[]);
+  const r = reservas.find(x=>x.id===rid);
+  if(!r) return;
+  document.getElementById('cc-res-id').value = rid;
+  document.getElementById('cc-hab').value = r.hab;
+  document.getElementById('cc-motivo').value = '';
+  document.getElementById('cc-llave').value = r.llave || '';
+  document.getElementById('cc-resumen').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+      <div><span style="color:var(--text3);display:block;font-size:11px">Huésped</span><strong>${getHuespedNombre(r.huespedId)}</strong></div>
+      <div><span style="color:var(--text3);display:block;font-size:11px">Cama actual</span><strong style="color:#fbbf24">Cab.${r.hab} — Cama ${camaLabel(r.cabaña)}</strong></div>
+      <div><span style="color:var(--text3);display:block;font-size:11px">Período</span><strong>${fmtFecha(r.entrada)} → ${fmtFecha(r.salida)}</strong></div>
+    </div>`;
+  updateCambioCamaSelect();
+  openModal('modalCambioCama');
 }
 
-// ===================== PRECIOS (abreviado) =====================
-function renderPrecios(tab) {
-  const precios = DB.get('precios',{});
-  const c = document.getElementById('pricingContent');
-  if(tab==='temporada') {
-    c.innerHTML = `<div class="card"><div class="card-header"><h3>Temporadas</h3><button class="btn btn-blue btn-sm" onclick="addTemporada()">+ Agregar temporada</button></div><table class="pricing-table"><thead><tr><th>Nombre</th><th>Período</th><th>Tipo</th><th></th></tr></thead><tbody>${(precios.temporadas||[]).map(t=>`<tr><td><input style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;width:130px" value="${t.nombre}" onchange="updateTemporada('${t.id}','nombre',this.value)"></td><td><div style="display:flex;align-items:center;gap:6px;"><input type="date" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;width:145px" value="${t.fecha_inicio||''}" onchange="updateTemporada('${t.id}','fecha_inicio',this.value)"><input type="date" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;width:145px" value="${t.fecha_fin||''}" onchange="updateTemporada('${t.id}','fecha_fin',this.value)"><label style="font-size:11px;color:var(--text3)">Anual</label><input type="checkbox" ${t.anual?'checked':''} onchange="updateTemporada('${t.id}','anual',this.checked)" style="width:16px;height:16px;cursor:pointer;"></div></td><td><select style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;" onchange="updateTemporada('${t.id}','tipo',this.value)"><option value="alta" ${t.tipo==='alta'?'selected':''}>Alta</option><option value="media" ${t.tipo==='media'?'selected':''}>Media</option><option value="baja" ${t.tipo==='baja'?'selected':''}>Baja</option></select></td><td><button class="btn btn-red btn-sm" onclick="deleteTemporada('${t.id}')">🗑</button></td></tr>`).join('')}</tbody></table></div>`;
-  } else if(tab==='habitacion') {
-    c.innerHTML = `<div class="card"><div class="card-header"><h3>Precios por Cabaña</h3></div><table class="pricing-table"><thead><tr><th>Cabaña</th><th>Precio Base (media)</th><th>Temporada Alta</th><th>Temporada Baja</th></tr></thead><tbody>${(precios.habitaciones||[]).map(h=>`<tr><td><strong>Cabaña ${h.hab}</strong></td><td><input type="number" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;width:120px" value="${h.precio_base||0}" onchange="updateHabPrecio('${h.hab}','precio_base',this.value)"></td><td><input type="number" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;width:120px" value="${h.precio_alta||0}" onchange="updateHabPrecio('${h.hab}','precio_alta',this.value)"></td><td><input type="number" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;width:120px" value="${h.precio_baja||0}" onchange="updateHabPrecio('${h.hab}','precio_baja',this.value)"></td></tr>`).join('')}</tbody></table></div>`;
-  } else {
-    c.innerHTML = `<div class="card"><div class="card-header"><h3>Comisiones y Descuentos por Plataforma</h3></div><table class="pricing-table"><thead><tr><th>Plataforma</th><th>Comisión (%)</th><th>Descuento ofrecido (%)</th></tr></thead><tbody>${(precios.plataformas||[]).map(p=>`<tr><td>${platBadge(p.plat)}</td><td><input type="number" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;width:80px" value="${p.comision}" onchange="updatePlatPrecio('${p.plat}','comision',this.value)"></td><td><input type="number" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;width:80px" value="${p.descuento}" onchange="updatePlatPrecio('${p.plat}','descuento',this.value)"></td></tr>`).join('')}</tbody></table></div>`;
+function updateCambioCamaSelect() {
+  const rid = document.getElementById('cc-res-id').value;
+  const hab = document.getElementById('cc-hab').value;
+  const reservas = DB.get('reservas',[]);
+  const r = reservas.find(x=>x.id===rid);
+  if(!r) return;
+  const sel = document.getElementById('cc-cabaña');
+  const beds = habBeds(hab);
+  sel.innerHTML = beds.map(b => {
+    if(b.id === r.cabaña) return ''; // cabaña actual, no mostrar
+    const blocked = reservas.some(x =>
+      x.id !== rid && x.cabaña === b.id &&
+      (x.estado === 'checkin' || x.estado === 'confirmada') &&
+      x.entrada < r.salida && x.salida > r.entrada
+    );
+    return `<option value="${b.id}" ${blocked?'disabled':''}>Cama ${b.label}${blocked?' (ocupada)':''}</option>`;
+  }).filter(Boolean).join('');
+  if(!sel.innerHTML) sel.innerHTML = '<option disabled>No hay cabañas disponibles en esta habitación</option>';
+}
+
+async function saveCambioCama() {
+  const rid = document.getElementById('cc-res-id').value;
+  const nuevaHab = document.getElementById('cc-hab').value;
+  const nuevaCama = document.getElementById('cc-cabaña').value;
+  const motivo = document.getElementById('cc-motivo').value;
+  const nuevaLlave = document.getElementById('cc-llave').value.trim();
+  if(!nuevaCama) { showNotif('Seleccioná una cabaña disponible','error'); return; }
+  const reservas = DB.get('reservas',[]);
+  const r = reservas.find(x=>x.id===rid);
+  if(!r) return;
+  const cabañaAnterior = camaLabel(r.cabaña);
+  // Limpiar estado manual de beds para ambas cabañas — las reservas son fuente de verdad
+  const beds = DB.get('beds',{});
+  delete beds[r.cabaña];
+  delete beds[nuevaCama];
+  await DB.set('beds', beds);
+  r.cabaña = nuevaCama;
+  r.hab = nuevaHab;
+  if(nuevaLlave) r.llave = nuevaLlave;
+  if(motivo) r.notas = (r.notas ? r.notas+' | ' : '') + 'Cambio de cabaña: '+motivo;
+  await DB.set('reservas', reservas);
+  closeModal('modalCambioCama');
+  renderReservas();
+  renderCheckin();
+  renderMapa(document.getElementById('mapaFecha')?.value);
+  showNotif(`🔄 Cambio realizado: cabaña ${cabañaAnterior} → cabaña ${camaLabel(nuevaCama)}`);
+}
+
+// ===================== FORMULARIO PÚBLICO =====================
+function showPublicFormLink() {
+  const url = window.location.href.split('?')[0] + '?registro=1';
+  document.getElementById('publicFormUrl').textContent = url;
+  openModal('modalPublicForm');
+}
+
+function copyPublicLink() {
+  const url = document.getElementById('publicFormUrl').textContent;
+  navigator.clipboard.writeText(url).then(() => showNotif('Link copiado al portapapeles'));
+}
+
+function openPublicFormPreview() {
+  window.open(window.location.href.split('?')[0] + '?registro=1', '_blank');
+}
+
+// Detectar si es modo registro público
+function checkPublicMode() {
+  if(new URLSearchParams(window.location.search).get('registro') === '1') {
+    showPublicRegistrationForm();
   }
 }
 
-function switchPricingTab(tab, el) {
-  document.querySelectorAll('#section-precios .tab').forEach(t=>t.classList.remove('active'));
-  el.classList.add('active');
-  renderPrecios(tab);
+function showPublicRegistrationForm() {
+  document.getElementById('loginScreen').innerHTML = `
+    <div class="login-box" style="width:460px;">
+      <div class="login-logo">
+        <h1>🏨 Puerto Delfín</h1>
+        <p>Registro de huésped</p>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Nombre *</label><input type="text" id="pub-nombre" placeholder="Juan"></div>
+        <div class="form-group"><label>Apellido *</label><input type="text" id="pub-apellido" placeholder="García"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>DNI / Pasaporte *</label><input type="text" id="pub-dni" placeholder="12345678"></div>
+        <div class="form-group"><label>Nacionalidad *</label><input type="text" id="pub-nac" placeholder="Argentina"></div>
+      <div class="form-group"><label>Ciudad</label><input type="text" id="pub-ciudad" placeholder="Buenos Aires"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Teléfono</label><input type="text" id="pub-tel" placeholder="+54 9 223..."></div>
+        <div class="form-group"><label>Email</label><input type="email" id="pub-email" placeholder="email@ejemplo.com"></div>
+      </div>
+      <div class="form-group" style="margin-top:4px;">
+        <label>Foto del documento (opcional)</label>
+        <div class="upload-zone" onclick="document.getElementById('pub-foto').click()" id="pubUploadZone">
+          📷 Tocá para subir foto del documento
+          <input type="file" id="pub-foto" accept="image/*" style="display:none" onchange="previewPubDoc(this)">
+          <img id="pubDocPreview" style="display:none;max-width:100%;max-height:120px;border-radius:6px;margin-top:8px;">
+        </div>
+      </div>
+      <button class="btn-primary btn" style="margin-top:8px;" onclick="submitPublicRegistration()">Enviar mis datos</button>
+      <div id="pub-msg" style="text-align:center;margin-top:12px;font-size:13px;"></div>
+      <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);text-align:center;">
+        <button class="btn btn-ghost btn-sm" onclick="location.reload()">← Volver al login</button>
+      </div>
+    </div>`;
 }
 
-function addTemporada() {
-  const p = DB.get('precios',{});
-  if(!p.temporadas) p.temporadas=[];
-  p.temporadas.push({ id:'t'+Date.now(), nombre:'Nueva temporada', fecha_inicio:'', fecha_fin:'', tipo:'media', anual:true });
-  DB.set('precios', p);
-  renderPrecios('temporada');
+function previewPubDoc(input) {
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = document.getElementById('pubDocPreview');
+    img.src = e.target.result;
+    img.style.display = 'block';
+  };
+  reader.readAsDataURL(file);
 }
 
-function deleteTemporada(id) {
-  const p = DB.get('precios',{});
-  p.temporadas = (p.temporadas||[]).filter(x=>x.id!==id);
-  DB.set('precios', p);
-  renderPrecios('temporada');
+async function submitPublicRegistration() {
+  const nombre = document.getElementById('pub-nombre').value.trim();
+  const apellido = document.getElementById('pub-apellido').value.trim();
+  const dni = document.getElementById('pub-dni').value.trim();
+  const nac = document.getElementById('pub-nac').value.trim();
+  const msg = document.getElementById('pub-msg');
+  if(!nombre||!apellido||!dni||!nac) { msg.style.color='#f87171'; msg.textContent='Completá los campos obligatorios (*)'; return; }
+  // Cargar datos en Firebase directamente
+  try {
+    await loadAllData();
+    const huespedes = DB.get('huespedes',[]);
+    const foto = document.getElementById('pubDocPreview').src || null;
+    huespedes.push({
+      id: 'h'+Date.now(), nombre, apellido, dni, nac,
+      tel: document.getElementById('pub-tel').value,
+      email: document.getElementById('pub-email').value,
+      foto: foto && foto !== window.location.href ? foto : null,
+      estadias: 0, pendiente: true
+    });
+    await DB.set('huespedes', huespedes);
+    msg.style.color='#34d399';
+    msg.textContent='✅ ¡Datos enviados! El equipo del hostel los confirmará pronto.';
+    document.querySelectorAll('#loginScreen input').forEach(i=>i.value='');
+    document.getElementById('pubDocPreview').style.display='none';
+  } catch(e) {
+    msg.style.color='#f87171';
+    msg.textContent='Error al enviar. Intentá de nuevo.';
+  }
 }
 
-function updateTemporada(id, field, val) {
-  const p = DB.get('precios',{});
-  const t = p.temporadas.find(x=>x.id===id);
-  if(t) t[field] = val;
-  DB.set('precios', p);
+// ===================== SIDEBAR MOBILE =====================
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebarOverlay').classList.toggle('open');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarOverlay').classList.remove('open');
 }
 
-function updateHabPrecio(hab, field, val) {
-  const p = DB.get('precios',{});
-  const h = (p.habitaciones||[]).find(x=>x.hab===hab);
-  if(h) h[field] = Number(val);
-  DB.set('precios', p);
+// ===================== LATE CHECK-OUT / EARLY CHECK-IN =====================
+function openHorario(rid, tipo) {
+  const reservas = DB.get('reservas',[]);
+  const r = reservas.find(x=>x.id===rid);
+  if(!r) return;
+  document.getElementById('horario-res-id').value = rid;
+  document.getElementById('horario-tipo').value = tipo;
+  const isLate = tipo === 'late';
+  document.getElementById('modalHorarioTitle').textContent = isLate ? '🌙 Late Check-out' : '🌅 Early Check-in';
+  document.getElementById('horario-hora-label').textContent = isLate ? 'Hora de salida solicitada' : 'Hora de entrada solicitada';
+  document.getElementById('horario-estandar').value = isLate ? '10:00' : '14:00';
+  document.getElementById('horario-hora').value = isLate ? '12:00' : '11:00';
+  document.getElementById('horario-cobrar').value = 'no';
+  document.getElementById('horario-monto').value = '';
+  document.getElementById('horario-monto-group').style.display = 'none';
+  document.getElementById('horario-pago-group').style.display = 'none';
+  document.getElementById('horario-notas').value = '';
+  document.getElementById('horario-resumen').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <div><span style="color:var(--text3);display:block;font-size:11px">Huésped</span><strong>${getHuespedNombre(r.huespedId)}</strong></div>
+      <div><span style="color:var(--text3);display:block;font-size:11px">Cab. / Cama</span><strong>Cabaña ${r.hab}</strong></div>
+      <div><span style="color:var(--text3);display:block;font-size:11px">${isLate?'Salida estándar':'Entrada estándar'}</span><strong style="color:#fbbf24">${isLate?'10:00 hs':'14:00 hs'}</strong></div>
+      <div><span style="color:var(--text3);display:block;font-size:11px">${isLate?'Fecha de salida':'Fecha de entrada'}</span><strong>${isLate?fmtFecha(r.salida):fmtFecha(r.entrada)}</strong></div>
+    </div>`;
+  openModal('modalHorario');
 }
 
-function updatePlatPrecio(plat, field, val) {
-  const p = DB.get('precios',{});
-  const h = (p.plataformas||[]).find(x=>x.plat===plat);
-  if(h) h[field] = Number(val);
-  DB.set('precios', p);
+function toggleHorarioCobro() {
+  const cobrar = document.getElementById('horario-cobrar').value === 'si';
+  document.getElementById('horario-monto-group').style.display = cobrar ? '' : 'none';
+  document.getElementById('horario-pago-group').style.display = cobrar ? '' : 'none';
+}
+
+async function saveHorario() {
+  const rid = document.getElementById('horario-res-id').value;
+  const tipo = document.getElementById('horario-tipo').value;
+  const hora = document.getElementById('horario-hora').value;
+  const cobrar = document.getElementById('horario-cobrar').value === 'si';
+  const monto = Number(document.getElementById('horario-monto').value)||0;
+  const moneda = document.getElementById('horario-moneda').value;
+  const metodo = document.getElementById('horario-metodo').value;
+  const notas = document.getElementById('horario-notas').value;
+  if(!hora) { showNotif('Ingresá la hora','error'); return; }
+  if(cobrar && monto <= 0) { showNotif('Ingresá un monto válido','error'); return; }
+
+  const reservas = DB.get('reservas',[]);
+  const r = reservas.find(x=>x.id===rid);
+  if(!r) return;
+
+  // Guardar en historial de horarios especiales
+  if(!r.horariosEspeciales) r.horariosEspeciales = [];
+  r.horariosEspeciales.push({
+    tipo, hora, cobrado: cobrar, monto: cobrar ? monto : 0,
+    moneda, metodo, notas, fecha: today()
+  });
+
+  if(cobrar && monto > 0) {
+    const movs = DB.get('movimientos',[]);
+    const label = tipo === 'late' ? 'Late Check-out' : 'Early Check-in';
+    movs.push({ id:'m'+Date.now(), tipo:'ingreso', cat:'reserva', moneda, monto, metodo, fecha:today(),
+      concepto:`${label} ${hora}hs — ${getHuespedNombre(r.huespedId)} Cab.${r.hab}` });
+    await DB.set('movimientos', movs);
+  }
+  await DB.set('reservas', reservas);
+  closeModal('modalHorario');
+  renderCheckin();
+  const label = tipo === 'late' ? 'Late check-out' : 'Early check-in';
+  showNotif(`✅ ${label} registrado a las ${hora}hs${cobrar?' — '+fmtMoney(monto,moneda)+' cobrado':' (cortesía)'}`);
+}
+
+// ===================== LIMPIAR DUPLICADOS =====================
+async function limpiarDuplicados() {
+  const reservas = DB.get('reservas', []);
+  const vistas = new Set();
+  const limpias = [];
+  const duplicadas = [];
+  for (const r of reservas) {
+    // Clave única: cabaña + entrada + salida
+    const key = `${r.cabaña}|${r.entrada}|${r.salida}`;
+    if (vistas.has(key)) {
+      duplicadas.push(r.id);
+    } else {
+      vistas.add(key);
+      limpias.push(r);
+    }
+  }
+  if (duplicadas.length === 0) {
+    showNotif('✅ No hay reservas duplicadas', 'success');
+    return;
+  }
+  if (!confirm(`Se encontraron ${duplicadas.length} reserva(s) duplicada(s). ¿Eliminamos?`)) return;
+  await DB.set('reservas', limpias);
+  renderReservas();
+  showNotif(`🧹 ${duplicadas.length} duplicado(s) eliminado(s)`);
+}
+
+
+
+// ===================== PUNTUACIÓN Y LISTA NEGRA =====================
+
+function renderScoreStars(containerId, scoreInputId, currentScore) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const scores = [1,2,3,4,5,6,7,8,9,10];
+  container.innerHTML = scores.map(n => {
+    const color = n <= 3 ? '#f87171' : n <= 5 ? '#fbbf24' : n <= 7 ? '#60a5fa' : '#34d399';
+    const selected = currentScore && n <= currentScore;
+    return `<div onclick="setScore('${scoreInputId}','${containerId}',${n})"
+      style="width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+      font-size:11px;font-weight:700;cursor:pointer;transition:all 0.15s;
+      background:${selected ? color.replace(')', ',0.25)').replace('rgb','rgba') : 'var(--surface2)'};
+      color:${selected ? color : 'var(--text3)'};
+      border:1px solid ${selected ? color : 'var(--border)'};
+      transform:${currentScore===n?'scale(1.2)':'scale(1)'}"
+      title="Puntuación ${n}">${n}</div>`;
+  }).join('');
+}
+
+function setScore(inputId, containerId, val) {
+  document.getElementById(inputId).value = val;
+  renderScoreStars(containerId, inputId, val);
+}
+
+function getScoreBadge(score) {
+  if (!score) return '<span style="font-size:11px;color:var(--text3)">Sin calificar</span>';
+  const color = score <= 3 ? '#f87171' : score <= 5 ? '#fbbf24' : score <= 7 ? '#60a5fa' : '#34d399';
+  const emoji = score <= 3 ? '🔴' : score <= 5 ? '🟡' : score <= 7 ? '🔵' : '🟢';
+  return `<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:12px;font-weight:700;background:${color}22;color:${color}">${emoji} ${score}/10</span>`;
+}
+
+function renderListaNegra() {
+  const huespedes = DB.get('huespedes', []);
+  const lista = huespedes.filter(h => h.score && h.score <= 5).sort((a,b) => a.score - b.score);
+  const tbody = document.getElementById('tablaListaNegra');
+  if (!lista.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:24px">✅ Sin huéspedes en lista negra</td></tr>';
+    return;
+  }
+  tbody.innerHTML = lista.map(h => `<tr>
+    <td><strong style="color:var(--text)">${h.nombre} ${h.apellido}</strong></td>
+    <td>${getScoreBadge(h.score)}</td>
+    <td style="font-size:12px;color:var(--text2)">${h.obs || '—'}</td>
+    <td style="text-align:center">${h.estadias || 0}</td>
+    <td style="font-size:12px;color:var(--text3)">Puerto Delfín</td>
+  </tr>`).join('');
+}
+
+function copyListaNegraLink() {
+  const url = window.location.href.split('?')[0] + '?listanegra=1';
+  navigator.clipboard.writeText(url).then(() => {
+    showNotif('🔗 Link copiado al portapapeles');
+  }).catch(() => {
+    prompt('Copiá este link:', url);
+  });
+}
+
+function checkListaNegraMode() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('listanegra') === '1') {
+    showListaNegraPublica();
+  }
+}
+
+async function showListaNegraPublica() {
+  await loadAllData();
+  const huespedes = DB.get('huespedes', []);
+  const lista = huespedes.filter(h => h.score && h.score <= 5).sort((a,b) => a.score - b.score);
+  document.getElementById('loginScreen').innerHTML = `
+    <div style="max-width:600px;width:95%;padding:32px 24px;">
+      <div style="text-align:center;margin-bottom:28px;">
+        <div style="font-size:40px;margin-bottom:8px;">🚫</div>
+        <h1 style="font-size:22px;font-weight:700;color:var(--text)">Lista Negra — Puerto Delfín</h1>
+        <p style="color:var(--text3);font-size:13px;margin-top:4px">Huéspedes con comportamiento problemático</p>
+      </div>
+      ${lista.length === 0
+        ? '<p style="text-align:center;color:var(--text3)">Sin registros actualmente</p>'
+        : `<div style="display:flex;flex-direction:column;gap:10px;">
+          ${lista.map(h => `
+            <div style="background:var(--surface);border:1px solid rgba(220,12,12,0.25);border-radius:var(--radius2);padding:16px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px;">
+              <div>
+                <strong style="color:var(--text);font-size:15px;">${h.nombre} ${h.apellido}</strong>
+                ${h.obs ? `<p style="font-size:12px;color:var(--text2);margin-top:4px">📝 ${h.obs}</p>` : ''}
+              </div>
+              <div style="flex-shrink:0">${getScoreBadge(h.score)}</div>
+            </div>`).join('')}
+          </div>`}
+      <p style="text-align:center;font-size:11px;color:var(--text3);margin-top:24px">
+        Actualizado: ${new Date().toLocaleDateString('es-AR')} · Puerto Delfín Mar de las Pampas
+      </p>
+    </div>`;
 }
 
 // ===================== GRILLA DE RESERVAS =====================
@@ -2011,38 +3564,61 @@ function renderGrilla() {
   if (!grillaFechaInicio) grillaFechaInicio = today();
   const reservas = DB.get('reservas', []);
   const tod = today();
+
+  // Generar array de fechas a mostrar
   const fechas = [];
   for (let i = 0; i < GRILLA_DIAS; i++) {
     const d = new Date(grillaFechaInicio);
     d.setDate(d.getDate() + i);
     fechas.push(d.toISOString().split('T')[0]);
   }
+
+  // Label de rango
   const fmt = f => { const p = f.split('-'); return `${p[2]}/${p[1]}`; };
-  document.getElementById('grillaRangoLabel').textContent = `${fmt(fechas[0])} — ${fmt(fechas[fechas.length-1])}`;
+  document.getElementById('grillaRangoLabel').textContent =
+    `${fmt(fechas[0])} — ${fmt(fechas[fechas.length-1])}`;
+
   const diasSemana = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
-  let html = '<table class="grilla-table"><thead><tr><th style="position:sticky;left:0;z-index:3;background:var(--surface2)">Cabaña</th>';
+
+  // Construir tabla
+  let html = '<table class="grilla-table">';
+
+  // Header fechas
+  html += '<thead><tr><th style="position:sticky;left:0;z-index:3;background:var(--surface2)">Cabaña</th>';
   fechas.forEach(f => {
     const d = new Date(f + 'T12:00:00');
     const isToday = f === tod;
     const dow = diasSemana[d.getDay()];
     const isWE = d.getDay() === 0 || d.getDay() === 6;
-    html += `<th class="${isToday ? 'today-col' : ''}" style="${isWE ? 'color:#f59e0b' : ''}">${dow}<br><strong>${d.getDate()}/${d.getMonth()+1}</strong></th>`;
+    html += `<th class="${isToday ? 'today-col' : ''}" style="${isWE ? 'color:#f59e0b' : ''}">
+      ${dow}<br><strong>${d.getDate()}/${d.getMonth()+1}</strong>
+    </th>`;
   });
   html += '</tr></thead><tbody>';
+
+  // Filas por habitación y cabaña
   for (let h = 1; h <= 12; h++) {
-    const beds = habBeds(String(h));
+    const hs = String(h);
+    const beds = habBeds(hs);
+
+    // Fila por cabaña (sin separador ya que cada cabaña es una unidad)
     html += `<tr class="grilla-hab-header"><td colspan="${fechas.length + 1}">Cabaña ${h}</td></tr>`;
+
     beds.forEach(b => {
       html += `<tr><td class="cabaña-label">Cabaña ${b.label}</td>`;
-      fechas.forEach(f => {
+
+      // Para cada fecha, ver si hay reserva
+      fechas.forEach((f, fi) => {
         const res = reservas.find(r =>
           r.cabaña === b.id &&
           (r.estado === 'checkin' || r.estado === 'confirmada' || r.estado === 'checkout') &&
           r.entrada.substring(0,10) <= f && r.salida.substring(0,10) > f
         );
+
         const isToday = f === tod;
         let cellClass = 'gc-free';
         let innerHtml = '';
+
         if (res) {
           const esEntrada = res.entrada.substring(0,10) === f;
           cellClass = res.estado === 'checkin' ? 'gc-occupied' : res.estado === 'confirmada' ? 'gc-confirmed' : 'gc-checkout';
@@ -2051,63 +3627,122 @@ function renderGrilla() {
             innerHtml = `<div class="grilla-span ${res.estado}" onclick="cycleBed('${b.id}')" title="${getHuespedNombre(res.huespedId)}">${nombre}</div>`;
           }
         }
+
         html += `<td class="grilla-cell ${cellClass}${isToday ? ' gc-today' : ''}">${innerHtml}</td>`;
       });
-      html += '<tr>';
+
+      html += '</tr>';
     });
   }
+
   html += '</tbody></table>';
   document.getElementById('grillaContainer').innerHTML = html;
 }
 
-// ===================== CHATBOT (abreviado) =====================
+
+// ===================== CHATBOT PUERTO DELFÍN =====================
 function buildSystemPrompt() {
+  // Asegurar que la KB esté en cache (puede no estar si el chat se abrió muy rápido)
+  // Los datos se leen de cache que fue populado por loadAllData()
   const reservas = DB.get('reservas', []);
   const bedStates = DB.get('beds', {});
   const precios = DB.get('precios', {});
+
   const todayStr = today();
-  const cabañasEnMantenimiento = Object.entries(bedStates).filter(([,v]) => v === 'maintenance').map(([k]) => k);
+
+  // Sin HABS hardcodeado — toda la info de cabañas viene de la base de conocimiento
+  const infoCabañas = `Cabañas 1-4: hasta 3 personas | Cabañas 5-8: hasta 4 personas | Cabañas 9-12: hasta 6 personas. No tienen vista al mar pero se escucha desde las cabañas. A 50m de la playa.`;
+
+  // Camas en mantenimiento según estado en beds
+  const cabañasEnMantenimiento = Object.entries(bedStates)
+    .filter(([,v]) => v === 'maintenance' || v?.estado === 'maintenance').map(([k]) => k);
+
   const totalCamas = 12;
   const cabañasDisponibles = totalCamas - cabañasEnMantenimiento.length;
-  const reservasHoy = reservas.filter(r => r.estado !== 'checkout' && r.entrada <= todayStr && r.salida > todayStr);
+
+  // Ocupación hoy
+  const reservasHoy = reservas.filter(r =>
+    r.estado !== 'checkout' && r.entrada <= todayStr && r.salida > todayStr
+  );
   const ocupadasHoy = reservasHoy.length;
   const libresHoy = Math.max(0, cabañasDisponibles - ocupadasHoy);
+
+  // Próximos check-ins (hoy y mañana)
   const manana = new Date(); manana.setDate(manana.getDate() + 1);
   const mananaStr = manana.toISOString().slice(0,10);
   const checkinsHoy = reservas.filter(r => r.entrada === todayStr && r.estado !== 'checkout').length;
   const checkinsMañana = reservas.filter(r => r.entrada === mananaStr && r.estado !== 'checkout').length;
   const checkoutsHoy = reservas.filter(r => r.salida === todayStr && r.estado !== 'checkout').length;
+
+  // Precios actuales desde Firebase
   let preciosTexto = '';
   if (precios.temporadas && precios.temporadas.length) {
     preciosTexto = precios.temporadas.map(t => {
-      const periodo = t.fecha_inicio && t.fecha_fin ? `${t.fecha_inicio.slice(5)} al ${t.fecha_fin.slice(5)}${t.anual?' (anual)':''}` : (t.meses || 'sin rango');
+      const periodo = t.fecha_inicio && t.fecha_fin
+        ? `${t.fecha_inicio.slice(5)} al ${t.fecha_fin.slice(5)}${t.anual?' (anual)':''}`
+        : (t.meses || 'sin rango');
       return `- ${t.nombre} [${t.tipo||'media'}] (${periodo})`;
     }).join('\n');
+    // Agregar precios por cabaña si están disponibles
     if (precios.habitaciones && precios.habitaciones.length) {
-      preciosTexto += '\nPrecios por noche (ARS): ' + precios.habitaciones.map(h => `Cab.${h.hab}: alta $${(h.precio_alta||0).toLocaleString('es-AR')} / base $${(h.precio_base||0).toLocaleString('es-AR')} / baja $${(h.precio_baja||0).toLocaleString('es-AR')}`).join(' | ');
+      preciosTexto += '\nPrecios por noche (ARS): ' + precios.habitaciones.map(h =>
+        `Cab.${h.hab}: alta $${(h.precio_alta||0).toLocaleString('es-AR')} / base $${(h.precio_base||0).toLocaleString('es-AR')} / baja $${(h.precio_baja||0).toLocaleString('es-AR')}`
+      ).join(' | ');
     }
   } else {
     preciosTexto = `- Temporada alta (Dic-Feb): $637.500 ARS/noche\n- Temporada media: $510.000 ARS/noche\n- Temporada baja: $400.000 ARS/noche`;
   }
+
+  // Función para calcular disponibilidad en una fecha
+  function disponibilidadEnFecha(fechaStr) {
+    const ocupadas = reservas.filter(r =>
+      r.estado !== 'checkout' && r.entrada <= fechaStr && r.salida > fechaStr
+    ).length;
+    return Math.max(0, cabañasDisponibles - ocupadas);
+  }
+
+  // Próximas 4 semanas de disponibilidad resumida
+  let dispProximas = '';
+  for (let i = 0; i <= 28; i++) {
+    const d = new Date(); d.setDate(d.getDate() + i);
+    const ds = d.toISOString().slice(0,10);
+    const libres = disponibilidadEnFecha(ds);
+    const label = i === 0 ? 'Hoy' : i === 1 ? 'Mañana' : ds;
+    dispProximas += `- ${label}: ${libres} cabaña${libres !== 1 ? 's' : ''} libre${libres !== 1 ? 's' : ''}\n`;
+  }
+
+  // Lista de cabañas ocupadas hoy con detalle
   const detalleCabañas = Array.from({length:12}, (_,i) => {
     const num = String(i+1);
-    const res = reservas.find(r => r.hab === num && r.estado !== 'checkout' && r.entrada <= todayStr && r.salida > todayStr);
+    const res = reservas.find(r =>
+      r.hab === num &&
+      r.estado !== 'checkout' &&
+      r.entrada <= todayStr && r.salida > todayStr
+    );
     if (res) return `  Cabaña ${num}: OCUPADA (${getHuespedNombre(res.huespedId, res)}, hasta ${res.salida})`;
     const estado = bedStates[num+'-1'];
     if (estado === 'maintenance') return `  Cabaña ${num}: EN MANTENIMIENTO`;
     if (estado === 'dirty') return `  Cabaña ${num}: SUCIA (libre pero pendiente limpieza)`;
     return `  Cabaña ${num}: LIBRE`;
   }).join('\n');
+
+  // Base de conocimiento desde Firebase
   const kb = DB.get('knowledge_base', []);
-  const kbTexto = kb.length ? kb.map(k => `[${k.category||'Info'}] ${k.question}: ${k.answer}`).join('\n') : '';
+  const kbTexto = kb.length
+    ? kb.map(k => `[${k.category||'Info'}] ${k.question}: ${k.answer}`).join('\n')
+    : '';
+
+  // Configuración del hostel desde Firebase (editable sin tocar el código)
   const botCfg = DB.get('bot_config', {});
   const nombreHostel = botCfg.nombre_hostel || 'Cabañas Puerto Delfín';
-  const ubicacion = botCfg.ubicacion || 'Mar de las Pampas, Buenos Aires, Argentina';
-  const checkinHora = botCfg.checkin || '15:00';
-  const checkoutHora = botCfg.checkout || '10:00';
-  const servicios = botCfg.servicios || 'Desayuno, parrilla, WiFi, TV, estacionamiento incluidos';
+  const ubicacion    = botCfg.ubicacion    || 'Mar de las Pampas, Buenos Aires, Argentina';
+  const checkinHora  = botCfg.checkin      || '15:00';
+  const checkoutHora = botCfg.checkout     || '10:00';
+  const servicios    = botCfg.servicios    || 'Desayuno, parrilla, WiFi, TV, estacionamiento incluidos';
   const infoAdicional = botCfg.info_adicional || '';
-  return `Sos el asistente virtual de ${nombreHostel}. Respondés de forma amigable, cálida y concisa. Detectás el idioma y respondés en el mismo idioma.
+
+  return `Sos el asistente virtual de ${nombreHostel}.
+Respondés de forma amigable, cálida y concisa. Detectás el idioma y respondés en el mismo idioma.
 
 INFORMACIÓN GENERAL:
 - Ubicación: ${ubicacion}
@@ -2115,7 +3750,7 @@ INFORMACIÓN GENERAL:
 - ${servicios}
 
 CABAÑAS (12 unidades):
-- ${botCfg.descripcion_cabanas || 'Cabañas 1-4: hasta 3 personas | Cabañas 5-8: hasta 4 personas | Cabañas 9-12: hasta 6 personas.'}
+- ${botCfg.descripcion_cabanas || infoCabañas}
 
 ${infoAdicional ? `INFO EXTRA DEL HOSTEL:\n${infoAdicional}\n` : ''}
 PRECIOS:
@@ -2130,18 +3765,37 @@ ${detalleCabañas}
 RESUMEN HOY: ${cabañasDisponibles} operativas | ${ocupadasHoy} ocupadas | ${libresHoy} libres
 Check-ins hoy: ${checkinsHoy} | Check-outs hoy: ${checkoutsHoy} | Check-ins mañana: ${checkinsMañana}
 
+DISPONIBILIDAD PRÓXIMAS 4 SEMANAS:
+${dispProximas}
 INSTRUCCIONES:
 - Respondé brevemente (máximo 3 párrafos)
 - Podés responder preguntas sobre precios, disponibilidad, servicios y políticas directamente
 - Si necesitan confirmar una reserva, pediles que se comuniquen por WhatsApp
+- Si pregunta por una fecha específica, usá los datos de disponibilidad de arriba
 - Usá emojis con moderación`;
+}
+
+const QUICK_REPLIES_DEFAULT = [
+  { label: "💰 Precios", msg: "¿Cuáles son los precios?" },
+  { label: "🏕️ Cabañas", msg: "¿Qué tipos de cabañas tienen?" },
+  { label: "📍 Ubicación", msg: "¿Dónde están ubicados?" },
+  { label: "⏰ Horarios", msg: "¿Cuáles son los horarios de check-in y check-out?" },
+  { label: "🐾 Mascotas", msg: "¿Aceptan mascotas?" },
+  { label: "🥐 Desayuno", msg: "¿Qué incluye el desayuno?" },
+  { label: "🏊 Pileta", msg: "¿Tienen pileta? ¿Cuándo está disponible?" },
+  { label: "📅 Reservar", msg: "Quiero hacer una reserva" },
+];
+function getQuickReplies() {
+  const cfg = DB.get('bot_config', {});
+  return Array.isArray(cfg.quick_replies) && cfg.quick_replies.length
+    ? cfg.quick_replies
+    : QUICK_REPLIES_DEFAULT;
 }
 
 let chatHistory = [];
 let chatApiKey = localStorage.getItem('cabanas_groq_key') || '';
-let chatTyping = false;
-let chatOpen = false;
 
+// Cargar API key desde Firebase si existe
 async function loadApiKeyFromDB() {
   const stored = DB.get('config_groq_key', '');
   if (stored && !chatApiKey) {
@@ -2149,6 +3803,8 @@ async function loadApiKeyFromDB() {
     localStorage.setItem('cabanas_groq_key', stored);
   }
 }
+let chatTyping = false;
+let chatOpen = false;
 
 function toggleChatFloat() {
   chatOpen = !chatOpen;
@@ -2157,6 +3813,8 @@ function toggleChatFloat() {
   if (chatOpen && chatHistory.length === 0) {
     initChatbot();
   }
+  // Resaltar nav item
+  document.getElementById('nav-chatbot')?.classList.toggle('active', chatOpen);
 }
 
 async function initChatbot() {
@@ -2167,6 +3825,7 @@ async function initChatbot() {
   } else {
     document.getElementById('chatApiWarning').style.display = 'none';
   }
+  // Cargar datos frescos incluyendo base de conocimiento
   await loadAllData();
   addBotMessage('¡Hola! 👋 Soy el asistente virtual de **Cabañas Puerto Delfín** 🐬\n\n¿En qué te puedo ayudar? Podés preguntarme sobre precios, disponibilidad, servicios y más.');
   showQuickReplies();
@@ -2184,7 +3843,7 @@ function saveApiKey() {
   if (!key) { showNotif('Ingresá la API key', 'error'); return; }
   chatApiKey = key;
   localStorage.setItem('cabanas_groq_key', key);
-  DB.set('config_groq_key', key);
+  DB.set('config_groq_key', key); // guardar en Firebase para todos los usuarios
   document.getElementById('chatApiWarning').style.display = 'none';
   showNotif('✅ API key guardada en Firebase');
 }
@@ -2204,11 +3863,23 @@ function addBotMessage(text, isTyping = false) {
   wrap.className = 'chat-msg-wrap';
   wrap.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;gap:4px;';
   if (isTyping) wrap.id = 'typingIndicator';
-  const formatted = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+
+  const formatted = text
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n/g, '<br>')
+    .replace(/(https:\/\/wa\.me\/\S+)/g, '<a href="$1" target="_blank" style="color:var(--accent2);text-decoration:underline;">💬 WhatsApp</a>')
+    .replace(/(https:\/\/maps\.google\.[^\s<]+)/g, '<a href="$1" target="_blank" style="color:var(--accent2);text-decoration:underline;">📍 Ver en Google Maps</a>')
+    .replace(/(https:\/\/goo\.gl\/maps\/[^\s<]+)/g, '<a href="$1" target="_blank" style="color:var(--accent2);text-decoration:underline;">📍 Ver en Google Maps</a>')
+    .replace(/(https:\/\/(?!wa\.me|maps\.google|goo\.gl\/maps)[^\s<"]+)/g, '<a href="$1" target="_blank" style="color:var(--accent2);text-decoration:underline;">🔗 $1</a>');
+
   const bubbleId = 'msg_' + Date.now();
   wrap.innerHTML = `
     <div class="chat-bubble bot ${isTyping ? 'typing' : ''}" id="${bubbleId}">${formatted}</div>
-    ${!isTyping ? `<div class="chat-action-row"><button class="chat-action-btn copy" onclick="copyMsg('${bubbleId}')">📋 Copiar</button><button class="chat-action-btn edit" onclick="editBotMsg(this)">✏️ Corregir → KB</button></div>` : ''}`;
+    ${!isTyping ? `
+    <div class="chat-action-row">
+      <button class="chat-action-btn copy" onclick="copyMsg('${bubbleId}')">📋 Copiar</button>
+      <button class="chat-action-btn edit" onclick="editBotMsg(this)">✏️ Corregir → KB</button>
+    </div>` : ''}`;
   msgs.appendChild(wrap);
   msgs.scrollTop = msgs.scrollHeight;
   return wrap;
@@ -2218,20 +3889,84 @@ function copyMsg(id) {
   const el = document.getElementById(id);
   if (!el) return;
   const text = (el.innerText || el.textContent).trim();
-  navigator.clipboard.writeText(text).then(() => showNotif('✅ Copiado — listo para pegar en WhatsApp o Instagram'));
+  navigator.clipboard.writeText(text).then(() => {
+    showNotif('✅ Copiado — listo para pegar en WhatsApp o Instagram');
+  });
+}
+
+function editBotMsg(btn) {
+  const bubble = (btn instanceof Element ? btn : null)?.closest('.chat-msg-wrap')?.querySelector('.chat-bubble.bot');
+  if (!bubble) return;
+  const originalText = (bubble.innerText || bubble.textContent).trim();
+
+  // Buscar el último mensaje del usuario para usarlo como pregunta
+  const userMsgs = document.querySelectorAll('.chat-bubble.user');
+  const lastQ = userMsgs.length ? (userMsgs[userMsgs.length-1].innerText || '').trim() : '';
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:1000;';
+  modal.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius2);padding:28px;width:520px;max-width:95vw;max-height:90vh;overflow-y:auto;">
+      <h2 style="font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text)">✏️ Corregir respuesta → Base de Conocimiento</h2>
+      <div class="form-group">
+        <label>Categoría</label>
+        <input id="ebCat" value="" placeholder="Precios, Servicios, Políticas..." style="width:100%;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;">
+      </div>
+      <div class="form-group" style="margin-top:10px;">
+        <label>Pregunta / Tema</label>
+        <input id="ebQ" value="${lastQ.replace(/"/g,'&quot;')}" placeholder="¿Cuál es la pregunta?" style="width:100%;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;">
+      </div>
+      <div class="form-group" style="margin-top:10px;">
+        <label>Respuesta correcta</label>
+        <textarea id="ebA" rows="6" style="width:100%;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;resize:vertical;">${originalText.replace(/</g,'&lt;')}</textarea>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
+        <button onclick="this.closest('.modal-overlay').remove()" style="padding:8px 16px;background:transparent;border:1px solid var(--border);color:var(--text2);border-radius:var(--radius);cursor:pointer;">Cancelar</button>
+        <button onclick="saveEditedBotMsg()" style="padding:8px 16px;background:var(--blue2);color:white;border:none;border-radius:var(--radius);cursor:pointer;font-weight:600;">💾 Guardar en KB</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if(e.target===modal) modal.remove(); });
+}
+
+async function saveEditedBotMsg() {
+  const cat = document.getElementById('ebCat').value.trim();
+  const q   = document.getElementById('ebQ').value.trim();
+  const a   = document.getElementById('ebA').value.trim();
+  if (!q || !a) { showNotif('Completá pregunta y respuesta', 'error'); return; }
+  const kb = DB.get('knowledge_base', []);
+  const ahora = new Date().toISOString();
+  const autor = currentUser?.email || 'desconocido';
+  // Si ya existe una entrada con la misma pregunta, actualizarla
+  const existing = kb.findIndex(k => k.question.toLowerCase() === q.toLowerCase());
+  if (existing >= 0) {
+    kb[existing] = { ...kb[existing], category: cat || kb[existing].category, answer: a, actualizadoEn: ahora, actualizadoPor: autor };
+    showNotif('✅ Entrada de KB actualizada');
+  } else {
+    kb.push({ category: cat || 'General', question: q, answer: a, creadoEn: ahora, creadoPor: autor });
+    showNotif('✅ Nueva entrada guardada en KB');
+  }
+  await DB.set('knowledge_base', kb);
+  document.querySelector('.modal-overlay')?.remove();
+  await loadAllData();
 }
 
 function showQuickReplies() {
   const c = document.getElementById('chatQuickBtns');
   if (!c) return;
-  const botCfg = DB.get('bot_config', {});
-  const qrs = (botCfg.quick_replies || []).length ? botCfg.quick_replies : [{ label: '💰 Precios', msg: '¿Cuáles son los precios?' }];
-  c.innerHTML = qrs.map(r => `<button class="chat-quick-btn" onclick="sendQuickReply('${r.msg.replace(/'/g, "&#39;")}')">${r.label}</button>`).join('');
+  c.innerHTML = getQuickReplies().map(r =>
+    `<button class="chat-quick-btn" onclick="sendQuickReply('${r.msg.replace(/'/g, "&#39;")}')">${r.label}</button>`
+  ).join('');
 }
 
 function hideQuickReplies() {
   const c = document.getElementById('chatQuickBtns');
   if (c) c.innerHTML = '';
+}
+
+function escapeHtml(t) {
+  return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 async function sendQuickReply(msg) {
@@ -2253,22 +3988,38 @@ async function sendMessage(text) {
   if (!text || chatTyping) return;
   addUserMessage(text);
   chatHistory.push({ role: 'user', content: text });
+
   if (!chatApiKey) {
     addBotMessage('⚠️ Necesito la API key de Groq para responder. Ingresala arriba 👆');
     return;
   }
+  // Recargar datos frescos (reservas + KB) antes de armar el prompt
   await loadAllData();
+
   chatTyping = true;
   document.getElementById('chatSendBtn').disabled = true;
   const typingDiv = addBotMessage('escribiendo...', true);
+
   try {
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + chatApiKey },
-      body: JSON.stringify({ model: 'llama-3.3-70b-versatile', max_tokens: 600, messages: [{ role: 'system', content: buildSystemPrompt() }, ...chatHistory] })
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + chatApiKey
+      },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        max_tokens: 600,
+        messages: [
+          { role: 'system', content: buildSystemPrompt() },
+          ...chatHistory
+        ]
+      })
     });
+
     const data = await res.json();
     typingDiv.remove();
+
     if (data.error) {
       addBotMessage('Error: ' + data.error.message);
     } else {
@@ -2280,9 +4031,34 @@ async function sendMessage(text) {
     typingDiv.remove();
     addBotMessage('Error de conexión. Revisá la API key o tu internet.');
   }
+
   chatTyping = false;
   document.getElementById('chatSendBtn').disabled = false;
 }
+
+// Drag para mover la ventana flotante
+(function() {
+  let isDragging = false, startX, startY, startLeft, startBottom;
+  document.addEventListener('mousedown', e => {
+    const header = document.getElementById('chatFloatHeader');
+    if (!header || !header.contains(e.target)) return;
+    isDragging = true;
+    const el = document.getElementById('chatFloat');
+    const rect = el.getBoundingClientRect();
+    startX = e.clientX; startY = e.clientY;
+    startLeft = rect.left; startBottom = window.innerHeight - rect.bottom;
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', e => {
+    if (!isDragging) return;
+    const el = document.getElementById('chatFloat');
+    const dx = e.clientX - startX, dy = e.clientY - startY;
+    el.style.left = Math.max(0, startLeft + dx) + 'px';
+    el.style.bottom = Math.max(0, startBottom - dy) + 'px';
+    el.style.right = 'auto';
+  });
+  document.addEventListener('mouseup', () => isDragging = false);
+})();
 
 // ===================== MAPA FECHA WRAPPER =====================
 function mapaNavegar(dias) {
@@ -2312,106 +4088,203 @@ function renderMapaFecha(val) {
   renderMapa(f);
 }
 
-// ===================== FUNCIONES FALTANTES (abreviadas) =====================
-function renderListaNegra() {
-  const huespedes = DB.get('huespedes', []);
-  const lista = huespedes.filter(h => !h.pendiente && h.score && h.score <= 5).sort((a,b) => a.score - b.score);
-  const tbody = document.getElementById('tablaListaNegra');
-  if (!lista.length) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:24px">✅ Sin huéspedes en lista negra</td></tr>'; return; }
-  tbody.innerHTML = lista.map(h => `<tr><td><strong>${h.nombre} ${h.apellido}</strong></td><td>${getScoreBadge(h.score)}</td><td>${h.obs || '—'}</td><td style="text-align:center">${h.estadias || 0}</td><td>Puerto Delfín</td></tr>`).join('');
-}
-
-function copyListaNegraLink() {
-  const url = window.location.href.split('?')[0] + '?listanegra=1';
-  navigator.clipboard.writeText(url).then(() => showNotif('🔗 Link copiado al portapapeles')).catch(() => prompt('Copiá este link:', url));
-}
-
-function renderAcct(tab) { document.getElementById('acctContent').innerHTML = '<div class="card" style="padding:20px;text-align:center">Módulo de contabilidad activo</div>'; }
-function switchAcctTab(tab, el) { document.querySelectorAll('#section-contabilidad .tab').forEach(t=>t.classList.remove('active')); el.classList.add('active'); renderAcct(tab); }
-function renderCaja() { document.getElementById('caja-ingresos').textContent = '$0'; document.getElementById('caja-balance').textContent = '$0'; document.getElementById('tablaCaja').innerHTML = '<tr><td colspan="5" style="text-align:center">Sin movimientos hoy</td></tr>'; }
-function cerrarCaja() { showNotif('Caja cerrada'); }
-function saveMovimiento() { showNotif('Movimiento guardado'); closeModal('modalMovimiento'); }
-function renderRoles() { document.getElementById('rolesGrid').innerHTML = '<div class="card" style="padding:20px;text-align:center">Módulo de roles activo</div>'; }
-function renderUsuarios() { document.getElementById('tablaUsuarios').innerHTML = '<tr><td colspan="6" style="text-align:center">Cargando...</td></tr>'; }
-function openNuevoUsuario() { openModal('modalUsuario'); }
-function saveUsuario() { showNotif('Usuario guardado'); closeModal('modalUsuario'); }
-function editUsuario(id) { openModal('modalUsuario'); }
-function toggleUsuarioEstado(id) { showNotif('Estado cambiado'); }
-function openEditHuesped(id) { openModal('modalEditHuesped'); }
-function saveEditHuesped() { showNotif('Huésped actualizado'); closeModal('modalEditHuesped'); renderHuespedes(); }
-function openCambioCama(rid) { openModal('modalCambioCama'); }
-function saveCambioCama() { showNotif('Cabaña cambiada'); closeModal('modalCambioCama'); }
-function updateCambioCamaSelect() {}
-function openExtender(rid) { openModal('modalExtender'); }
-function saveExtension() { showNotif('Estadía extendida'); closeModal('modalExtender'); renderReservas(); }
-function openPago(rid) { openModal('modalPago'); }
-function savePago() { showNotif('Pago registrado'); closeModal('modalPago'); renderReservas(); }
-function openHorario(rid, tipo) { openModal('modalHorario'); }
-function saveHorario() { showNotif('Horario registrado'); closeModal('modalHorario'); }
-function toggleHorarioCobro() {}
-function limpiarDuplicados() { showNotif('No se encontraron duplicados'); }
-function showPublicFormLink() { openModal('modalPublicForm'); }
-function copyPublicLink() { showNotif('Link copiado'); }
-function openPublicFormPreview() { window.open(window.location.href.split('?')[0] + '?registro=1', '_blank'); }
-function submitPublicRegistration() { showNotif('Datos enviados'); }
-function previewPubDoc(input) {}
-function showPublicRegistrationForm() {}
-function checkPublicMode() { if(new URLSearchParams(window.location.search).get('registro') === '1') showPublicRegistrationForm(); }
-function checkListaNegraMode() { if(new URLSearchParams(window.location.search).get('listanegra') === '1') { document.getElementById('loginScreen').innerHTML = '<div style="padding:40px;text-align:center">Lista Negra Pública</div>'; } }
-function renderBotConfig() { document.getElementById('bcf-nombre').value = ''; }
-function saveBotConfig() { showNotif('Configuración guardada'); }
-function saveQuickReplies() { showNotif('Respuestas rápidas guardadas'); }
-function addQuickReply() {}
-function removeQuickReply(i) {}
-function openKbModal(idx) { openModal('modalKb'); }
-function closeKbModal() { closeModal('modalKb'); }
-function saveKb(idx) { showNotif('Entrada guardada'); closeKbModal(); renderKnowledge(); }
-function deleteKb(idx) { showNotif('Entrada eliminada'); renderKnowledge(); }
-function editReserva(rid) { openNuevaReserva(); }
-function onHabChange() {}
-function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('sidebarOverlay').classList.toggle('open'); }
-function closeSidebar() { document.getElementById('sidebar').classList.remove('open'); document.getElementById('sidebarOverlay').classList.remove('open'); }
-function setScore(inputId, containerId, val) { document.getElementById(inputId).value = val; renderScoreStars(containerId, inputId, val); }
-function renderScoreStars(containerId, scoreInputId, currentScore) { const container = document.getElementById(containerId); if(container) container.innerHTML = '<div>⭐</div>'; }
-function showGuestDetail(id) { openModal('modalGuestDetail'); }
-function previewDoc(input) {}
-function saveHuesped() { showNotif('Huésped registrado'); closeModal('modalHuesped'); renderHuespedes(); }
-function togglePerm(roleId, module, type) {}
-function deleteRol(id) {}
-function saveRol() { showNotif('Rol creado'); closeModal('modalRol'); renderRoles(); }
-
-// Drag para mover ventana flotante
-(function() {
-  let isDragging = false, startX, startY, startLeft, startBottom;
-  document.addEventListener('mousedown', e => {
-    const header = document.getElementById('chatFloatHeader');
-    if (!header || !header.contains(e.target)) return;
-    isDragging = true;
-    const el = document.getElementById('chatFloat');
-    const rect = el.getBoundingClientRect();
-    startX = e.clientX; startY = e.clientY;
-    startLeft = rect.left; startBottom = window.innerHeight - rect.bottom;
-    e.preventDefault();
-  });
-  document.addEventListener('mousemove', e => {
-    if (!isDragging) return;
-    const el = document.getElementById('chatFloat');
-    const dx = e.clientX - startX, dy = e.clientY - startY;
-    el.style.left = Math.max(0, startLeft + dx) + 'px';
-    el.style.bottom = Math.max(0, startBottom - dy) + 'px';
-    el.style.right = 'auto';
-  });
-  document.addEventListener('mouseup', () => isDragging = false);
-})();
-
 // ===================== INIT =====================
 updateDate();
 checkPublicMode();
 checkListaNegraMode();
+// Botón formulario público en login — event listener directo para evitar problema de módulo
 document.getElementById('btnPublicForm')?.addEventListener('click', showPublicRegistrationForm);
-loadAllData().then(() => { showSection('dashboard'); });
+loadAllData().then(() => {
+  showSection('dashboard');
+});
 
-// Exponer funciones globales
+// ===== EXPONER FUNCIONES GLOBALMENTE (requerido por type="module") =====
+// ===================== BASE DE CONOCIMIENTO =====================
+async function loadKnowledgeBase() {
+  try {
+    const snap = await get(ref(db, 'cabanas/knowledge_base'));
+    console.log('[KB] snap.exists():', snap.exists());
+    let data = snap.exists() ? snap.val() : null;
+    console.log('[KB] data tipo:', typeof data, '| isArray:', Array.isArray(data), '| valor:', data);
+    let entries = [];
+    if (Array.isArray(data)) {
+      entries = data.filter(x => x !== null && x !== undefined);
+    } else if (data && typeof data === 'object') {
+      entries = Object.values(data).filter(x => x !== null && x !== undefined);
+    }
+    console.log('[KB] entries cargadas:', entries.length);
+    cache['knowledge_base'] = entries;
+  } catch(e) {
+    console.error('[KB] Error cargando knowledge_base:', e);
+  }
+}
+
+function renderKnowledge(filtro) {
+  const rawKb = DB.get('knowledge_base', []);
+  let kb = Array.isArray(rawKb) ? rawKb : (rawKb && typeof rawKb === 'object' ? Object.values(rawKb) : []);
+  const list = document.getElementById('kbList');
+  if (!list) return;
+  const searchVal = (filtro ?? document.getElementById('kbSearch')?.value ?? '').toLowerCase();
+  if (searchVal) kb = kb.filter(k =>
+    (k.question||'').toLowerCase().includes(searchVal) ||
+    (k.answer||'').toLowerCase().includes(searchVal) ||
+    (k.category||'').toLowerCase().includes(searchVal)
+  );
+  if (!kb.length) {
+    list.innerHTML = `<div class="card" style="padding:40px;text-align:center;color:var(--text3)">${searchVal ? 'Sin resultados para esa búsqueda.' : 'Sin entradas. Agregá la primera con el botón de arriba.'}</div>`;
+    return;
+  }
+  const fmt = iso => iso ? new Date(iso).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
+  const fullKb = DB.get('knowledge_base', []);
+  list.innerHTML = kb.map((k) => {
+    const i = fullKb.indexOf(k);
+    const meta = k.actualizadoEn
+      ? `Actualizado ${fmt(k.actualizadoEn)} por ${k.actualizadoPor||'?'}`
+      : k.creadoEn ? `Creado ${fmt(k.creadoEn)} por ${k.creadoPor||'?'}` : '';
+    return `
+    <div class="card" style="margin-bottom:10px;padding:16px 20px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+        <div style="flex:1;">
+          <div style="font-size:10px;color:var(--accent2);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">${k.category||'General'}</div>
+          <div style="font-weight:600;margin-bottom:6px;">${k.question}</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:${meta?'6':'0'}px;">${k.answer}</div>
+          ${meta ? `<div style="font-size:10px;color:var(--text3);">🕐 ${meta}</div>` : ''}
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <button class="btn btn-ghost btn-sm" onclick="openKbModal(${i})">✏️</button>
+          <button class="btn btn-red btn-sm" onclick="deleteKb(${i})">🗑️</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openKbModal(idx) {
+  const kb = DB.get('knowledge_base', []);
+  const k = idx !== undefined ? kb[idx] : null;
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.id = 'modalKb';
+  modal.innerHTML = `
+  <div class="modal">
+    <h2>${k ? 'Editar entrada' : 'Nueva entrada'}</h2>
+    <div class="form-group"><label>Categoría</label><input id="kbCat" value="${k?.category||''}" placeholder="Precios, Políticas, Servicios..."></div>
+    <div class="form-group"><label>Pregunta / Tema</label><input id="kbQ" value="${k?.question||''}" placeholder="¿Cuál es el precio por noche?"></div>
+    <div class="form-group"><label>Respuesta</label><textarea id="kbA" rows="5" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:9px 12px;width:100%;font-size:13px;">${k?.answer||''}</textarea></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeKbModal()">Cancelar</button>
+      <button class="btn btn-blue" onclick="saveKb(${idx ?? -1})">Guardar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  setTimeout(() => modal.classList.add('open'), 10);
+  modal.addEventListener('click', e => { if(e.target===modal) closeKbModal(); });
+}
+
+function closeKbModal() {
+  const m = document.getElementById('modalKb');
+  if(m) m.remove();
+}
+
+async function saveKb(idx) {
+  const cat = document.getElementById('kbCat').value.trim();
+  const q   = document.getElementById('kbQ').value.trim();
+  const a   = document.getElementById('kbA').value.trim();
+  if(!q || !a) { showNotif('Completá pregunta y respuesta', 'error'); return; }
+  const raw = DB.get('knowledge_base', []);
+  const kb = Array.isArray(raw) ? raw : (raw && typeof raw === 'object' ? Object.values(raw) : []);
+  const ahora = new Date().toISOString();
+  const autor = currentUser?.email || 'desconocido';
+  if(idx >= 0) {
+    kb[idx] = { ...kb[idx], category: cat, question: q, answer: a, actualizadoEn: ahora, actualizadoPor: autor };
+  } else {
+    kb.push({ category: cat || 'General', question: q, answer: a, creadoEn: ahora, creadoPor: autor });
+  }
+  await DB.set('knowledge_base', kb);
+  closeKbModal();
+  await loadKnowledgeBase();
+  renderKnowledge();
+  showNotif('✅ Entrada guardada');
+}
+
+async function deleteKb(idx) {
+  if(!confirm('¿Eliminar esta entrada?')) return;
+  const raw = DB.get('knowledge_base', []);
+  const kb = Array.isArray(raw) ? raw : (raw && typeof raw === 'object' ? Object.values(raw) : []);
+  kb.splice(idx, 1);
+  await DB.set('knowledge_base', kb);
+  await loadKnowledgeBase();
+  renderKnowledge();
+  showNotif('Entrada eliminada');
+}
+
+// ===================== CONFIGURACIÓN DEL BOT =====================
+function renderBotConfig() {
+  const cfg = DB.get('bot_config', {});
+  document.getElementById('bcf-nombre').value    = cfg.nombre_hostel || '';
+  document.getElementById('bcf-ubicacion').value = cfg.ubicacion     || '';
+  document.getElementById('bcf-checkin').value   = cfg.checkin       || '';
+  document.getElementById('bcf-checkout').value  = cfg.checkout      || '';
+  document.getElementById('bcf-cabanas').value   = cfg.descripcion_cabanas || '';
+  document.getElementById('bcf-servicios').value = cfg.servicios     || '';
+  document.getElementById('bcf-adicional').value = cfg.info_adicional || '';
+  renderQuickRepliesList(cfg.quick_replies || QUICK_REPLIES_DEFAULT);
+}
+
+function renderQuickRepliesList(qrs) {
+  const list = document.getElementById('qr-list');
+  if (!list) return;
+  list.innerHTML = qrs.map((r, i) => `
+    <div style="display:flex;gap:8px;align-items:center;">
+      <input type="text" value="${r.label||''}" placeholder="Etiqueta (emoji + texto)" id="qr-label-${i}"
+        style="flex:1;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px;">
+      <input type="text" value="${r.msg||''}" placeholder="Mensaje que envía el cliente" id="qr-msg-${i}"
+        style="flex:2;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px;">
+      <button class="btn btn-red btn-sm" onclick="removeQuickReply(${i})">✕</button>
+    </div>`).join('');
+}
+
+function addQuickReply() {
+  const cfg = DB.get('bot_config', {});
+  const qrs = Array.isArray(cfg.quick_replies) ? [...cfg.quick_replies] : [...QUICK_REPLIES_DEFAULT];
+  qrs.push({ label: '', msg: '' });
+  renderQuickRepliesList(qrs);
+}
+
+function removeQuickReply(i) {
+  const cfg = DB.get('bot_config', {});
+  const qrs = Array.isArray(cfg.quick_replies) ? [...cfg.quick_replies] : [...QUICK_REPLIES_DEFAULT];
+  qrs.splice(i, 1);
+  renderQuickRepliesList(qrs);
+}
+
+async function saveBotConfig() {
+  const stored = DB.get('bot_config', {});
+  stored.nombre_hostel      = document.getElementById('bcf-nombre').value.trim();
+  stored.ubicacion          = document.getElementById('bcf-ubicacion').value.trim();
+  stored.checkin            = document.getElementById('bcf-checkin').value;
+  stored.checkout           = document.getElementById('bcf-checkout').value;
+  stored.descripcion_cabanas = document.getElementById('bcf-cabanas').value.trim();
+  stored.servicios          = document.getElementById('bcf-servicios').value.trim();
+  stored.info_adicional     = document.getElementById('bcf-adicional').value.trim();
+  await DB.set('bot_config', stored);
+  showNotif('✅ Configuración del hostel guardada');
+}
+
+async function saveQuickReplies() {
+  const list = document.getElementById('qr-list');
+  if (!list) return;
+  const rows = list.querySelectorAll('[id^="qr-label-"]');
+  const qrs = Array.from(rows).map((_, i) => ({
+    label: document.getElementById(`qr-label-${i}`).value.trim(),
+    msg:   document.getElementById(`qr-msg-${i}`).value.trim(),
+  })).filter(r => r.label && r.msg);
+  const stored = DB.get('bot_config', {});
+  stored.quick_replies = qrs;
+  await DB.set('bot_config', stored);
+  showNotif('✅ Respuestas rápidas guardadas');
+}
+
 Object.assign(window, {
   doLogin, doLogout, renderKnowledge, openKbModal, closeKbModal, saveKb, deleteKb, showSection, closeSidebar, toggleSidebar, openNuevaReserva, onHabChange,
   toggleChatFloat, initChatbot, clearChat, sendChat, sendQuickReply, saveApiKey, copyMsg, editBotMsg, saveEditedBotMsg,
@@ -2430,7 +4303,7 @@ Object.assign(window, {
   openCambioCama, updateCambioCamaSelect, saveCambioCama,
   limpiarDuplicados,
   showPublicFormLink, copyPublicLink, openPublicFormPreview, submitPublicRegistration, previewPubDoc, showPublicRegistrationForm,
-  updateBedsSelect, onEntradaChange, calcTotalReserva, calcExtension, toggleHorarioCobro,
+  updateBedsSelect, onEntradaChange, calcTotalReserva, calcExtension, toggleHorarioCobro, toggleHorarioCobroToggle: toggleHorarioCobro,
   cycleBed, showGuestDetail, previewDoc, populateRolSelect,
   switchPricingTab, switchAcctTab, cerrarCaja,
   addTemporada, deleteTemporada, updateTemporada, updateHabPrecio, updatePlatPrecio,
