@@ -1716,6 +1716,7 @@ function showSection(s) {
   document.getElementById('section-'+s)?.classList.add('active');
   document.getElementById('nav-'+s)?.classList.add('active');
   document.getElementById('pageTitle').textContent = sectionTitles[s] || s;
+  window.scrollTo({ top: 0, behavior: 'instant' });
   if (s === 'dashboard') loadAllData().then(() => renderDashboard());
   if (s === 'mapa') { mapaNavegar(0); loadAllData().then(() => renderMapa(document.getElementById('mapaFecha').value)); }
   if (s === 'reservas') loadAllData().then(() => renderReservas());
