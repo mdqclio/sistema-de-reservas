@@ -4120,11 +4120,17 @@ async function loadKnowledgeBase() {
   }
 }
 
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 function renderKnowledge(filtro) {
   const rawKb = DB.get('knowledge_base', []);
   let kb = Array.isArray(rawKb) ? rawKb : (rawKb && typeof rawKb === 'object' ? Object.values(rawKb) : []);
+  kb = kb.filter(k => k && typeof k === 'object');
   const list = document.getElementById('kbList');
   if (!list) return;
+  console.log('[renderKnowledge] kb.length:', kb.length);
   const searchVal = (filtro ?? document.getElementById('kbSearch')?.value ?? '').toLowerCase();
   if (searchVal) kb = kb.filter(k =>
     (k.question||'').toLowerCase().includes(searchVal) ||
@@ -4136,19 +4142,17 @@ function renderKnowledge(filtro) {
     return;
   }
   const fmt = iso => iso ? new Date(iso).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
-  const fullKb = DB.get('knowledge_base', []);
-  list.innerHTML = kb.map((k) => {
-    const i = fullKb.indexOf(k);
+  list.innerHTML = kb.map((k, i) => {
     const meta = k.actualizadoEn
-      ? `Actualizado ${fmt(k.actualizadoEn)} por ${k.actualizadoPor||'?'}`
-      : k.creadoEn ? `Creado ${fmt(k.creadoEn)} por ${k.creadoPor||'?'}` : '';
+      ? `Actualizado ${fmt(k.actualizadoEn)} por ${esc(k.actualizadoPor||'?')}`
+      : k.creadoEn ? `Creado ${fmt(k.creadoEn)} por ${esc(k.creadoPor||'?')}` : '';
     return `
     <div class="card" style="margin-bottom:10px;padding:16px 20px;">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
         <div style="flex:1;">
-          <div style="font-size:10px;color:var(--accent2);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">${k.category||'General'}</div>
-          <div style="font-weight:600;margin-bottom:6px;">${k.question}</div>
-          <div style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:${meta?'6':'0'}px;">${k.answer}</div>
+          <div style="font-size:10px;color:var(--accent2);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">${esc(k.category||'General')}</div>
+          <div style="font-weight:600;margin-bottom:6px;">${esc(k.question)}</div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.5;white-space:pre-wrap;margin-bottom:${meta?'6':'0'}px;">${esc(k.answer)}</div>
           ${meta ? `<div style="font-size:10px;color:var(--text3);">🕐 ${meta}</div>` : ''}
         </div>
         <div style="display:flex;gap:6px;flex-shrink:0;">
