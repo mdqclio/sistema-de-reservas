@@ -4516,18 +4516,25 @@ async function renderKnowledge() {
       return;
     }
     lista.innerHTML = items.map((item, idx) => {
-    const texto = item.texto || (item.question ? `[${item.category||'Info'}] ${item.question}: ${item.answer}` : '');
+    // Normalizar formato viejo {question,answer,category} y nuevo {texto}
+    const esViejo = !item.texto && item.question;
+    const textoEdit = item.texto || (esViejo ? `${item.question}: ${item.answer}` : '');
     const fecha = item.fecha || (item.creadoEn ? item.creadoEn.slice(0,10) : '');
     const origen = item.origen || '';
+    const cuerpoHTML = esViejo
+      ? `<div style="font-size:10px;color:var(--accent2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">${item.category||'General'}</div>
+         <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px;">${item.question}</div>
+         <div style="font-size:13px;color:var(--text2);line-height:1.5;">${item.answer}</div>`
+      : `<div style="font-size:14px;color:var(--text);line-height:1.5;word-break:break-word;">${item.texto}${origen==='corrección'?' <span style="color:var(--amber);font-size:11px;">✏️ corrección</span>':''}</div>`;
     return `
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;" id="kb-item-${idx}">
-      <div style="display:flex;align-items:flex-start;gap:10px;">
-        <div style="flex:1;">
-          <div class="kb-text-view" id="kb-text-${idx}" style="font-size:14px;color:var(--text);line-height:1.5;">${texto}</div>
-          <textarea class="kb-text-edit" id="kb-edit-${idx}" style="display:none;width:100%;padding:8px;background:var(--surface3);border:1px solid var(--accent);border-radius:var(--radius);color:var(--text);font-size:13px;font-family:inherit;resize:vertical;min-height:60px;">${texto}</textarea>
+      <div style="display:flex;align-items:flex-start;gap:10px;min-width:0;">
+        <div style="flex:1;min-width:0;">
+          <div class="kb-text-view" id="kb-text-${idx}">${cuerpoHTML}</div>
+          <textarea class="kb-text-edit" id="kb-edit-${idx}" style="display:none;width:100%;padding:8px;background:var(--surface3);border:1px solid var(--accent);border-radius:var(--radius);color:var(--text);font-size:13px;font-family:inherit;resize:vertical;min-height:60px;">${textoEdit}</textarea>
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;flex-shrink:0;">
-          <div style="font-size:11px;color:var(--text3);">${fecha} ${origen==='corrección'?'<span style="color:var(--amber);">✏️ corrección</span>':''}</div>
+          <div style="font-size:11px;color:var(--text3);">${fecha}</div>
           <div style="display:flex;gap:4px;" id="kb-btns-${idx}">
             <button class="btn btn-ghost btn-sm" onclick="editKnowledgeEntry(${idx})">✏️ editar</button>
             <button class="btn btn-red btn-sm" onclick="deleteKnowledgeEntry(${idx})">✕</button>
