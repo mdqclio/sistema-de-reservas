@@ -447,7 +447,39 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
 .notif.show { transform: translateX(0); }
 .notif.success { border-left: 3px solid var(--green); }
 .notif.error { border-left: 3px solid var(--red); }
+
+/* ===== PIPELINE KANBAN ===== */
+.kanban-board { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 12px; align-items: flex-start; }
+.kanban-col { flex: 0 0 260px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius2); padding: 14px; min-height: 200px; }
+.kanban-col-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.kanban-col-title { font-size: 13px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; }
+.kanban-count { font-size: 11px; background: var(--surface3); border: 1px solid var(--border); border-radius: 20px; padding: 2px 8px; color: var(--text3); }
+.kanban-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; margin-bottom: 8px; cursor: pointer; transition: border-color 0.2s, transform 0.1s; }
+.kanban-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+.kanban-card-name { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.kanban-card-detail { font-size: 12px; color: var(--text3); line-height: 1.6; }
+.kanban-card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+.kanban-pill { font-size: 10px; padding: 2px 8px; border-radius: 20px; font-weight: 600; }
+.kanban-pill.consulta { background: rgba(59,130,246,0.15); color: var(--accent2); }
+.kanban-pill.presupuesto { background: rgba(217,119,6,0.15); color: #fbbf24; }
+.kanban-pill.confirmada { background: rgba(5,150,105,0.15); color: #34d399; }
+.kanban-pill.perdida { background: rgba(220,38,38,0.12); color: #f87171; }
+.kanban-move-btns { display: flex; gap: 4px; }
+
+/* ===== FICHA 360° ===== */
+.ficha-360-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; }
+.ficha-stat { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; }
+.ficha-stat-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+.ficha-stat-value { font-size: 18px; font-weight: 700; color: var(--accent2); }
+
+/* ===== CHARTS ===== */
+.chart-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-top: 14px; }
+.chart-card { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius2); padding: 16px; }
+.chart-card h4 { font-size: 13px; font-weight: 600; color: var(--text2); margin-bottom: 12px; }
+@media(max-width:900px) { .chart-row { grid-template-columns: 1fr; } .kanban-col { flex: 0 0 220px; } }
+@media(max-width:600px) { .ficha-360-grid { grid-template-columns: 1fr; } }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -508,6 +540,9 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
       </div>
       <div class="nav-item" onclick="showSection('checkin');closeSidebar()" id="nav-checkin">
         <span class="icon">✅</span> Check-In / Out
+      </div>
+      <div class="nav-item" onclick="showSection('pipeline');closeSidebar()" id="nav-pipeline">
+        <span class="icon">🎯</span> Pipeline CRM
       </div>
       <div class="nav-section">Operaciones</div>
       <div class="nav-item" onclick="toggleChatFloat();closeSidebar()" id="nav-chatbot">
@@ -597,6 +632,12 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
             <tbody id="dash-checkouts"></tbody>
           </table>
         </div>
+      </div>
+      <div id="dash-fechas-importantes" style="margin-top:14px;"></div>
+      <div class="chart-row">
+        <div class="chart-card"><h4>📈 Ocupación mensual</h4><canvas id="chartOcupacion" height="180"></canvas></div>
+        <div class="chart-card"><h4>💰 Ingresos ARS por mes</h4><canvas id="chartIngresos" height="180"></canvas></div>
+        <div class="chart-card"><h4>📱 Reservas por plataforma</h4><canvas id="chartPlataformas" height="180"></canvas></div>
       </div>
     </div>
 
@@ -957,6 +998,10 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
       <div class="form-group"><label>Teléfono</label><input type="text" id="eh-tel"></div>
       <div class="form-group"><label>Email</label><input type="email" id="eh-email"></div>
     </div>
+    <div class="form-row">
+      <div class="form-group"><label>Cumpleaños (DD/MM)</label><input type="text" id="eh-cumple" placeholder="15/03" maxlength="5"></div>
+      <div class="form-group"><label>Fecha especial (DD/MM)</label><input type="text" id="eh-fecha-esp" placeholder="Ej: aniversario 22/06"></div>
+    </div>
     <div class="form-group" style="margin-top:12px;">
       <label>Puntuación de comportamiento (1-10)</label>
       <div id="eh-stars" style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;"></div>
@@ -1155,6 +1200,10 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
     <div class="form-row">
       <div class="form-group"><label>Teléfono</label><input type="text" id="h-tel" placeholder="+54 9 223..."></div>
       <div class="form-group"><label>Email</label><input type="email" id="h-email" placeholder="email@ejemplo.com"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Cumpleaños (DD/MM)</label><input type="text" id="h-cumple" placeholder="15/03" maxlength="5"></div>
+      <div class="form-group"><label>Fecha especial (DD/MM)</label><input type="text" id="h-fecha-esp" placeholder="Ej: aniversario 22/06"></div>
     </div>
     <div class="form-group">
       <label>Foto del Documento</label>
@@ -1389,6 +1438,18 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
       </div>
     </div>
 
+    <!-- PIPELINE CRM -->
+    <div id="section-pipeline" class="section">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
+        <div>
+          <h2 style="font-size:20px;font-weight:600;">🎯 Pipeline de Ventas</h2>
+          <p style="font-size:13px;color:var(--text3);margin-top:2px;">Seguimiento de consultas y oportunidades</p>
+        </div>
+        <button class="btn btn-blue" onclick="openLeadModal()">+ Nueva consulta</button>
+      </div>
+      <div class="kanban-board" id="kanbanBoard"></div>
+    </div>
+
     <!-- CONFIGURACIÓN DEL BOT -->
     <div id="section-botconfig" class="section">
       <div style="display:grid;gap:20px;">
@@ -1547,6 +1608,7 @@ async function initData() {
     { id:'u1', nombre:'Administrador', email:'', rol:'rol-admin', estado:'activo', ultimoAcceso: null },
   ]);
   await DB.set('cierres', []);
+  await DB.set('pipeline', []);
   // NO tocar knowledge_base si ya tiene datos
   if (!Array.isArray(cache['knowledge_base']) || cache['knowledge_base'].length === 0) {
     await DB.set('knowledge_base', []);
@@ -1644,7 +1706,7 @@ function applyRoleUI(rolKey, rolObj) {
 // ===================== NAVIGATION =====================
 const sectionTitles = {
   dashboard:'Dashboard', mapa:'Mapa de Cabañas', reservas:'Reservas',
-  checkin:'Check-In / Check-Out', huespedes:'Huéspedes', precios:'Gestión de Precios',
+  checkin:'Check-In / Check-Out', pipeline:'Pipeline CRM', huespedes:'Huéspedes', precios:'Gestión de Precios',
   grilla:'Grilla de Reservas', listanegra:'Lista Negra', contabilidad:'Contabilidad', caja:'Caja Diaria', usuarios:'Usuarios del Sistema', roles:'Roles y Permisos', knowledge:'Base de Conocimiento', botconfig:'Configuración del Bot'
 };
 
@@ -1668,6 +1730,7 @@ function showSection(s) {
   if (s === 'usuarios') renderUsuarios();
   if (s === 'roles') renderRoles();
   if (s === 'knowledge') renderKnowledge();
+  if (s === 'pipeline') loadAllData().then(() => renderPipeline());
   if (s === 'botconfig') renderBotConfig();
 }
 
@@ -1784,6 +1847,161 @@ function renderDashboard() {
         <td>${pagoBadge(r)}</td>
       </tr>`).join('')
     : '<tr><td colspan="4" style="text-align:center;color:var(--text3)">Sin check-outs pendientes</td></tr>';
+
+  renderFechasImportantes();
+  renderDashboardCharts();
+}
+
+// ===== FECHAS IMPORTANTES (cumpleaños y fechas especiales) =====
+function renderFechasImportantes() {
+  const huespedes = DB.get('huespedes', []);
+  const hoy = new Date();
+  const DIAS_AVISO = 7;
+  const eventos = [];
+
+  huespedes.forEach(h => {
+    const nombre = `${h.nombre} ${h.apellido}`;
+    const tel = h.tel ? h.tel.replace(/\D/g,'') : '';
+
+    function parseDDMM(str) {
+      if (!str) return null;
+      // Acepta DD/MM al inicio del string (puede tener descripción después)
+      const match = str.match(/(\d{1,2})\/(\d{1,2})/);
+      if (!match) return null;
+      return { dia: parseInt(match[1]), mes: parseInt(match[2]) };
+    }
+
+    function diasHasta(dia, mes) {
+      const thisYear = new Date(hoy.getFullYear(), mes - 1, dia);
+      const nextYear = new Date(hoy.getFullYear() + 1, mes - 1, dia);
+      const target = thisYear >= new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()) ? thisYear : nextYear;
+      return Math.round((target - new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate())) / (1000*60*60*24));
+    }
+
+    if (h.cumple) {
+      const p = parseDDMM(h.cumple);
+      if (p) {
+        const dias = diasHasta(p.dia, p.mes);
+        if (dias <= DIAS_AVISO) eventos.push({ nombre, tel, label: '🎂 Cumpleaños', fecha: `${String(p.dia).padStart(2,'0')}/${String(p.mes).padStart(2,'0')}`, dias, tipo: 'cumple' });
+      }
+    }
+    if (h.fechaEsp) {
+      const p = parseDDMM(h.fechaEsp);
+      if (p) {
+        const dias = diasHasta(p.dia, p.mes);
+        const desc = h.fechaEsp.replace(/\d{1,2}\/\d{1,2}/, '').trim() || 'Fecha especial';
+        if (dias <= DIAS_AVISO) eventos.push({ nombre, tel, label: `✨ ${desc}`, fecha: `${String(p.dia).padStart(2,'0')}/${String(p.mes).padStart(2,'0')}`, dias, tipo: 'especial' });
+      }
+    }
+  });
+
+  const el = document.getElementById('dash-fechas-importantes');
+  if (!el) return;
+  if (!eventos.length) { el.innerHTML = ''; return; }
+
+  eventos.sort((a,b) => a.dias - b.dias);
+  el.innerHTML = `
+  <div class="card" style="border-left:3px solid var(--amber);margin-bottom:0;">
+    <div class="card-header"><h3>🎉 Fechas importantes próximas</h3><span style="font-size:12px;color:var(--text3)">Próximos ${DIAS_AVISO} días</span></div>
+    <div style="display:flex;flex-direction:column;gap:8px;padding:4px 0;">
+      ${eventos.map(e => {
+        const waMsg = encodeURIComponent(`Hola ${e.nombre.split(' ')[0]}! Desde Cabañas Puerto Delfín te deseamos un ${e.tipo==='cumple'?'¡muy feliz cumpleaños! 🎂':''}${e.tipo==='especial'?'¡muy feliz fecha especial! ✨':''} Esperamos verte pronto 🌊`);
+        const waLink = e.tel ? `<a href="https://wa.me/${e.tel}?text=${waMsg}" target="_blank" class="btn btn-green btn-sm">📱 Escribir por WhatsApp</a>` : '';
+        return `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;background:var(--surface2);border-radius:var(--radius);">
+          <div>
+            <span style="font-weight:600;color:var(--text)">${e.nombre}</span>
+            <span style="margin-left:8px;font-size:12px;color:var(--text3)">${e.label} — ${e.fecha}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+            <span style="font-size:12px;color:${e.dias===0?'#fbbf24':e.dias<=2?'#f87171':'var(--text3)'};">${e.dias===0?'¡Hoy!':'en '+e.dias+' días'}</span>
+            ${waLink}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+}
+
+// ===== CHARTS DEL DASHBOARD =====
+let _charts = {};
+function renderDashboardCharts() {
+  const reservas = DB.get('reservas', []);
+  const movimientos = DB.get('movimientos', []);
+  const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const hoy = new Date();
+
+  // Últimos 6 meses
+  const labels = [];
+  const ocupPct = [];
+  const ingMes = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+    const y = d.getFullYear(), m = d.getMonth();
+    labels.push(MESES[m]);
+    // Ocupación promedio del mes (noches ocupadas / noches totales)
+    const diasMes = new Date(y, m+1, 0).getDate();
+    let nightsOcup = 0;
+    for (let day = 1; day <= diasMes; day++) {
+      const ds = `${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+      const ocup = reservas.filter(r => r.estado !== 'checkout' && r.entrada <= ds && r.salida > ds).length;
+      nightsOcup += ocup;
+    }
+    ocupPct.push(Math.round(nightsOcup / (diasMes * 12) * 100));
+    // Ingresos ARS del mes
+    const key = `${y}-${String(m+1).padStart(2,'0')}`;
+    const ing = movimientos.filter(mv => mv.tipo === 'ingreso' && mv.moneda === 'ARS' && (mv.fecha||'').startsWith(key))
+      .reduce((a, b) => a + Number(b.monto), 0);
+    ingMes.push(Math.round(ing / 1000)); // en miles
+  }
+
+  // Plataformas
+  const platCount = {};
+  reservas.forEach(r => { const p = r.plataforma || 'directo'; platCount[p] = (platCount[p]||0) + 1; });
+  const platLabels = Object.keys(platCount);
+  const platData = Object.values(platCount);
+  const platColors = ['#3b82f6','#f59e0b','#10b981','#8b5cf6','#ef4444','#06b6d4'];
+
+  const chartDefaults = {
+    animation: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: '#5a7fa8', font: { size: 10 } }, grid: { color: 'rgba(59,130,246,0.08)' } },
+      y: { ticks: { color: '#5a7fa8', font: { size: 10 } }, grid: { color: 'rgba(59,130,246,0.08)' } }
+    }
+  };
+
+  function makeChart(id, type, labels, data, color, opts = {}) {
+    const canvas = document.getElementById(id);
+    if (!canvas) return;
+    if (_charts[id]) { _charts[id].destroy(); }
+    _charts[id] = new Chart(canvas, {
+      type,
+      data: {
+        labels,
+        datasets: [{ data, backgroundColor: color, borderColor: color, borderWidth: type === 'line' ? 2 : 0,
+          fill: type === 'line', tension: 0.4, pointRadius: 3,
+          borderRadius: type === 'bar' ? 6 : 0 }]
+      },
+      options: { ...chartDefaults, ...opts, plugins: { legend: { display: false }, ...(opts.plugins||{}) } }
+    });
+  }
+
+  makeChart('chartOcupacion', 'bar', labels, ocupPct, 'rgba(59,130,246,0.7)', {
+    scales: { ...chartDefaults.scales, y: { ...chartDefaults.scales.y, max: 100, ticks: { color:'#5a7fa8', font:{size:10}, callback: v => v+'%' } } }
+  });
+  makeChart('chartIngresos', 'line', labels, ingMes, '#3b82f6', {
+    scales: { ...chartDefaults.scales, y: { ...chartDefaults.scales.y, ticks: { color:'#5a7fa8', font:{size:10}, callback: v => '$'+v+'k' } } }
+  });
+
+  const platCanvas = document.getElementById('chartPlataformas');
+  if (platCanvas) {
+    if (_charts['chartPlataformas']) _charts['chartPlataformas'].destroy();
+    _charts['chartPlataformas'] = new Chart(platCanvas, {
+      type: 'doughnut',
+      data: { labels: platLabels, datasets: [{ data: platData, backgroundColor: platColors.slice(0, platLabels.length), borderWidth: 0 }] },
+      options: { animation: false, plugins: { legend: { display: true, position: 'bottom', labels: { color: '#94b4d4', font: { size: 11 }, padding: 8, boxWidth: 12 } } }, cutout: '65%' }
+    });
+  }
 }
 
 function onEntradaChange() {
@@ -2490,30 +2708,59 @@ function showGuestDetail(id) {
   const h = DB.get('huespedes',[]).find(x=>x.id===id);
   if(!h) return;
   const reservas = DB.get('reservas',[]).filter(r=>r.huespedId===id);
+  const completadas = reservas.filter(r=>r.estado==='checkout'||r.estado==='checkin');
+  const totalGastado = completadas.reduce((a,r)=>a+Number(r.precio||0)*nightsBetween(r.entrada,r.salida),0);
+  const ultimaRes = completadas.sort((a,b)=>b.salida>a.salida?1:-1)[0];
+  const diasDesde = ultimaRes ? Math.round((new Date()-new Date(ultimaRes.salida))/(1000*60*60*24)) : null;
+  const promNoches = completadas.length ? Math.round(completadas.reduce((a,r)=>a+nightsBetween(r.entrada,r.salida),0)/completadas.length) : 0;
+
   document.getElementById('guestDetailContent').innerHTML = `
-    <div class="guest-detail" style="margin-bottom:20px">
+    <div class="guest-detail" style="margin-bottom:16px">
       <div class="guest-avatar">${h.nombre[0]}${h.apellido[0]}</div>
       <div class="guest-info">
         <h3>${h.nombre} ${h.apellido}</h3>
         <div class="guest-meta">
           <span class="meta-chip">🪪 ${h.dni}</span>
-          <span class="meta-chip">🌍 ${h.nac}</span>
+          <span class="meta-chip">🌍 ${h.nac||'—'}</span>
           ${h.tel?`<span class="meta-chip"><a href="https://wa.me/${h.tel.replace(/\D/g,'')}" target="_blank" style="color:inherit;text-decoration:none;">📱 ${h.tel}</a></span>`:''}
           ${h.email?`<span class="meta-chip">✉️ ${h.email}</span>`:''}
-          <span class="meta-chip">🏨 ${reservas.length} estadía(s)</span>
+          ${h.cumple?`<span class="meta-chip">🎂 ${h.cumple}</span>`:''}
+          ${h.fechaEsp?`<span class="meta-chip">✨ ${h.fechaEsp}</span>`:''}
         </div>
       </div>
     </div>
-    ${h.foto ? `<div style="margin-bottom:16px"><p style="font-size:12px;color:var(--text3);margin-bottom:6px">Documento:</p><img src="${h.foto}" style="max-width:100%;border-radius:8px;max-height:160px"></div>` : ''}
-    <p style="font-size:12px;color:var(--text3);margin-bottom:8px">Historial de reservas:</p>
+    <div class="ficha-360-grid">
+      <div class="ficha-stat"><div class="ficha-stat-label">Total estadías</div><div class="ficha-stat-value">${completadas.length}</div></div>
+      <div class="ficha-stat"><div class="ficha-stat-label">Total gastado (ARS)</div><div class="ficha-stat-value">${fmtMoney(totalGastado)}</div></div>
+      <div class="ficha-stat"><div class="ficha-stat-label">Promedio noches</div><div class="ficha-stat-value">${promNoches} noches</div></div>
+      <div class="ficha-stat"><div class="ficha-stat-label">Última visita</div><div class="ficha-stat-value" style="font-size:14px">${ultimaRes?fmtFecha(ultimaRes.salida)+' (hace '+diasDesde+' días)':'—'}</div></div>
+    </div>
+    ${diasDesde !== null && diasDesde >= 300 ? `<div style="margin-top:12px;padding:10px 14px;background:rgba(59,130,246,0.1);border:1px solid var(--accent);border-radius:var(--radius);font-size:13px;color:var(--accent2)">💡 Han pasado ${diasDesde} días desde su última visita — buena oportunidad para reconectar.</div>` : ''}
+    <div style="margin-top:14px;">
+      <label style="font-size:12px;color:var(--text3);display:block;margin-bottom:6px">Notas internas</label>
+      <textarea id="fichaNotas-${id}" rows="3" style="width:100%;padding:9px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:13px;resize:vertical;">${h.notas||''}</textarea>
+      <button class="btn btn-blue btn-sm" style="margin-top:6px" onclick="saveGuestNotes('${id}')">Guardar notas</button>
+    </div>
+    ${h.foto ? `<div style="margin-top:14px"><p style="font-size:12px;color:var(--text3);margin-bottom:6px">Documento:</p><img src="${h.foto}" style="max-width:100%;border-radius:8px;max-height:160px"></div>` : ''}
+    <p style="font-size:12px;color:var(--text3);margin-top:14px;margin-bottom:8px">Historial de reservas:</p>
     <table><thead><tr><th>Entrada</th><th>Salida</th><th>Cab.</th><th>Total</th><th>Estado</th></tr></thead>
-    <tbody>${reservas.map(r=>`<tr>
+    <tbody>${reservas.sort((a,b)=>b.entrada>a.entrada?1:-1).map(r=>`<tr>
       <td>${fmtFecha(r.entrada)}</td><td>${fmtFecha(r.salida)}</td><td>Cab.${r.hab}</td>
       <td>${fmtMoney(r.precio*nightsBetween(r.entrada,r.salida),r.moneda)}</td>
       <td>${estadoBadge(r.estado)}</td>
     </tr>`).join('')||'<tr><td colspan="5" style="text-align:center;color:var(--text3)">Sin reservas</td></tr>'}</tbody></table>
   `;
   openModal('modalGuestDetail');
+}
+
+async function saveGuestNotes(id) {
+  const notas = document.getElementById('fichaNotas-'+id)?.value || '';
+  const huespedes = DB.get('huespedes',[]);
+  const idx = huespedes.findIndex(x=>x.id===id);
+  if(idx<0) return;
+  huespedes[idx].notas = notas;
+  await DB.set('huespedes', huespedes);
+  showNotif('✅ Notas guardadas');
 }
 
 function previewDoc(input) {
@@ -2541,6 +2788,8 @@ function saveHuesped() {
     nac: document.getElementById('h-nac').value,
     tel: document.getElementById('h-tel').value,
     email: document.getElementById('h-email').value,
+    cumple: document.getElementById('h-cumple').value.trim(),
+    fechaEsp: document.getElementById('h-fecha-esp').value.trim(),
     foto: foto && foto !== window.location.href ? foto : null,
     estadias: 0
   });
@@ -2549,7 +2798,7 @@ function saveHuesped() {
   renderHuespedes();
   showNotif('Huésped registrado: '+nombre+' '+apellido);
   // reset form
-  ['h-nombre','h-apellido','h-dni','h-nac','h-tel','h-email'].forEach(id=>document.getElementById(id).value='');
+  ['h-nombre','h-apellido','h-dni','h-nac','h-tel','h-email','h-cumple','h-fecha-esp'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('docPreview').style.display='none';
 }
 
@@ -3115,6 +3364,8 @@ function openEditHuesped(id) {
   if(document.getElementById('eh-ciudad')) document.getElementById('eh-ciudad').value = h.ciudad||'';
   document.getElementById('eh-tel').value = h.tel||'';
   document.getElementById('eh-email').value = h.email||'';
+  document.getElementById('eh-cumple').value = h.cumple||'';
+  document.getElementById('eh-fecha-esp').value = h.fechaEsp||'';
   document.getElementById('eh-score').value = h.score||'';
   document.getElementById('eh-obs').value = h.obs||'';
   renderScoreStars('eh-stars', 'eh-score', h.score||null);
@@ -3134,6 +3385,8 @@ async function saveEditHuesped() {
   h.nac = document.getElementById('eh-nac').value;
   h.tel = document.getElementById('eh-tel').value;
   h.email = document.getElementById('eh-email').value;
+  h.cumple = document.getElementById('eh-cumple').value.trim();
+  h.fechaEsp = document.getElementById('eh-fecha-esp').value.trim();
   const sc = document.getElementById('eh-score').value;
   h.score = sc ? Number(sc) : null;
   h.obs = document.getElementById('eh-obs').value.trim();
@@ -4084,6 +4337,150 @@ loadAllData().then(() => {
   showSection('dashboard');
 });
 
+// ===================== PIPELINE CRM =====================
+const ETAPAS = [
+  { id: 'consulta',    label: '💬 Consulta',           color: 'consulta' },
+  { id: 'presupuesto', label: '📋 Presupuesto enviado', color: 'presupuesto' },
+  { id: 'confirmada',  label: '✅ Confirmada',           color: 'confirmada' },
+  { id: 'perdida',     label: '❌ Perdida',              color: 'perdida' },
+];
+
+function renderPipeline() {
+  const leads = DB.get('pipeline', []);
+  const board = document.getElementById('kanbanBoard');
+  if (!board) return;
+  board.innerHTML = ETAPAS.map(etapa => {
+    const cards = leads.filter(l => l.etapa === etapa.id);
+    return `
+    <div class="kanban-col">
+      <div class="kanban-col-header">
+        <span class="kanban-col-title">${etapa.label}</span>
+        <span class="kanban-count">${cards.length}</span>
+      </div>
+      ${cards.map(l => `
+        <div class="kanban-card" onclick="openLeadModal('${l.id}')">
+          <div class="kanban-card-name">${l.nombre}</div>
+          <div class="kanban-card-detail">
+            ${l.cabaña ? `🏕 Cabaña ${l.cabaña}` : ''}${l.personas ? ` · ${l.personas} personas` : ''}<br>
+            ${l.desde ? `📅 ${fmtFecha(l.desde)}${l.hasta?' → '+fmtFecha(l.hasta):''}` : ''}
+            ${l.monto ? `<br>💰 ${fmtMoney(Number(l.monto))}` : ''}
+            ${l.notas ? `<br><span style="color:var(--text3)">${l.notas.slice(0,60)}${l.notas.length>60?'…':''}</span>` : ''}
+          </div>
+          <div class="kanban-card-footer">
+            <span class="kanban-pill ${etapa.color}">${etapa.label.split(' ').slice(1).join(' ')}</span>
+            <div class="kanban-move-btns" onclick="event.stopPropagation()">
+              ${etapa.id !== 'consulta' ? `<button class="btn btn-ghost btn-sm" style="padding:2px 6px;font-size:11px" onclick="moveLeadEtapa('${l.id}',-1)">◀</button>` : ''}
+              ${etapa.id !== 'perdida'  ? `<button class="btn btn-ghost btn-sm" style="padding:2px 6px;font-size:11px" onclick="moveLeadEtapa('${l.id}',1)">▶</button>` : ''}
+            </div>
+          </div>
+        </div>`).join('')}
+    </div>`;
+  }).join('');
+}
+
+function openLeadModal(leadId) {
+  const leads = DB.get('pipeline', []);
+  const l = leadId ? leads.find(x => x.id === leadId) : null;
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.id = 'modalLead';
+  modal.innerHTML = `
+  <div class="modal">
+    <h2>${l ? 'Editar consulta' : 'Nueva consulta'}</h2>
+    <input type="hidden" id="lead-id" value="${l?.id||''}">
+    <div class="form-row">
+      <div class="form-group"><label>Nombre *</label><input id="lead-nombre" value="${l?.nombre||''}" placeholder="Juan García"></div>
+      <div class="form-group"><label>Teléfono</label><input id="lead-tel" value="${l?.tel||''}" placeholder="+54 9 ..."></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Email</label><input id="lead-email" value="${l?.email||''}" placeholder="juan@email.com"></div>
+      <div class="form-group"><label>Personas</label><input id="lead-personas" type="number" value="${l?.personas||''}" min="1" max="20"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Fecha desde</label><input id="lead-desde" type="date" value="${l?.desde||''}"></div>
+      <div class="form-group"><label>Fecha hasta</label><input id="lead-hasta" type="date" value="${l?.hasta||''}"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Cabaña preferida</label><input id="lead-cabana" value="${l?.cabaña||''}" placeholder="Ej: 9 o cualquiera"></div>
+      <div class="form-group"><label>Monto cotizado (ARS)</label><input id="lead-monto" type="number" value="${l?.monto||''}" placeholder="0"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Etapa</label>
+        <select id="lead-etapa">
+          ${ETAPAS.map(e=>`<option value="${e.id}" ${(l?.etapa||'consulta')===e.id?'selected':''}>${e.label}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group"><label>Origen</label>
+        <select id="lead-origen">
+          ${['Directo','Instagram','WhatsApp','Booking','Airbnb','Web','Referido','Otro'].map(o=>`<option ${(l?.origen||'Directo')===o?'selected':''}>${o}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="form-group"><label>Notas</label><textarea id="lead-notas" rows="3" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);padding:9px 12px;width:100%;font-size:13px;">${l?.notas||''}</textarea></div>
+    <div class="modal-footer">
+      ${l ? `<button class="btn btn-red" onclick="deleteLead('${l.id}')">Eliminar</button>` : ''}
+      <button class="btn btn-ghost" onclick="closeLeadModal()">Cancelar</button>
+      <button class="btn btn-blue" onclick="saveLead()">Guardar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  setTimeout(() => modal.classList.add('open'), 10);
+  modal.addEventListener('click', e => { if(e.target===modal) closeLeadModal(); });
+}
+
+function closeLeadModal() {
+  const m = document.getElementById('modalLead');
+  if(m) m.remove();
+}
+
+async function saveLead() {
+  const nombre = document.getElementById('lead-nombre').value.trim();
+  if (!nombre) { showNotif('El nombre es obligatorio', 'error'); return; }
+  const id = document.getElementById('lead-id').value || 'lead'+Date.now();
+  const leads = DB.get('pipeline', []);
+  const data = {
+    id, nombre,
+    tel:      document.getElementById('lead-tel').value.trim(),
+    email:    document.getElementById('lead-email').value.trim(),
+    personas: document.getElementById('lead-personas').value,
+    desde:    document.getElementById('lead-desde').value,
+    hasta:    document.getElementById('lead-hasta').value,
+    cabaña:   document.getElementById('lead-cabana').value.trim(),
+    monto:    document.getElementById('lead-monto').value,
+    etapa:    document.getElementById('lead-etapa').value,
+    origen:   document.getElementById('lead-origen').value,
+    notas:    document.getElementById('lead-notas').value.trim(),
+    updatedAt: today(),
+  };
+  const idx = leads.findIndex(l => l.id === id);
+  if (idx >= 0) leads[idx] = data; else leads.push(data);
+  await DB.set('pipeline', leads);
+  closeLeadModal();
+  renderPipeline();
+  showNotif('✅ Consulta guardada');
+}
+
+async function moveLeadEtapa(leadId, dir) {
+  const leads = DB.get('pipeline', []);
+  const l = leads.find(x => x.id === leadId);
+  if (!l) return;
+  const idx = ETAPAS.findIndex(e => e.id === l.etapa);
+  const newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= ETAPAS.length) return;
+  l.etapa = ETAPAS[newIdx].id;
+  await DB.set('pipeline', leads);
+  renderPipeline();
+}
+
+async function deleteLead(leadId) {
+  if (!confirm('¿Eliminar esta consulta?')) return;
+  const leads = DB.get('pipeline', []).filter(l => l.id !== leadId);
+  await DB.set('pipeline', leads);
+  closeLeadModal();
+  renderPipeline();
+  showNotif('Consulta eliminada');
+}
+
 // ===== EXPONER FUNCIONES GLOBALMENTE (requerido por type="module") =====
 // ===================== BASE DE CONOCIMIENTO =====================
 async function loadKnowledgeBase() {
@@ -4269,6 +4666,8 @@ Object.assign(window, {
   grillaNavegar, grillaHoy, renderGrilla,
   renderBotConfig, saveBotConfig, saveQuickReplies, addQuickReply, removeQuickReply,
   renderListaNegra, copyListaNegraLink, renderScoreStars, setScore,
+  renderPipeline, openLeadModal, closeLeadModal, saveLead, moveLeadEtapa, deleteLead,
+  showGuestDetail, saveGuestNotes, renderFechasImportantes,
   mapaNavegar, renderMapaFecha,
   today, fmtFecha, loadKnowledgeBase,
   confirmCheckin, doCheckin, doCheckout, editUsuario, openExtender, openHorario, openNuevoUsuario, openPago,
