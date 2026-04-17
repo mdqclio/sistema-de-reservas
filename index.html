@@ -548,6 +548,9 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
       <div class="nav-item" onclick="toggleChatFloat();closeSidebar()" id="nav-chatbot">
         <span class="icon">💬</span> Chat Asistente
       </div>
+      <div class="nav-item admin-only" onclick="showSection('knowledge');closeSidebar()" id="nav-knowledge" style="display:none;">
+        <span class="icon">🧠</span> Base de Conocimiento
+      </div>
       <div class="nav-item" onclick="showSection('huespedes');closeSidebar()" id="nav-huespedes">
         <span class="icon">👤</span> Huéspedes
       </div>
@@ -569,9 +572,6 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
       </div>
       <div class="nav-item admin-only" onclick="showSection('roles');closeSidebar()" id="nav-roles" style="display:none;">
         <span class="icon">🔑</span> Roles y Permisos
-      </div>
-      <div class="nav-item admin-only" onclick="showSection('knowledge');closeSidebar()" id="nav-knowledge" style="display:none;">
-        <span class="icon">🧠</span> Base de Conocimiento
       </div>
       <div class="nav-item admin-only" onclick="showSection('botconfig');closeSidebar()" id="nav-botconfig" style="display:none;">
         <span class="icon">⚙️</span> Config. del Bot
