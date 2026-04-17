@@ -771,12 +771,24 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
 
     <!-- CONTABILIDAD -->
     <div id="section-contabilidad" class="section">
-      <div class="tabs">
-        <div class="tab active" onclick="switchAcctTab('ingresos',this)">Ingresos</div>
-        <div class="tab" onclick="switchAcctTab('egresos',this)">Egresos</div>
-        <div class="tab" onclick="switchAcctTab('sueldos',this)">Sueldos</div>
-        <div class="tab" onclick="switchAcctTab('servicios',this)">Servicios</div>
-        <div class="tab" onclick="switchAcctTab('resumen',this)">Resumen Mes</div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+        <div class="tabs" style="margin-bottom:0;flex-wrap:wrap;">
+          <div class="tab active" onclick="switchAcctTab('ingresos',this)">Ingresos</div>
+          <div class="tab" onclick="switchAcctTab('egresos',this)">Egresos</div>
+          <div class="tab" onclick="switchAcctTab('devoluciones',this)">Devoluciones</div>
+          <div class="tab" onclick="switchAcctTab('sueldos',this)">Sueldos</div>
+          <div class="tab" onclick="switchAcctTab('servicios',this)">Servicios</div>
+          <div class="tab" onclick="switchAcctTab('cobrar',this)">💳 Cobrar</div>
+          <div class="tab" onclick="switchAcctTab('presupuesto',this)">📊 Presupuesto</div>
+          <div class="tab" onclick="switchAcctTab('recurrentes',this)">🔄 Recurrentes</div>
+          <div class="tab" onclick="switchAcctTab('resumen',this)">Resumen</div>
+          <div class="tab" onclick="switchAcctTab('auditoria',this)">🔍 Auditoría</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+          <button class="btn btn-ghost btn-sm" onclick="openCategoriasModal()">📂 Categorías</button>
+          <button class="btn btn-ghost btn-sm" onclick="openProveedorModal(null)">🏢 Proveedores</button>
+          <button class="btn btn-blue btn-sm" onclick="exportarCSV()">📥 CSV</button>
+        </div>
       </div>
       <div id="acctContent"></div>
     </div>
@@ -793,7 +805,7 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
         <div class="card">
           <div class="card-header">
             <h3>Movimientos de hoy</h3>
-            <button class="btn btn-blue btn-sm" onclick="openModal('modalMovimiento')">+ Movimiento</button>
+            <button class="btn btn-blue btn-sm" onclick="openMovimientoModal()">+ Movimiento</button>
           </div>
           <table>
             <thead><tr><th>Hora</th><th>Concepto</th><th>Tipo</th><th>Monto</th><th>Método</th></tr></thead>
@@ -807,9 +819,19 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
             <textarea id="cajaObs" rows="3" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:9px 12px;font-size:13px;resize:vertical;"></textarea>
           </div>
           <div class="form-group" style="margin-bottom:12px;">
-            <label>Tipo de cambio USD del día</label>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+              <label style="margin:0;">Tipo de cambio USD del día</label>
+              <button class="btn btn-ghost btn-sm" style="font-size:11px;" onclick="fetchCotizacionDolar('cajaTipoCambio')">🌐 Buscar</button>
+            </div>
             <input type="number" id="cajaTipoCambio" value="1430" style="width:100%;">
+            <div id="cotizacionInfo" style="display:none;margin-top:6px;font-size:11px;color:var(--text3);line-height:1.8;"></div>
           </div>
+          <div class="form-group" style="margin-bottom:12px;">
+            <label>Arqueo — efectivo contado en caja</label>
+            <input type="number" id="cajaArqueo" placeholder="Monto real contado" style="width:100%;">
+          </div>
+          <div id="cajaArqueoDif" style="display:none;padding:8px 12px;border-radius:var(--radius);font-size:13px;margin-bottom:12px;"></div>
+          <button class="btn btn-ghost btn-sm" style="width:100%;margin-bottom:8px;" onclick="calcArqueo()">Calcular diferencia</button>
           <button class="btn btn-green" style="width:100%;" onclick="cerrarCaja()">Cerrar Caja del Día</button>
           <div id="historialCierres" style="margin-top:16px;"></div>
         </div>
@@ -1293,30 +1315,42 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
 <!-- MODAL MOVIMIENTO CAJA -->
 <div class="modal-overlay" id="modalMovimiento">
   <div class="modal">
-    <h2>Registrar Movimiento</h2>
+    <h2 id="movModalTitle">Registrar Movimiento</h2>
     <div class="form-row">
       <div class="form-group"><label>Tipo</label>
-        <select id="mov-tipo">
+        <select id="mov-tipo" onchange="onMovTipoChange()">
           <option value="ingreso">Ingreso</option>
           <option value="egreso">Egreso</option>
+          <option value="devolucion">Devolución / Nota de crédito</option>
         </select>
       </div>
       <div class="form-group"><label>Categoría</label>
-        <select id="mov-cat">
-          <option value="reserva">Reserva / Check-in</option>
-          <option value="servicio">Servicio (luz, gas, etc.)</option>
-          <option value="sueldo">Sueldo</option>
-          <option value="limpieza">Insumo / Limpieza</option>
-          <option value="mantenimiento">Mantenimiento</option>
-          <option value="otro">Otro</option>
-        </select>
+        <select id="mov-cat"></select>
       </div>
     </div>
     <div class="form-row">
       <div class="form-group"><label>Moneda</label>
-        <select id="mov-moneda"><option value="ARS">ARS</option><option value="USD">USD</option></select>
+        <select id="mov-moneda" onchange="onMovMonedaChange()">
+          <option value="ARS">ARS</option>
+          <option value="USD">USD</option>
+        </select>
       </div>
-      <div class="form-group"><label>Monto *</label><input type="number" id="mov-monto" placeholder="0"></div>
+      <div class="form-group"><label>Monto *</label>
+        <input type="number" id="mov-monto" placeholder="0" oninput="onMovMonedaChange()">
+      </div>
+    </div>
+    <div class="form-row" id="mov-tc-row" style="display:none;">
+      <div class="form-group">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <label style="margin:0;">Tipo de cambio del día</label>
+          <button class="btn btn-ghost btn-sm" style="font-size:11px;" onclick="fetchCotizacionDolar('mov-tc')">🌐 Buscar</button>
+        </div>
+        <input type="number" id="mov-tc" placeholder="Ej: 1430" oninput="onMovMonedaChange()">
+        <div id="movCotizacionInfo" style="display:none;margin-top:4px;font-size:10px;color:var(--text3);line-height:1.7;"></div>
+      </div>
+      <div class="form-group"><label>Equivalente ARS</label>
+        <input type="text" id="mov-equiv" readonly style="opacity:0.6;background:var(--surface3);">
+      </div>
     </div>
     <div class="form-row">
       <div class="form-group"><label>Método</label>
@@ -1325,14 +1359,121 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
           <option value="transferencia">Transferencia</option>
           <option value="mercadopago">Mercado Pago</option>
           <option value="tarjeta">Tarjeta</option>
+          <option value="cheque">Cheque</option>
         </select>
       </div>
       <div class="form-group"><label>Fecha</label><input type="date" id="mov-fecha"></div>
     </div>
-    <div class="form-group"><label>Concepto *</label><input type="text" id="mov-concepto" placeholder="Descripción del movimiento"></div>
+    <div class="form-group"><label>Proveedor (opcional)</label>
+      <select id="mov-proveedor"><option value="">— Sin proveedor —</option></select>
+    </div>
+    <div class="form-group"><label>Concepto *</label>
+      <input type="text" id="mov-concepto" placeholder="Descripción del movimiento">
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="display:flex;align-items:center;gap:8px;padding-top:18px;">
+        <input type="checkbox" id="mov-impuesto" style="accent-color:var(--accent);width:16px;height:16px;" onchange="onMovImpuestoChange()">
+        <label style="margin:0;text-transform:none;font-size:13px;color:var(--text2);">Incluye impuesto</label>
+      </div>
+      <div class="form-group" id="mov-impuesto-pct-group" style="display:none;">
+        <label>% impuesto</label>
+        <input type="number" id="mov-impuesto-pct" placeholder="21" value="21">
+      </div>
+    </div>
+    <div class="form-group" id="mov-ref-group" style="display:none;">
+      <label>Referencia al movimiento original</label>
+      <input type="text" id="mov-ref" placeholder="Concepto o ID del movimiento original">
+    </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modalMovimiento')">Cancelar</button>
       <button class="btn btn-blue" onclick="saveMovimiento()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL PROVEEDOR -->
+<div class="modal-overlay" id="modalProveedor">
+  <div class="modal" style="max-width:480px;">
+    <h2 id="provModalTitle">Nuevo Proveedor</h2>
+    <input type="hidden" id="prov-id">
+    <div class="form-row">
+      <div class="form-group"><label>Nombre *</label><input type="text" id="prov-nombre" placeholder="Ej: Distribuidora Sur"></div>
+      <div class="form-group"><label>CUIT</label><input type="text" id="prov-cuit" placeholder="20-12345678-9"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Contacto</label><input type="text" id="prov-contacto" placeholder="Teléfono o email"></div>
+      <div class="form-group"><label>Rubro</label>
+        <select id="prov-rubro">
+          <option value="limpieza">Limpieza</option>
+          <option value="mantenimiento">Mantenimiento</option>
+          <option value="servicio">Servicios (luz, gas, internet)</option>
+          <option value="alimentacion">Alimentación</option>
+          <option value="marketing">Marketing / Plataformas</option>
+          <option value="otro">Otro</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group"><label>Notas</label><textarea id="prov-notas" rows="2" style="width:100%;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;resize:vertical;"></textarea></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalProveedor')">Cancelar</button>
+      <button class="btn btn-blue" onclick="saveProveedor()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL RECURRENTE -->
+<div class="modal-overlay" id="modalRecurrente">
+  <div class="modal" style="max-width:480px;">
+    <h2 id="recModalTitle">Gasto Recurrente</h2>
+    <input type="hidden" id="rec-id">
+    <div class="form-row">
+      <div class="form-group"><label>Concepto *</label><input type="text" id="rec-concepto" placeholder="Ej: Servicio de internet"></div>
+      <div class="form-group"><label>Categoría</label><select id="rec-cat"></select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Monto</label><input type="number" id="rec-monto" placeholder="0"></div>
+      <div class="form-group"><label>Moneda</label>
+        <select id="rec-moneda"><option value="ARS">ARS</option><option value="USD">USD</option></select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Día del mes</label>
+        <input type="number" id="rec-dia" placeholder="1-31" min="1" max="31">
+      </div>
+      <div class="form-group"><label>Método</label>
+        <select id="rec-metodo">
+          <option value="transferencia">Transferencia</option>
+          <option value="debito">Débito automático</option>
+          <option value="efectivo">Efectivo</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group"><label>Proveedor (opcional)</label>
+      <select id="rec-proveedor"><option value="">— Sin proveedor —</option></select>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalRecurrente')">Cancelar</button>
+      <button class="btn btn-blue" onclick="saveRecurrente()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CATEGORÍA -->
+<div class="modal-overlay" id="modalCategoria">
+  <div class="modal" style="max-width:440px;">
+    <h2>Categorías de Movimientos</h2>
+    <div id="listaCategorias" style="margin-bottom:16px;display:flex;flex-direction:column;gap:6px;"></div>
+    <div style="display:flex;gap:8px;">
+      <input type="text" id="nueva-cat-nombre" placeholder="Nueva categoría..." style="flex:1;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;">
+      <select id="nueva-cat-tipo" style="padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;">
+        <option value="ambos">Ingreso y Egreso</option>
+        <option value="ingreso">Solo Ingreso</option>
+        <option value="egreso">Solo Egreso</option>
+      </select>
+      <button class="btn btn-blue btn-sm" onclick="saveCategoria()">+</button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalCategoria')">Cerrar</button>
     </div>
   </div>
 </div>
@@ -1622,6 +1763,23 @@ async function initData() {
   ]);
   await DB.set('cierres', []);
   await DB.set('pipeline', []);
+  await DB.set('categorias', [
+    { id:'c1', nombre:'Reserva / Check-in', tipo:'ingreso' },
+    { id:'c2', nombre:'Servicio (luz, gas, internet)', tipo:'egreso' },
+    { id:'c3', nombre:'Sueldo', tipo:'egreso' },
+    { id:'c4', nombre:'Limpieza / Insumos', tipo:'egreso' },
+    { id:'c5', nombre:'Mantenimiento', tipo:'egreso' },
+    { id:'c6', nombre:'Marketing / Publicidad', tipo:'egreso' },
+    { id:'c7', nombre:'Comisión plataforma', tipo:'egreso' },
+    { id:'c8', nombre:'Impuestos', tipo:'egreso' },
+    { id:'c9', nombre:'Devolución a huésped', tipo:'devolucion' },
+    { id:'c10', nombre:'Otro', tipo:'ambos' },
+  ]);
+  await DB.set('proveedores', []);
+  await DB.set('recurrentes', []);
+  await DB.set('presupuestos', []);
+  await DB.set('auditoria', []);
+  await DB.set('tipo_cambio_historial', []);
   // NO tocar knowledge_base si ya tiene datos
   if (!Array.isArray(cache['knowledge_base']) || cache['knowledge_base'].length === 0) {
     await DB.set('knowledge_base', []);
@@ -1679,6 +1837,7 @@ async function doLogin() {
     applyRoleUI(rolKey, rol);
     showSection('dashboard');
     updateDate();
+    aplicarRecurrentes();
   } catch(e) {
     const msg = e.code === 'auth/invalid-credential' || e.code === 'auth/user-not-found' || e.code === 'auth/wrong-password'
       ? 'Usuario o contraseña incorrectos'
@@ -2506,9 +2665,17 @@ async function confirmCheckin() {
   if(!r.pagado || r.pagado === 0) {
     const nights = nightsBetween(r.entrada, r.salida);
     const movs = DB.get('movimientos',[]);
-    movs.push({ id:'m'+Date.now(), tipo:'ingreso', cat:'reserva', moneda:r.moneda, monto:r.precio*nights, metodo:r.pago, fecha:today(), concepto:`Check-in ${getHuespedNombre(r.huespedId)} - Cab.${r.hab}` });
+    const montoTotal = r.precio * nights;
+    movs.push({ id:'m'+Date.now(), tipo:'ingreso', cat:'Reserva / Check-in', moneda:r.moneda, monto:montoTotal, metodo:r.pago, fecha:today(), concepto:`Check-in ${getHuespedNombre(r.huespedId)} - Cab.${r.hab}` });
+    // Comisión automática de plataforma (feature 6)
+    const precios = DB.get('precios', {});
+    const platData = (precios.plataformas||[]).find(p => p.plat === (r.plataforma||'directo'));
+    if (platData && platData.comision > 0) {
+      const comision = Math.round(montoTotal * platData.comision / 100);
+      movs.push({ id:'m'+Date.now()+'c', tipo:'egreso', cat:'Comisión plataforma', moneda:r.moneda, monto:comision, metodo:'transferencia', fecha:today(), concepto:`Comisión ${r.plataforma} ${platData.comision}% - Cab.${r.hab}` });
+    }
     await DB.set('movimientos', movs);
-    r.pagado = r.precio * nights;
+    r.pagado = montoTotal;
     r.saldo = 0;
     r.estadoPago = 'total';
   }
@@ -3049,50 +3216,540 @@ function deletePromo(id) {
 }
 
 // ===================== CONTABILIDAD =====================
+
+// Categorías por defecto (fallback si no hay en Firebase)
+const CATS_DEFAULT = [
+  { id:'c1', nombre:'Reserva / Check-in', tipo:'ingreso' },
+  { id:'c2', nombre:'Servicio (luz, gas, internet)', tipo:'egreso' },
+  { id:'c3', nombre:'Sueldo', tipo:'egreso' },
+  { id:'c4', nombre:'Limpieza / Insumos', tipo:'egreso' },
+  { id:'c5', nombre:'Mantenimiento', tipo:'egreso' },
+  { id:'c6', nombre:'Marketing / Publicidad', tipo:'egreso' },
+  { id:'c7', nombre:'Comisión plataforma', tipo:'egreso' },
+  { id:'c8', nombre:'Impuestos', tipo:'egreso' },
+  { id:'c9', nombre:'Devolución a huésped', tipo:'devolucion' },
+  { id:'c10', nombre:'Otro', tipo:'ambos' },
+];
+
+function getCategorias() {
+  const stored = DB.get('categorias', []);
+  return (Array.isArray(stored) && stored.length) ? stored : CATS_DEFAULT;
+}
+
+function getCatOptions(tipoFiltro) {
+  const cats = getCategorias();
+  return cats
+    .filter(c => !tipoFiltro || c.tipo === tipoFiltro || c.tipo === 'ambos' || (tipoFiltro==='egreso' && c.tipo==='devolucion'))
+    .map(c => `<option value="${c.nombre}">${c.nombre}</option>`)
+    .join('');
+}
+
+function populateMovCats() {
+  const tipo = document.getElementById('mov-tipo')?.value || 'egreso';
+  const sel = document.getElementById('mov-cat');
+  if (!sel) return;
+  sel.innerHTML = getCatOptions(tipo === 'devolucion' ? 'devolucion' : tipo);
+}
+
+function populateRecCats() {
+  const sel = document.getElementById('rec-cat');
+  if (!sel) return;
+  sel.innerHTML = getCatOptions('egreso');
+}
+
+function populateProvSelect(selId) {
+  const sel = document.getElementById(selId);
+  if (!sel) return;
+  const provs = DB.get('proveedores', []);
+  sel.innerHTML = '<option value="">— Sin proveedor —</option>' +
+    provs.map(p => `<option value="${p.id}">${p.nombre}</option>`).join('');
+}
+
+function onMovTipoChange() {
+  populateMovCats();
+  const tipo = document.getElementById('mov-tipo').value;
+  const refGroup = document.getElementById('mov-ref-group');
+  if (refGroup) refGroup.style.display = tipo === 'devolucion' ? '' : 'none';
+}
+
+function onMovMonedaChange() {
+  const moneda = document.getElementById('mov-moneda')?.value;
+  const tcRow = document.getElementById('mov-tc-row');
+  if (!tcRow) return;
+  tcRow.style.display = moneda === 'USD' ? '' : 'none';
+  if (moneda === 'USD') {
+    const monto = Number(document.getElementById('mov-monto')?.value || 0);
+    const tc = Number(document.getElementById('mov-tc')?.value || 0);
+    const equiv = document.getElementById('mov-equiv');
+    if (equiv) equiv.value = tc > 0 ? fmtMoney(monto * tc) : '';
+  }
+}
+
+function onMovImpuestoChange() {
+  const checked = document.getElementById('mov-impuesto')?.checked;
+  const group = document.getElementById('mov-impuesto-pct-group');
+  if (group) group.style.display = checked ? '' : 'none';
+}
+
+function openMovimientoModal() {
+  populateMovCats();
+  populateProvSelect('mov-proveedor');
+  document.getElementById('mov-fecha').value = today();
+  document.getElementById('mov-tc-row').style.display = 'none';
+  document.getElementById('mov-ref-group').style.display = 'none';
+  document.getElementById('mov-impuesto-pct-group').style.display = 'none';
+  document.getElementById('mov-impuesto').checked = false;
+  document.getElementById('mov-tipo').value = 'egreso';
+  populateMovCats();
+  openModal('modalMovimiento');
+}
+
+function auditLog(accion, entidad, detalle) {
+  const log = DB.get('auditoria', []);
+  log.push({
+    id: 'a' + Date.now(),
+    fecha: today(),
+    hora: new Date().toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit'}),
+    usuario: currentUser?.name || 'Sistema',
+    accion,
+    entidad,
+    detalle: String(detalle).slice(0, 120)
+  });
+  // Guardar solo los últimos 500 registros
+  if (log.length > 500) log.splice(0, log.length - 500);
+  DB.set('auditoria', log);
+}
+
 function renderAcct(tab) {
-  const movs = DB.get('movimientos',[]);
+  const movs = DB.get('movimientos', []);
   const c = document.getElementById('acctContent');
-  if(tab==='resumen') {
+  if (!c) return;
+
+  if (tab === 'resumen') {
     const mes = new Date().getMonth();
     const year = new Date().getFullYear();
-    const movsmes = movs.filter(m => { const d=new Date(m.fecha); return d.getMonth()===mes && d.getFullYear()===year; });
+    const movsmes = movs.filter(m => { const d = new Date(m.fecha); return d.getMonth()===mes && d.getFullYear()===year; });
     const ingARS = movsmes.filter(m=>m.tipo==='ingreso'&&m.moneda==='ARS').reduce((a,b)=>a+Number(b.monto),0);
     const ingUSD = movsmes.filter(m=>m.tipo==='ingreso'&&m.moneda==='USD').reduce((a,b)=>a+Number(b.monto),0);
-    const egARS = movsmes.filter(m=>m.tipo==='egreso'&&m.moneda==='ARS').reduce((a,b)=>a+Number(b.monto),0);
+    const egARS = movsmes.filter(m=>(m.tipo==='egreso'||m.tipo==='devolucion')&&m.moneda==='ARS').reduce((a,b)=>a+Number(b.monto),0);
     const bal = ingARS - egARS;
+    // Resumen por categoría
+    const porCat = {};
+    movsmes.forEach(m => {
+      const k = m.cat || 'Otro';
+      if (!porCat[k]) porCat[k] = { ing:0, eg:0 };
+      if (m.tipo==='ingreso') porCat[k].ing += Number(m.monto);
+      else porCat[k].eg += Number(m.monto);
+    });
     c.innerHTML = `
-      <div class="acct-grid">
+      <div class="acct-grid" style="margin-bottom:16px;">
         <div class="stat-card green"><div class="label">Ingresos ARS (mes)</div><div class="value">${fmtMoney(ingARS)}</div></div>
         <div class="stat-card green"><div class="label">Ingresos USD (mes)</div><div class="value">USD ${ingUSD.toLocaleString('es-AR')}</div></div>
         <div class="stat-card red"><div class="label">Egresos ARS (mes)</div><div class="value">${fmtMoney(egARS)}</div></div>
-        <div class="stat-card blue"><div class="label">Balance neto ARS</div><div class="value">${fmtMoney(bal)}</div></div>
+        <div class="stat-card ${bal>=0?'blue':'red'}"><div class="label">Balance neto</div><div class="value">${fmtMoney(bal)}</div></div>
         <div class="stat-card amber"><div class="label">Transacciones</div><div class="value">${movsmes.length}</div></div>
-      </div>`;
+      </div>
+      <div class="card"><table>
+        <thead><tr><th>Categoría</th><th>Ingresos</th><th>Egresos</th><th>Neto</th></tr></thead>
+        <tbody>${Object.entries(porCat).map(([cat, v])=>`<tr>
+          <td>${cat}</td>
+          <td style="color:#34d399">${v.ing>0?fmtMoney(v.ing):'-'}</td>
+          <td style="color:#f87171">${v.eg>0?fmtMoney(v.eg):'-'}</td>
+          <td style="font-weight:600;color:${v.ing-v.eg>=0?'#34d399':'#f87171'}">${fmtMoney(v.ing-v.eg)}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>`;
     return;
   }
-  const tipoMap = { ingresos:'ingreso', egresos:'egreso', sueldos:'egreso', servicios:'egreso' };
-  const catMap = { sueldos:'sueldo', servicios:'servicio' };
-  let filtered = movs.filter(m=>m.tipo===(tipoMap[tab]||m.tipo));
-  if(catMap[tab]) filtered = filtered.filter(m=>m.cat===catMap[tab]);
+
+  if (tab === 'cobrar') { renderCuentasPorCobrar(c); return; }
+  if (tab === 'presupuesto') { renderPresupuesto(c); return; }
+  if (tab === 'recurrentes') { renderRecurrentes(c); return; }
+  if (tab === 'auditoria') { renderAuditoria(c); return; }
+
+  const tipoMap = { ingresos:'ingreso', egresos:'egreso', sueldos:'egreso', servicios:'egreso', devoluciones:'devolucion' };
+  const catMap = { sueldos:'Sueldo', servicios:'Servicio (luz, gas, internet)' };
+  let filtered = movs.filter(m => m.tipo === (tipoMap[tab] || m.tipo));
+  if (catMap[tab]) filtered = filtered.filter(m => (m.cat||'').toLowerCase().includes(catMap[tab].split(' ')[0].toLowerCase()));
+
   c.innerHTML = `
-    <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
-      <button class="btn btn-blue btn-sm" onclick="openModal('modalMovimiento')">+ Agregar</button>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
+      <button class="btn btn-blue btn-sm" onclick="openMovimientoModal()">+ Agregar</button>
     </div>
     <div class="card">
       <table>
-        <thead><tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Monto</th><th>Método</th></tr></thead>
+        <thead><tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Monto</th><th>Método</th><th>Proveedor</th></tr></thead>
         <tbody>${filtered.length
-          ? filtered.sort((a,b)=>b.fecha>a.fecha?1:-1).map(m=>`<tr>
-              <td style="font-family:'DM Mono';font-size:12px">${fmtFecha(m.fecha)}</td>
-              <td>${m.concepto}</td>
-              <td><span class="badge ${m.tipo==='ingreso'?'green':'red'}">${m.cat}</span></td>
-              <td style="font-weight:500;color:${m.tipo==='ingreso'?'#34d399':'#f87171'}">${m.tipo==='ingreso'?'+':'-'}${fmtMoney(m.monto,m.moneda)}</td>
-              <td>${m.metodo}</td>
-            </tr>`).join('')
-          : '<tr><td colspan="5" style="text-align:center;color:var(--text3)">Sin movimientos</td></tr>'
+          ? filtered.sort((a,b)=>b.fecha>a.fecha?1:-1).map(m => {
+              const prov = m.proveedorId ? (DB.get('proveedores',[]).find(p=>p.id===m.proveedorId)?.nombre||'') : '';
+              const color = m.tipo==='ingreso' ? '#34d399' : '#f87171';
+              const signo = m.tipo==='ingreso' ? '+' : '-';
+              const tcInfo = m.moneda==='USD'&&m.tc ? ` <span style="font-size:10px;color:var(--text3)">(TC $${m.tc})</span>` : '';
+              const impInfo = m.impuesto ? ` <span style="font-size:10px;color:var(--amber)">IMP ${m.impuestoPct}%</span>` : '';
+              return `<tr>
+                <td style="font-family:'DM Mono';font-size:12px">${fmtFecha(m.fecha)}</td>
+                <td>${m.concepto}${impInfo}</td>
+                <td><span class="badge ${m.tipo==='ingreso'?'green':'red'}">${m.cat||'—'}</span></td>
+                <td style="font-weight:500;color:${color}">${signo}${fmtMoney(m.monto,m.moneda)}${tcInfo}</td>
+                <td>${m.metodo||'—'}</td>
+                <td style="font-size:12px;color:var(--text3)">${prov}</td>
+              </tr>`;
+            }).join('')
+          : '<tr><td colspan="6" style="text-align:center;color:var(--text3)">Sin movimientos</td></tr>'
         }</tbody>
       </table>
     </div>`;
+}
+
+function renderCuentasPorCobrar(c) {
+  const reservas = DB.get('reservas', []);
+  const huespedes = DB.get('huespedes', []);
+  const pendientes = reservas.filter(r => {
+    const total = r.precio * nightsBetween(r.entrada, r.salida);
+    const pagado = Number(r.pagado || 0);
+    return pagado < total && r.estado !== 'cancelada';
+  }).map(r => {
+    const total = r.precio * nightsBetween(r.entrada, r.salida);
+    const pagado = Number(r.pagado || 0);
+    const h = huespedes.find(h => h.id === r.huespedId);
+    return { ...r, total, pagado, pendiente: total - pagado, hNombre: h ? h.nombre : '—' };
+  }).sort((a,b) => a.entrada > b.entrada ? 1 : -1);
+
+  const totalPendiente = pendientes.reduce((s,r) => s + r.pendiente, 0);
+  c.innerHTML = `
+    <div class="stat-card amber" style="margin-bottom:16px;display:inline-block;padding:14px 24px;">
+      <div class="label">Total pendiente de cobro</div>
+      <div class="value">${fmtMoney(totalPendiente)}</div>
+    </div>
+    <div class="card"><table>
+      <thead><tr><th>Huésped</th><th>Cabaña</th><th>Check-in</th><th>Check-out</th><th>Total</th><th>Pagado</th><th>Pendiente</th><th>Estado</th></tr></thead>
+      <tbody>${pendientes.length
+        ? pendientes.map(r => `<tr>
+            <td>${r.hNombre}</td>
+            <td>Cabaña ${r.hab}</td>
+            <td style="font-family:'DM Mono';font-size:12px">${fmtFecha(r.entrada)}</td>
+            <td style="font-family:'DM Mono';font-size:12px">${fmtFecha(r.salida)}</td>
+            <td>${fmtMoney(r.total, r.moneda)}</td>
+            <td style="color:#34d399">${fmtMoney(r.pagado, r.moneda)}</td>
+            <td style="font-weight:600;color:#f87171">${fmtMoney(r.pendiente, r.moneda)}</td>
+            <td><span class="badge ${r.estado==='activa'?'green':r.estado==='pendiente'?'amber':'blue'}">${r.estado||'—'}</span></td>
+          </tr>`).join('')
+        : '<tr><td colspan="8" style="text-align:center;color:var(--text3)">✅ Todo cobrado — sin saldos pendientes</td></tr>'
+      }</tbody>
+    </table></div>`;
+}
+
+function renderPresupuesto(c) {
+  const presupuestos = DB.get('presupuestos', []);
+  const movs = DB.get('movimientos', []);
+  const mes = new Date().getMonth();
+  const year = new Date().getFullYear();
+  const movsmes = movs.filter(m => { const d = new Date(m.fecha); return d.getMonth()===mes && d.getFullYear()===year && m.tipo==='egreso'; });
+  const cats = getCategorias().filter(c => c.tipo==='egreso' || c.tipo==='ambos');
+  const mesKey = `${year}-${String(mes+1).padStart(2,'0')}`;
+
+  const rows = cats.map(cat => {
+    const pres = presupuestos.find(p => p.cat===cat.nombre && p.mes===mesKey);
+    const budg = pres ? Number(pres.monto) : 0;
+    const real = movsmes.filter(m=>(m.cat||'').trim()===cat.nombre.trim()).reduce((s,m)=>s+Number(m.monto),0);
+    const pct = budg > 0 ? Math.min(Math.round(real/budg*100), 100) : 0;
+    const color = pct >= 100 ? '#f87171' : pct >= 80 ? '#fbbf24' : '#34d399';
+    return { cat, budg, real, pct, color, mesKey };
+  });
+
+  c.innerHTML = `
+    <div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;">
+      <h3 style="font-size:15px;font-weight:600;">Presupuesto vs Real — ${new Date().toLocaleDateString('es-AR',{month:'long',year:'numeric'})}</h3>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+    ${rows.map(r => `
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <span style="font-size:13px;font-weight:500;">${r.cat.nombre}</span>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:12px;color:var(--text3)">Real: <strong style="color:var(--text)">${fmtMoney(r.real)}</strong></span>
+            <span style="font-size:12px;color:var(--text3)">Presup:
+              <input type="number" value="${r.budg||''}" placeholder="0"
+                style="width:90px;padding:3px 6px;background:var(--surface3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;"
+                onchange="savePresupuesto('${r.cat.nombre}','${r.mesKey}',this.value)">
+            </span>
+          </div>
+        </div>
+        ${r.budg > 0 ? `
+        <div style="height:6px;background:var(--surface3);border-radius:3px;overflow:hidden;">
+          <div style="height:100%;width:${r.pct}%;background:${r.color};border-radius:3px;transition:width 0.4s;"></div>
+        </div>
+        <div style="font-size:11px;color:${r.color};margin-top:4px;text-align:right;">${r.pct}% utilizado${r.pct>=100?' — ⚠️ EXCEDIDO':''}</div>` : ''}
+      </div>`).join('')}
+    </div>`;
+}
+
+async function savePresupuesto(cat, mes, monto) {
+  const presupuestos = DB.get('presupuestos', []);
+  const idx = presupuestos.findIndex(p => p.cat===cat && p.mes===mes);
+  if (idx >= 0) presupuestos[idx].monto = Number(monto);
+  else presupuestos.push({ cat, mes, monto: Number(monto) });
+  await DB.set('presupuestos', presupuestos);
+  showNotif('✅ Presupuesto guardado');
+}
+
+function renderRecurrentes(c) {
+  const recs = DB.get('recurrentes', []);
+  c.innerHTML = `
+    <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
+      <button class="btn btn-blue btn-sm" onclick="openRecurrenteModal(null)">+ Nuevo recurrente</button>
+    </div>
+    ${recs.length ? `<div class="card"><table>
+      <thead><tr><th>Concepto</th><th>Categoría</th><th>Monto</th><th>Día</th><th>Método</th><th>Aplicado hoy</th><th></th></tr></thead>
+      <tbody>${recs.map((r,i)=>`<tr>
+        <td>${r.concepto}</td>
+        <td><span class="badge red">${r.cat||'—'}</span></td>
+        <td style="color:#f87171">${fmtMoney(r.monto, r.moneda)}</td>
+        <td>Día ${r.dia}</td>
+        <td>${r.metodo||'—'}</td>
+        <td style="text-align:center;">${r.ultimaAplicacion===today()?'✅':'—'}</td>
+        <td>
+          <button class="btn btn-ghost btn-sm" onclick="openRecurrenteModal(${i})">✏️</button>
+          <button class="btn btn-red btn-sm" onclick="deleteRecurrente(${i})">✕</button>
+        </td>
+      </tr>`).join('')}</tbody>
+    </table></div>` : `<p style="color:var(--text3);font-size:13px;">No hay gastos recurrentes configurados.</p>`}`;
+}
+
+function openRecurrenteModal(idx) {
+  const recs = DB.get('recurrentes', []);
+  const r = idx !== null ? recs[idx] : null;
+  populateRecCats();
+  populateProvSelect('rec-proveedor');
+  document.getElementById('rec-id').value = idx !== null ? idx : '';
+  document.getElementById('recModalTitle').textContent = r ? 'Editar recurrente' : 'Nuevo recurrente';
+  document.getElementById('rec-concepto').value = r?.concepto || '';
+  document.getElementById('rec-monto').value = r?.monto || '';
+  document.getElementById('rec-moneda').value = r?.moneda || 'ARS';
+  document.getElementById('rec-dia').value = r?.dia || '';
+  document.getElementById('rec-metodo').value = r?.metodo || 'transferencia';
+  document.getElementById('rec-proveedor').value = r?.proveedorId || '';
+  if (r?.cat) document.getElementById('rec-cat').value = r.cat;
+  openModal('modalRecurrente');
+}
+
+async function saveRecurrente() {
+  const concepto = document.getElementById('rec-concepto').value.trim();
+  if (!concepto) { showNotif('El concepto es obligatorio', 'error'); return; }
+  const idx = document.getElementById('rec-id').value;
+  const recs = DB.get('recurrentes', []);
+  const data = {
+    concepto,
+    cat: document.getElementById('rec-cat').value,
+    monto: Number(document.getElementById('rec-monto').value),
+    moneda: document.getElementById('rec-moneda').value,
+    dia: Number(document.getElementById('rec-dia').value),
+    metodo: document.getElementById('rec-metodo').value,
+    proveedorId: document.getElementById('rec-proveedor').value,
+  };
+  if (idx !== '') recs[Number(idx)] = { ...recs[Number(idx)], ...data };
+  else recs.push(data);
+  await DB.set('recurrentes', recs);
+  closeModal('modalRecurrente');
+  renderAcct('recurrentes');
+  auditLog('crear/editar', 'Recurrente', concepto);
+  showNotif('✅ Gasto recurrente guardado');
+}
+
+async function deleteRecurrente(idx) {
+  if (!confirm('¿Eliminar este gasto recurrente?')) return;
+  const recs = DB.get('recurrentes', []);
+  recs.splice(idx, 1);
+  await DB.set('recurrentes', recs);
+  renderAcct('recurrentes');
+}
+
+async function aplicarRecurrentes() {
+  // Se llama al iniciar sesión — aplica recurrentes del día si aún no fueron aplicados
+  const recs = DB.get('recurrentes', []);
+  const hoy = today();
+  const diaHoy = new Date().getDate();
+  let aplicados = 0;
+  for (const r of recs) {
+    if (Number(r.dia) === diaHoy && r.ultimaAplicacion !== hoy) {
+      const movs = DB.get('movimientos', []);
+      movs.push({
+        id: 'm' + Date.now() + Math.random(),
+        tipo: 'egreso',
+        cat: r.cat || 'Recurrente',
+        moneda: r.moneda || 'ARS',
+        monto: Number(r.monto),
+        metodo: r.metodo || 'transferencia',
+        fecha: hoy,
+        concepto: r.concepto + ' (recurrente automático)',
+        proveedorId: r.proveedorId || '',
+        esRecurrente: true,
+      });
+      await DB.set('movimientos', movs);
+      r.ultimaAplicacion = hoy;
+      aplicados++;
+    }
+  }
+  if (aplicados > 0) {
+    await DB.set('recurrentes', recs);
+    showNotif(`🔄 ${aplicados} gasto(s) recurrente(s) aplicados automáticamente`);
+  }
+}
+
+function renderAuditoria(c) {
+  const log = DB.get('auditoria', []);
+  const ultimos = [...log].reverse().slice(0, 100);
+  c.innerHTML = `
+    <div class="card"><table>
+      <thead><tr><th>Fecha</th><th>Hora</th><th>Usuario</th><th>Acción</th><th>Entidad</th><th>Detalle</th></tr></thead>
+      <tbody>${ultimos.length
+        ? ultimos.map(e=>`<tr>
+            <td style="font-family:'DM Mono';font-size:12px">${fmtFecha(e.fecha)}</td>
+            <td style="font-size:12px;color:var(--text3)">${e.hora||''}</td>
+            <td style="font-size:12px">${e.usuario||'—'}</td>
+            <td><span class="badge blue" style="font-size:10px">${e.accion||'—'}</span></td>
+            <td style="font-size:12px">${e.entidad||'—'}</td>
+            <td style="font-size:12px;color:var(--text2)">${e.detalle||''}</td>
+          </tr>`).join('')
+        : '<tr><td colspan="6" style="text-align:center;color:var(--text3)">Sin registros de auditoría</td></tr>'
+      }</tbody>
+    </table></div>`;
+}
+
+function openCategoriasModal() {
+  renderListaCategorias();
+  openModal('modalCategoria');
+}
+
+function renderListaCategorias() {
+  const cats = getCategorias();
+  const lista = document.getElementById('listaCategorias');
+  if (!lista) return;
+  lista.innerHTML = cats.map((c,i) => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:var(--surface3);border-radius:var(--radius);">
+      <span style="font-size:13px;">${c.nombre}</span>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <span style="font-size:10px;color:var(--text3);">${c.tipo}</span>
+        ${c.id?.startsWith('c') && Number(c.id.slice(1)) <= 10 ? '' :
+          `<button class="btn btn-red btn-sm" style="padding:2px 6px;" onclick="deleteCategoria(${i})">✕</button>`}
+      </div>
+    </div>`).join('');
+}
+
+async function saveCategoria() {
+  const nombre = document.getElementById('nueva-cat-nombre').value.trim();
+  const tipo = document.getElementById('nueva-cat-tipo').value;
+  if (!nombre) { showNotif('Escribí el nombre de la categoría', 'error'); return; }
+  const cats = getCategorias();
+  cats.push({ id: 'cu' + Date.now(), nombre, tipo });
+  await DB.set('categorias', cats);
+  document.getElementById('nueva-cat-nombre').value = '';
+  renderListaCategorias();
+  showNotif('✅ Categoría agregada');
+}
+
+async function deleteCategoria(idx) {
+  const cats = getCategorias();
+  cats.splice(idx, 1);
+  await DB.set('categorias', cats);
+  renderListaCategorias();
+}
+
+function openProveedorModal(idx) {
+  const provs = DB.get('proveedores', []);
+  const p = idx !== null && idx !== undefined && idx >= 0 ? provs[idx] : null;
+  // Si no hay proveedor específico, mostrar lista
+  if (idx === null) {
+    renderProveedores();
+    return;
+  }
+  document.getElementById('prov-id').value = idx >= 0 ? idx : '';
+  document.getElementById('provModalTitle').textContent = p ? 'Editar Proveedor' : 'Nuevo Proveedor';
+  document.getElementById('prov-nombre').value = p?.nombre || '';
+  document.getElementById('prov-cuit').value = p?.cuit || '';
+  document.getElementById('prov-contacto').value = p?.contacto || '';
+  document.getElementById('prov-rubro').value = p?.rubro || 'limpieza';
+  document.getElementById('prov-notas').value = p?.notas || '';
+  openModal('modalProveedor');
+}
+
+function renderProveedores() {
+  const provs = DB.get('proveedores', []);
+  const c = document.getElementById('acctContent');
+  if (!c) return;
+  // Cambiar la vista activa a proveedores
+  c.innerHTML = `
+    <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
+      <button class="btn btn-blue btn-sm" onclick="openProveedorModal(-1)">+ Nuevo proveedor</button>
+    </div>
+    ${provs.length ? `<div class="card"><table>
+      <thead><tr><th>Nombre</th><th>CUIT</th><th>Rubro</th><th>Contacto</th><th>Notas</th><th></th></tr></thead>
+      <tbody>${provs.map((p,i)=>`<tr>
+        <td style="font-weight:500">${p.nombre}</td>
+        <td style="font-family:'DM Mono';font-size:12px">${p.cuit||'—'}</td>
+        <td><span class="badge blue">${p.rubro||'—'}</span></td>
+        <td style="font-size:12px">${p.contacto||'—'}</td>
+        <td style="font-size:12px;color:var(--text3)">${(p.notas||'').slice(0,40)}${(p.notas||'').length>40?'…':''}</td>
+        <td>
+          <button class="btn btn-ghost btn-sm" onclick="openProveedorModal(${i})">✏️</button>
+          <button class="btn btn-red btn-sm" onclick="deleteProveedor(${i})">✕</button>
+        </td>
+      </tr>`).join('')}</tbody>
+    </table></div>` : `<p style="color:var(--text3);font-size:13px;">No hay proveedores cargados.</p>`}`;
+}
+
+async function saveProveedor() {
+  const nombre = document.getElementById('prov-nombre').value.trim();
+  if (!nombre) { showNotif('El nombre es obligatorio', 'error'); return; }
+  const idx = document.getElementById('prov-id').value;
+  const provs = DB.get('proveedores', []);
+  const data = {
+    id: 'prov' + Date.now(),
+    nombre,
+    cuit: document.getElementById('prov-cuit').value.trim(),
+    contacto: document.getElementById('prov-contacto').value.trim(),
+    rubro: document.getElementById('prov-rubro').value,
+    notas: document.getElementById('prov-notas').value.trim(),
+  };
+  if (idx !== '' && idx >= 0) { data.id = provs[Number(idx)].id; provs[Number(idx)] = data; }
+  else provs.push(data);
+  await DB.set('proveedores', provs);
+  closeModal('modalProveedor');
+  auditLog('crear/editar', 'Proveedor', nombre);
+  renderProveedores();
+  showNotif('✅ Proveedor guardado');
+}
+
+async function deleteProveedor(idx) {
+  if (!confirm('¿Eliminar este proveedor?')) return;
+  const provs = DB.get('proveedores', []);
+  provs.splice(idx, 1);
+  await DB.set('proveedores', provs);
+  renderProveedores();
+}
+
+function exportarCSV() {
+  const movs = DB.get('movimientos', []);
+  if (!movs.length) { showNotif('No hay movimientos para exportar', 'error'); return; }
+  const provs = DB.get('proveedores', []);
+  const headers = ['Fecha','Tipo','Categoría','Concepto','Moneda','Monto','TC','Monto ARS equiv.','Método','Proveedor','Impuesto','% Impuesto','Referencia'];
+  const rows = movs.sort((a,b)=>a.fecha>b.fecha?1:-1).map(m => {
+    const prov = m.proveedorId ? (provs.find(p=>p.id===m.proveedorId)?.nombre||'') : '';
+    const montoARS = m.moneda==='USD' && m.tc ? (Number(m.monto)*Number(m.tc)).toFixed(2) : m.monto;
+    return [
+      m.fecha, m.tipo, m.cat||'', m.concepto, m.moneda, m.monto,
+      m.tc||'', montoARS, m.metodo||'', prov,
+      m.impuesto?'Sí':'No', m.impuestoPct||'', m.ref||''
+    ].map(v => `"${String(v).replace(/"/g,'""')}"`).join(',');
+  });
+  const csv = '\uFEFF' + [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `contabilidad-puerto-delfin-${today()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showNotif('✅ CSV descargado');
 }
 
 function switchAcctTab(tab, el) {
@@ -3134,39 +3791,81 @@ function renderCaja() {
 function saveMovimiento() {
   const monto = document.getElementById('mov-monto').value;
   const concepto = document.getElementById('mov-concepto').value;
-  if(!monto||!concepto) { showNotif('Monto y concepto son obligatorios','error'); return; }
-  const movs = DB.get('movimientos',[]);
-  movs.push({
-    id:'m'+Date.now(),
-    tipo: document.getElementById('mov-tipo').value,
+  if (!monto || !concepto) { showNotif('Monto y concepto son obligatorios', 'error'); return; }
+  const moneda = document.getElementById('mov-moneda').value;
+  const tc = moneda === 'USD' ? Number(document.getElementById('mov-tc')?.value || 0) : null;
+  const tieneImpuesto = document.getElementById('mov-impuesto')?.checked;
+  const impuestoPct = tieneImpuesto ? Number(document.getElementById('mov-impuesto-pct')?.value || 0) : null;
+  const tipo = document.getElementById('mov-tipo').value;
+  const movs = DB.get('movimientos', []);
+  const mov = {
+    id: 'm' + Date.now(),
+    tipo,
     cat: document.getElementById('mov-cat').value,
-    moneda: document.getElementById('mov-moneda').value,
+    moneda,
     monto: Number(monto),
     metodo: document.getElementById('mov-metodo').value,
     fecha: document.getElementById('mov-fecha').value,
-    concepto
-  });
+    concepto,
+    proveedorId: document.getElementById('mov-proveedor')?.value || '',
+    impuesto: tieneImpuesto || false,
+    impuestoPct: impuestoPct || null,
+    ref: document.getElementById('mov-ref')?.value?.trim() || '',
+  };
+  if (tc) mov.tc = tc;
+  movs.push(mov);
   DB.set('movimientos', movs);
+  auditLog('registrar', 'Movimiento', `${tipo} ${fmtMoney(Number(monto), moneda)} — ${concepto}`);
   closeModal('modalMovimiento');
   renderCaja();
   showNotif('Movimiento registrado');
 }
 
+function calcArqueo() {
+  const contado = Number(document.getElementById('cajaArqueo')?.value || 0);
+  if (!contado) { showNotif('Ingresá el efectivo contado', 'error'); return; }
+  const tod = today();
+  const movs = DB.get('movimientos', []).filter(m => m.fecha === tod);
+  const efectivoEsperado = movs.filter(m => m.metodo === 'efectivo').reduce((s,m) => {
+    return s + (m.tipo === 'ingreso' ? Number(m.monto) : -Number(m.monto));
+  }, 0);
+  const dif = contado - efectivoEsperado;
+  const div = document.getElementById('cajaArqueoDif');
+  if (div) {
+    div.style.display = '';
+    div.style.background = dif === 0 ? 'rgba(5,150,105,0.1)' : 'rgba(220,38,38,0.1)';
+    div.style.border = `1px solid ${dif === 0 ? 'rgba(5,150,105,0.3)' : 'rgba(220,38,38,0.3)'}`;
+    div.style.color = dif === 0 ? '#34d399' : '#f87171';
+    div.innerHTML = dif === 0
+      ? '✅ Arqueo perfecto — no hay diferencia'
+      : `⚠️ Diferencia: ${dif > 0 ? '+' : ''}${fmtMoney(dif)} (esperado ${fmtMoney(efectivoEsperado)}, contado ${fmtMoney(contado)})`;
+  }
+}
+
 function cerrarCaja() {
   const tod = today();
-  const movs = DB.get('movimientos',[]).filter(m=>m.fecha===tod);
+  const movs = DB.get('movimientos', []).filter(m => m.fecha === tod);
   const ingARS = movs.filter(m=>m.tipo==='ingreso'&&m.moneda==='ARS').reduce((a,b)=>a+Number(b.monto),0);
-  const egARS = movs.filter(m=>m.tipo==='egreso'&&m.moneda==='ARS').reduce((a,b)=>a+Number(b.monto),0);
+  const egARS = movs.filter(m=>(m.tipo==='egreso'||m.tipo==='devolucion')&&m.moneda==='ARS').reduce((a,b)=>a+Number(b.monto),0);
   const ingUSD = movs.filter(m=>m.tipo==='ingreso'&&m.moneda==='USD').reduce((a,b)=>a+Number(b.monto),0);
-  const cierres = DB.get('cierres',[]);
+  const tc = document.getElementById('cajaTipoCambio').value;
+  const arqueo = document.getElementById('cajaArqueo')?.value || null;
+  const efectivoEsperado = movs.filter(m=>m.metodo==='efectivo').reduce((s,m)=>s+(m.tipo==='ingreso'?Number(m.monto):-Number(m.monto)),0);
+  const cierres = DB.get('cierres', []);
   cierres.push({
     fecha: tod,
-    balanceARS: ingARS-egARS,
+    balanceARS: ingARS - egARS,
     balanceUSD: ingUSD,
-    tc: document.getElementById('cajaTipoCambio').value,
-    obs: document.getElementById('cajaObs').value
+    tc,
+    obs: document.getElementById('cajaObs').value,
+    arqueo: arqueo ? Number(arqueo) : null,
+    efectivoEsperado,
+    diferencia: arqueo ? Number(arqueo) - efectivoEsperado : null,
+    cierreHora: new Date().toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit'}),
+    cerradoPor: currentUser?.name || 'Sistema',
   });
   DB.set('cierres', cierres);
+  auditLog('cierre', 'Caja', `Balance ARS: ${fmtMoney(ingARS-egARS)} | USD: ${ingUSD}`);
   renderCaja();
   showNotif('✅ Caja cerrada correctamente');
 }
@@ -4687,6 +5386,80 @@ async function saveQuickReplies() {
   showNotif('✅ Respuestas rápidas guardadas');
 }
 
+// ===================== COTIZACIÓN DÓLAR =====================
+async function fetchCotizacionDolar(targetInputId) {
+  const btn = event?.target;
+  if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+  try {
+    const res = await fetch('https://dolarapi.com/v1/dolares');
+    if (!res.ok) throw new Error('Error al consultar la API');
+    const data = await res.json();
+
+    const tipos = ['oficial', 'blue', 'bolsa', 'contadoconliqui', 'tarjeta'];
+    const encontrados = data.filter(d => tipos.includes(d.casa));
+    if (!encontrados.length) throw new Error('Sin datos');
+
+    const oficial = encontrados.find(d => d.casa === 'oficial');
+    const blue    = encontrados.find(d => d.casa === 'blue');
+    const valores = [oficial, blue].filter(Boolean).map(d => (d.compra + d.venta) / 2);
+    const promedio = valores.length ? Math.round(valores.reduce((a,b)=>a+b,0) / valores.length) : null;
+
+    // Guardar en Firebase con fecha
+    const historial = DB.get('tipo_cambio_historial', []);
+    const hoy = today();
+    const yaGuardadoHoy = historial.find(h => h.fecha === hoy);
+    if (!yaGuardadoHoy && promedio) {
+      historial.push({
+        fecha: hoy,
+        hora: new Date().toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit'}),
+        promedio,
+        oficial: oficial ? Math.round((oficial.compra + oficial.venta) / 2) : null,
+        blue:    blue    ? Math.round((blue.compra    + blue.venta)    / 2) : null,
+        detalle: encontrados.map(d => ({ casa: d.casa, nombre: d.nombre, compra: d.compra, venta: d.venta })),
+      });
+      // Guardar solo los últimos 365 días
+      if (historial.length > 365) historial.splice(0, historial.length - 365);
+      await DB.set('tipo_cambio_historial', historial);
+    }
+
+    // Rellenar el input con el promedio
+    const input = document.getElementById(targetInputId);
+    if (input && promedio) {
+      input.value = promedio;
+      input.dispatchEvent(new Event('input'));
+    }
+
+    // Mostrar detalle
+    const infoId = targetInputId === 'cajaTipoCambio' ? 'cotizacionInfo' : 'movCotizacionInfo';
+    const infoDiv = document.getElementById(infoId);
+    if (infoDiv) {
+      infoDiv.style.display = '';
+      infoDiv.innerHTML = encontrados.map(d =>
+        `<span style="margin-right:10px;">
+          <strong style="color:var(--text2);text-transform:capitalize;">${d.nombre}:</strong>
+          $${d.compra?.toLocaleString('es-AR')} / $${d.venta?.toLocaleString('es-AR')}
+        </span>`
+      ).join('') +
+      (promedio ? `<br><strong style="color:var(--accent)">Promedio oficial+blue: $${promedio.toLocaleString('es-AR')}</strong>` : '');
+    }
+
+    showNotif('✅ Cotización actualizada y guardada');
+  } catch(e) {
+    // Si falla la API, intentar usar el último valor guardado
+    const historial = DB.get('tipo_cambio_historial', []);
+    const ultimo = historial.length ? historial[historial.length - 1] : null;
+    if (ultimo) {
+      const input = document.getElementById(targetInputId);
+      if (input) input.value = ultimo.promedio;
+      showNotif(`Sin conexión — usando último TC guardado (${fmtFecha(ultimo.fecha)}: $${ultimo.promedio.toLocaleString('es-AR')})`, 'error');
+    } else {
+      showNotif('No se pudo obtener la cotización. Verificá tu conexión.', 'error');
+    }
+  } finally {
+    if (btn) { btn.textContent = '🌐 Buscar'; btn.disabled = false; }
+  }
+}
+
 Object.assign(window, {
   doLogin, doLogout, renderKnowledge, saveKnowledgeEntry, deleteKnowledgeEntry, editKnowledgeEntry, cancelEditKnowledge, saveEditKnowledge, showSection, closeSidebar, toggleSidebar, openNuevaReserva, onHabChange,
   toggleChatFloat, initChatbot, clearChat, sendChat, sendQuickReply, saveApiKey, copyMsg, editBotMsg, saveEditedBotMsg,
@@ -4702,6 +5475,13 @@ Object.assign(window, {
   renderReservas, renderDashboard, renderMapa, renderMapaFecha, renderCheckin,
   renderHuespedes, renderPrecios, renderAcct, renderCaja, renderRoles, renderUsuarios,
   saveReserva, saveHuesped, saveMovimiento, saveRol, saveUsuario, savePago, saveExtension, saveHorario,
+  fetchCotizacionDolar,
+  saveCategoria, deleteCategoria, openCategoriasModal, renderListaCategorias,
+  saveProveedor, deleteProveedor, openProveedorModal, renderProveedores,
+  saveRecurrente, deleteRecurrente, openRecurrenteModal, aplicarRecurrentes,
+  savePresupuesto, exportarCSV, calcArqueo,
+  openMovimientoModal, onMovTipoChange, onMovMonedaChange, onMovImpuestoChange,
+  renderCuentasPorCobrar, renderPresupuesto, renderRecurrentes, renderAuditoria, renderProveedores,
   editReserva,
   openEditHuesped, saveEditHuesped, confirmDelete, deleteHuesped, deleteReserva,
   openCambioCama, updateCambioCamaSelect, saveCambioCama,
