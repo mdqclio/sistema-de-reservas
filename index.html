@@ -4161,6 +4161,7 @@ function editBotMsg(btn) {
 
   const modal = document.createElement('div');
   modal.className = 'modal-overlay';
+  modal.id = 'modalEditBot';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:1000;';
   const textoSugerido = lastQ ? `Pregunta: ${lastQ} — Respuesta: ${originalText}` : originalText;
   modal.innerHTML = `
@@ -4188,7 +4189,7 @@ async function saveEditedBotMsg() {
   const kb = Array.isArray(raw) ? raw : (raw && typeof raw === 'object' ? Object.values(raw) : []);
   kb.push({ texto, fecha: today(), origen: 'corrección' });
   await DB.set('knowledge_base', kb);
-  document.querySelector('.modal-overlay')?.remove();
+  document.getElementById('modalEditBot')?.remove();
   showNotif('✅ Corrección guardada en la base de conocimiento');
 }
 
