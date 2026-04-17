@@ -1667,7 +1667,7 @@ function showSection(s) {
   if (s === 'caja') renderCaja();
   if (s === 'usuarios') renderUsuarios();
   if (s === 'roles') renderRoles();
-  if (s === 'knowledge') loadKnowledgeBase().then(() => setTimeout(() => renderKnowledge(), 50));
+  if (s === 'knowledge') renderKnowledge();
   if (s === 'botconfig') renderBotConfig();
 }
 
@@ -3720,7 +3720,7 @@ function buildSystemPrompt() {
       r.estado !== 'checkout' &&
       r.entrada <= todayStr && r.salida > todayStr
     );
-    if (res) return `  Cabaña ${num}: OCUPADA (${getHuespedNombre(res.huespedId, res)}, hasta ${res.salida})`;
+    if (res) return `  Cabaña ${num}: OCUPADA hasta ${res.salida} (dato interno, no revelar al cliente)`;
     const estado = bedStates[num+'-1'];
     if (estado === 'maintenance') return `  Cabaña ${num}: EN MANTENIMIENTO`;
     if (estado === 'dirty') return `  Cabaña ${num}: SUCIA (libre pero pendiente limpieza)`;
@@ -3773,7 +3773,8 @@ INSTRUCCIONES:
 - Podés responder preguntas sobre precios, disponibilidad, servicios y políticas directamente
 - Si necesitan confirmar una reserva, pediles que se comuniquen por WhatsApp
 - Si pregunta por una fecha específica, usá los datos de disponibilidad de arriba
-- Usá emojis con moderación`;
+- Usá emojis con moderación
+- PRIVACIDAD: Nunca menciones nombres, apellidos ni datos personales de huéspedes alojados. Si pregunta quién está en una cabaña, decí solamente que está ocupada hasta cierta fecha. Los datos de huéspedes son confidenciales.`;
 }
 
 const QUICK_REPLIES_DEFAULT = [
@@ -4101,17 +4102,22 @@ async function loadKnowledgeBase() {
   }
 }
 
-function renderKnowledge() {
-  const raw = DB.get('knowledge_base', []);
-  let items = Array.isArray(raw) ? raw : (raw && typeof raw === 'object' ? Object.values(raw) : []);
-  items = items.filter(x => x !== null && x !== undefined);
+async function renderKnowledge() {
   const lista = document.getElementById('kb-lista');
-  if (!lista) { console.warn('kb-lista no encontrado'); return; }
-  if (!items.length) {
-    lista.innerHTML = '<p style="color:var(--text3);font-size:13px;">No hay entradas todavía. Usá el campo de arriba para agregar info que el asistente usará en sus respuestas.</p>';
-    return;
-  }
-  lista.innerHTML = items.map((item, idx) => {
+  if (!lista) return;
+  lista.innerHTML = '<p style="color:var(--text3);font-size:13px;">Cargando...</p>';
+  // Siempre lee directo de Firebase para evitar problemas de caché
+  try {
+    const snap = await get(ref(db, 'cabanas/knowledge_base'));
+    let raw = snap.exists() ? snap.val() : null;
+    let items = Array.isArray(raw) ? raw : (raw && typeof raw === 'object' ? Object.values(raw) : []);
+    items = items.filter(x => x !== null && x !== undefined);
+    cache['knowledge_base'] = items;
+    if (!items.length) {
+      lista.innerHTML = '<p style="color:var(--text3);font-size:13px;">No hay entradas todavía. Usá el campo de arriba para agregar info que el asistente usará en sus respuestas.</p>';
+      return;
+    }
+    lista.innerHTML = items.map((item, idx) => {
     const texto = item.texto || (item.question ? `[${item.category||'Info'}] ${item.question}: ${item.answer}` : '');
     const fecha = item.fecha || (item.creadoEn ? item.creadoEn.slice(0,10) : '');
     const origen = item.origen || '';
@@ -4135,7 +4141,11 @@ function renderKnowledge() {
         </div>
       </div>
     </div>`;
-  }).join('');
+    }).join('');
+  } catch(e) {
+    lista.innerHTML = '<p style="color:var(--text3);font-size:13px;">Error cargando la base de conocimiento.</p>';
+    console.error('[KB] Error en renderKnowledge:', e);
+  }
 }
 
 function editKnowledgeEntry(idx) {
