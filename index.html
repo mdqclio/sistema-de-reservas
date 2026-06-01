@@ -1788,6 +1788,114 @@ async function initReservasLive() {
   reservasLiveReady = true;
 }
 
+// ============================================================================
+// HUÉSPEDES: mismo patrón que reservas (escritura por hijo + sync en vivo).
+// El nodo cabanas/huespedes pasa de array a objeto indexado por id:
+//   cabanas/huespedes/{id} = {...}
+// ============================================================================
+const pendingHuespedes = new Set();    // ids con escritura local en vuelo
+const pendingHuespedesDel = new Set(); // ids con borrado local en vuelo
+let huespedesLiveReady = false;
+
+// Lectura: siempre como array para que .find/.filter/.sort sigan funcionando.
+function getHuespedes() {
+  return Object.values(cache.huespedes || {});
+}
+
+// Asegura que el cache de huespedes sea un objeto indexado (normalización defensiva)
+function ensureHuespedesObj() {
+  if (!cache.huespedes || Array.isArray(cache.huespedes)) {
+    const arr = Object.values(cache.huespedes || {});
+    cache.huespedes = Object.fromEntries(arr.filter(h => h && h.id).map(h => [h.id, h]));
+  }
+  return cache.huespedes;
+}
+
+// Genera un id con push key de Firebase (en vez de 'h'+Date.now())
+function nuevoHuespedId() {
+  return push(ref(db, 'cabanas/huespedes')).key;
+}
+
+// Escritura por hijo: NO pisa el resto del nodo
+async function writeHuesped(reg) {
+  if (!reg || !reg.id) return;
+  const id = reg.id;
+  ensureHuespedesObj();
+  cache.huespedes[id] = reg;        // update optimista del cache
+  pendingHuespedes.add(id);
+  try {
+    await set(ref(db, 'cabanas/huespedes/' + id), reg);
+  } catch(e) { console.error('Firebase write error (huesped):', e); }
+  pendingHuespedes.delete(id);
+}
+
+// Borrado por hijo
+async function removeHuesped(id) {
+  if (!id) return;
+  ensureHuespedesObj();
+  delete cache.huespedes[id];       // update optimista del cache
+  pendingHuespedesDel.add(id);
+  try {
+    await remove(ref(db, 'cabanas/huespedes/' + id));
+  } catch(e) { console.error('Firebase remove error (huesped):', e); }
+  pendingHuespedesDel.delete(id);
+}
+
+// Sync en vivo: escucha cambios remotos y actualiza cache + vistas.
+function attachHuespedesLive() {
+  onValue(ref(db, 'cabanas/huespedes'), snap => {
+    const remote = snap.exists() ? snap.val() : {};
+    const next = Array.isArray(remote)
+      ? Object.fromEntries(remote.filter(h => h && h.id).map(h => [h.id, h]))
+      : { ...remote };
+    // No pisar escrituras locales a medio guardar.
+    pendingHuespedes.forEach(id => {
+      if (cache.huespedes && cache.huespedes[id]) next[id] = cache.huespedes[id];
+    });
+    pendingHuespedesDel.forEach(id => { delete next[id]; });
+    cache.huespedes = next;
+    rerenderHuespedesViews();
+  });
+}
+
+// Re-render de las vistas que dependen de huéspedes, sin tocar un modal abierto.
+function rerenderHuespedesViews() {
+  const isActive = s => document.getElementById('section-' + s)?.classList.contains('active');
+  // No re-renderizar la lista de huéspedes mientras se crea/edita uno en el modal.
+  const huespedModalOpen = document.getElementById('modalHuesped')?.classList.contains('open')
+    || document.getElementById('modalEditHuesped')?.classList.contains('open');
+  if (isActive('huespedes') && !huespedModalOpen) renderHuespedes();
+  if (isActive('listanegra')) renderListaNegra();
+  if (isActive('reservas')) renderReservas();
+  if (isActive('grilla')) renderGrilla();
+  if (isActive('dashboard')) renderDashboard();
+  if (isActive('checkin')) renderCheckin();
+  if (isActive('mapa')) renderMapa(document.getElementById('mapaFecha')?.value);
+}
+
+// Migración única: re-indexa el nodo por id (array o claves numéricas -> {id:reg}).
+async function migrateHuespedesToIndexed() {
+  const snap = await get(ref(db, 'cabanas/huespedes'));
+  if (!snap.exists()) return;
+  const val = snap.val();
+  if (!Array.isArray(val)) {
+    const ok = Object.entries(val).every(([k, h]) => h && h.id === k);
+    if (ok) return;
+  }
+  const arr = Array.isArray(val) ? val.filter(Boolean) : Object.values(val);
+  const indexed = {};
+  arr.forEach(h => { if (h && h.id) indexed[h.id] = h; });
+  await set(ref(db, 'cabanas/huespedes'), indexed);
+}
+
+// Init una sola vez: migra el formato y engancha el listener en vivo.
+async function initHuespedesLive() {
+  if (huespedesLiveReady) return;
+  await migrateHuespedesToIndexed();
+  attachHuespedesLive();
+  huespedesLiveReady = true;
+}
+
 async function loadAllData() {
   showLoader(true);
   try {
@@ -1796,8 +1904,8 @@ async function loadAllData() {
       const data = snapshot.val();
       // No pisar claves con escrituras locales pendientes (evita race condition)
       Object.keys(data).forEach(k => {
-        // 'reservas' lo gobierna el listener en vivo (onValue); no lo pisamos acá.
-        if (k === 'reservas') return;
+        // Estos nodos los gobierna su listener en vivo (onValue); no los pisamos acá.
+        if (k === 'reservas' || k === 'huespedes') return;
         if (!pendingWrites.has(k)) cache[k] = data[k];
       });
       // Sembrar reservas en cache la primera vez (hasta que onValue dispare).
@@ -1807,11 +1915,19 @@ async function loadAllData() {
           ? Object.fromEntries(r.filter(x => x && x.id).map(x => [x.id, x]))
           : (r || {});
       }
+      // Sembrar huespedes en cache la primera vez (hasta que onValue dispare).
+      if (cache.huespedes === undefined) {
+        const hh = data.huespedes;
+        cache.huespedes = Array.isArray(hh)
+          ? Object.fromEntries(hh.filter(x => x && x.id).map(x => [x.id, x]))
+          : (hh || {});
+      }
     }
     await initData();
     // Migración + sync en vivo de reservas (una sola vez). Aislado para que un
     // fallo de permisos no rompa el resto de la carga.
     try { await initReservasLive(); } catch(e) { console.error('reservas live init error:', e); }
+    try { await initHuespedesLive(); } catch(e) { console.error('huespedes live init error:', e); }
     // await loadApiKeyFromDB(); // CHAT DESACTIVADO TEMPORALMENTE
   } catch(e) {
     console.error('Firebase read error:', e);
@@ -1838,7 +1954,8 @@ function showLoader(show) {
 // INITIAL SEED DATA
 async function initData() {
   if (cache['init_cabanas']) return; // ya inicializado en Firebase
-  await DB.set('huespedes', []);
+  // huespedes arranca vacío como objeto indexado por id (cabanas/huespedes/{id}).
+  // No sembramos un array: el nodo se crea con la primera escritura por hijo.
   // reservas arranca vacío como objeto indexado por id (cabanas/reservas/{id}).
   // No sembramos un array: el nodo se crea con la primera escritura por hijo.
   await DB.set('beds', {});
@@ -2054,7 +2171,7 @@ function allBeds() {
 }
 function getHuespedNombre(id, reserva) {
   if (!id) return reserva?.guestName || '—';
-  const h = DB.get('huespedes',[]).find(x=>x.id===id);
+  const h = getHuespedes().find(x=>x.id===id);
   if (h) return ((h.nombre||'') + ' ' + (h.apellido||'')).trim();
   return reserva?.guestName || id;
 }
@@ -2151,7 +2268,7 @@ function renderDashboard() {
 
 // ===== FECHAS IMPORTANTES (cumpleaños y fechas especiales) =====
 function renderFechasImportantes() {
-  const huespedes = DB.get('huespedes', []);
+  const huespedes = getHuespedes();
   const hoy = new Date();
   const DIAS_AVISO = 7;
   const eventos = [];
@@ -2433,7 +2550,7 @@ function cycleBed(bedId) {
   );
   if(resOcupada) {
     // Mostrar info del huésped en lugar de ciclar estado
-    const h = DB.get('huespedes',[]).find(x=>x.id===resOcupada.huespedId);
+    const h = getHuespedes().find(x=>x.id===resOcupada.huespedId);
     const saldo = Number(resOcupada.saldo||0);
     const nights = nightsBetween(resOcupada.entrada, resOcupada.salida);
     document.getElementById('guestDetailContent').innerHTML = `
@@ -2627,7 +2744,7 @@ function openNuevaReserva() {
   document.getElementById('modalReservaTitle').textContent = 'Nueva Reserva';
   document.getElementById('res-edit-id').value = '';
   document.getElementById('btnGuardarReserva').textContent = 'Guardar Reserva';
-  const huespedes = DB.get('huespedes', []);
+  const huespedes = getHuespedes();
   const sel = document.getElementById('res-huesped');
   sel.innerHTML = '<option value="">Seleccionar...</option>' +
     huespedes.map(h => `<option value="${h.id}">${h.nombre} ${h.apellido}</option>`).join('');
@@ -2651,7 +2768,7 @@ function editReserva(rid) {
   document.getElementById('modalReservaTitle').textContent = 'Editar Reserva';
   document.getElementById('res-edit-id').value = rid;
   document.getElementById('btnGuardarReserva').textContent = 'Guardar cambios';
-  const huespedes = DB.get('huespedes', []);
+  const huespedes = getHuespedes();
   const sel = document.getElementById('res-huesped');
   sel.innerHTML = '<option value="">Seleccionar...</option>' +
     huespedes.map(h => `<option value="${h.id}">${h.nombre} ${h.apellido}</option>`).join('');
@@ -2713,7 +2830,7 @@ async function saveReserva() {
   const saldo = Math.max(totalEstadia - pagado, 0);
   const estadoPago = document.getElementById('res-estado-pago').value;
   const reservas = getReservas();
-  const huespedData = DB.get('huespedes',[]).find(x=>x.id===h);
+  const huespedData = getHuespedes().find(x=>x.id===h);
   const desayunoVal = document.getElementById('res-desayuno').value;
   const newData = {
     huespedId: h,
@@ -2963,7 +3080,7 @@ function renderCheckin() {
 
   document.getElementById('tablaEnHostel').innerHTML = enHostel.length
     ? enHostel.map(r=>{
-        const h = DB.get('huespedes',[]).find(x=>x.id===r.huespedId);
+        const h = getHuespedes().find(x=>x.id===r.huespedId);
         const saldo = Number(r.saldo||0);
         return `<tr>
           <td>${getHuespedNombre(r.huespedId, r)}</td>
@@ -2986,7 +3103,7 @@ function renderCheckin() {
 
 // ===================== HUÉSPEDES =====================
 function renderHuespedes() {
-  const huespedes = DB.get('huespedes',[]);
+  const huespedes = getHuespedes();
   const q = document.getElementById('filterHuesped')?.value.toLowerCase()||'';
   const filtered = q ? huespedes.filter(h=>(h.nombre+' '+h.apellido+h.dni).toLowerCase().includes(q)) : huespedes;
 
@@ -3011,7 +3128,7 @@ function renderHuespedes() {
 }
 
 function showGuestDetail(id) {
-  const h = DB.get('huespedes',[]).find(x=>x.id===id);
+  const h = getHuespedes().find(x=>x.id===id);
   if(!h) return;
   const reservas = getReservas().filter(r=>r.huespedId===id);
   const completadas = reservas.filter(r=>r.estado==='checkout'||r.estado==='checkin');
@@ -3061,11 +3178,10 @@ function showGuestDetail(id) {
 
 async function saveGuestNotes(id) {
   const notas = document.getElementById('fichaNotas-'+id)?.value || '';
-  const huespedes = DB.get('huespedes',[]);
-  const idx = huespedes.findIndex(x=>x.id===id);
-  if(idx<0) return;
-  huespedes[idx].notas = notas;
-  await DB.set('huespedes', huespedes);
+  const h = getHuespedes().find(x=>x.id===id);
+  if(!h) return;
+  h.notas = notas;
+  await writeHuesped(h); // escritura por hijo
   showNotif('✅ Notas guardadas');
 }
 
@@ -3088,9 +3204,8 @@ function saveHuesped() {
   const dni = document.getElementById('h-dni').value.trim();
   if(!nombre||!apellido||!dni) { showNotif('Nombre, apellido y DNI son obligatorios','error'); return; }
   const foto = document.getElementById('docPreview').src || null;
-  const huespedes = DB.get('huespedes',[]);
-  huespedes.push({
-    id: 'h'+Date.now(), nombre, apellido, dni,
+  writeHuesped({ // escritura por hijo
+    id: nuevoHuespedId(), nombre, apellido, dni,
     nac: document.getElementById('h-nac').value,
     tel: document.getElementById('h-tel').value,
     email: document.getElementById('h-email').value,
@@ -3099,7 +3214,6 @@ function saveHuesped() {
     foto: foto && foto !== window.location.href ? foto : null,
     estadias: 0
   });
-  DB.set('huespedes', huespedes);
   closeModal('modalHuesped');
   renderHuespedes();
   showNotif('Huésped registrado: '+nombre+' '+apellido);
@@ -3527,7 +3641,7 @@ function renderAcct(tab) {
 
 function renderCuentasPorCobrar(c) {
   const reservas = getReservas();
-  const huespedes = DB.get('huespedes', []);
+  const huespedes = getHuespedes();
   const pendientes = reservas.filter(r => {
     const total = r.precio * nightsBetween(r.entrada, r.salida);
     const pagado = Number(r.pagado || 0);
@@ -4192,7 +4306,7 @@ async function saveUsuario() {
 
 // ===================== EDITAR / BORRAR HUÉSPEDES =====================
 function openEditHuesped(id) {
-  const h = DB.get('huespedes',[]).find(x=>x.id===id);
+  const h = getHuespedes().find(x=>x.id===id);
   if(!h) return;
   document.getElementById('eh-id').value = h.id;
   document.getElementById('eh-nombre').value = h.nombre;
@@ -4216,8 +4330,7 @@ async function saveEditHuesped() {
   const apellido = document.getElementById('eh-apellido').value.trim();
   const dni = document.getElementById('eh-dni').value.trim();
   if(!nombre||!apellido||!dni) { showNotif('Nombre, apellido y DNI son obligatorios','error'); return; }
-  const huespedes = DB.get('huespedes',[]);
-  const h = huespedes.find(x=>x.id===id);
+  const h = getHuespedes().find(x=>x.id===id);
   if(!h) return;
   h.nombre = nombre; h.apellido = apellido; h.dni = dni;
   h.nac = document.getElementById('eh-nac').value;
@@ -4229,7 +4342,7 @@ async function saveEditHuesped() {
   h.score = sc ? Number(sc) : null;
   h.obs = document.getElementById('eh-obs').value.trim();
   h.pendiente = false;
-  await DB.set('huespedes', huespedes);
+  await writeHuesped(h); // escritura por hijo
   closeModal('modalEditHuesped');
   renderHuespedes();
   showNotif('Huésped actualizado: '+nombre+' '+apellido);
@@ -4247,9 +4360,8 @@ function confirmDelete(tipo, id, nombre) {
 }
 
 async function deleteHuesped(id) {
-  const huespedes = DB.get('huespedes',[]).filter(h=>h.id!==id);
   const reservasDelHuesped = getReservas().filter(r=>r.huespedId===id).map(r=>r.id);
-  await DB.set('huespedes', huespedes);
+  await removeHuesped(id); // borrado por hijo
   for (const rid of reservasDelHuesped) await removeReserva(rid); // borrado por hijo
   closeModal('modalConfirmDelete');
   renderHuespedes();
@@ -4412,16 +4524,14 @@ async function submitPublicRegistration() {
   // Cargar datos en Firebase directamente
   try {
     await loadAllData();
-    const huespedes = DB.get('huespedes',[]);
     const foto = document.getElementById('pubDocPreview').src || null;
-    huespedes.push({
-      id: 'h'+Date.now(), nombre, apellido, dni, nac,
+    await writeHuesped({ // escritura por hijo
+      id: nuevoHuespedId(), nombre, apellido, dni, nac,
       tel: document.getElementById('pub-tel').value,
       email: document.getElementById('pub-email').value,
       foto: foto && foto !== window.location.href ? foto : null,
       estadias: 0, pendiente: true
     });
-    await DB.set('huespedes', huespedes);
     msg.style.color='#34d399';
     msg.textContent='✅ ¡Datos enviados! El equipo del hostel los confirmará pronto.';
     document.querySelectorAll('#loginScreen input').forEach(i=>i.value='');
@@ -4568,7 +4678,7 @@ function getScoreBadge(score) {
 }
 
 function renderListaNegra() {
-  const huespedes = DB.get('huespedes', []);
+  const huespedes = getHuespedes();
   const lista = huespedes.filter(h => h.score && h.score <= 5).sort((a,b) => a.score - b.score);
   const tbody = document.getElementById('tablaListaNegra');
   if (!lista.length) {
@@ -4602,7 +4712,7 @@ function checkListaNegraMode() {
 
 async function showListaNegraPublica() {
   await loadAllData();
-  const huespedes = DB.get('huespedes', []);
+  const huespedes = getHuespedes();
   const lista = huespedes.filter(h => h.score && h.score <= 5).sort((a,b) => a.score - b.score);
   document.getElementById('loginScreen').innerHTML = `
     <div style="max-width:600px;width:95%;padding:32px 24px;">
