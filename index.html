@@ -156,8 +156,8 @@ nav { flex: 1; min-height: 0; padding: 12px 0; overflow-y: auto; }
 .card-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
 .card-header h3 { font-size: 15px; font-weight: 600; }
 table { width: 100%; border-collapse: collapse; }
-th { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; padding: 10px 16px; text-align: left; border-bottom: 1px solid var(--border); background: var(--surface2); }
-td { font-size: 13px; color: var(--text2); padding: 11px 16px; border-bottom: 1px solid rgba(59,130,246,0.06); }
+th { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; padding: 7px 12px; text-align: left; border-bottom: 1px solid var(--border); background: var(--surface2); }
+td { font-size: 13px; color: var(--text2); padding: 7px 12px; border-bottom: 1px solid rgba(59,130,246,0.06); }
 tr:last-child td { border-bottom: none; }
 tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
 .badge { display: inline-block; padding: 3px 8px; border-radius: 20px; font-size: 11px; font-weight: 500; }
@@ -170,6 +170,12 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
 /* ===== BUTTONS ===== */
 .btn { padding: 8px 16px; border-radius: var(--radius); font-size: 13px; font-weight: 500; transition: all 0.2s; cursor: pointer; }
 .btn-sm { padding: 5px 11px; font-size: 12px; border-radius: 7px; }
+/* Botón compacto solo-ícono para columnas de acción densas */
+.btn-icon { padding: 4px 7px; font-size: 13px; line-height: 1; border-radius: 7px; }
+/* Celda de acciones: una sola fila, sin apilar */
+td.acciones { white-space: nowrap; }
+td.acciones .btn { margin-right: 3px; }
+td.acciones .btn:last-child { margin-right: 0; }
 .btn-blue { background: var(--blue2); color: white; }
 .btn-blue:hover { background: var(--accent); }
 .btn-green { background: rgba(5,150,105,0.2); color: #34d399; border: 1px solid rgba(5,150,105,0.3); }
@@ -1640,7 +1646,7 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
 // ===================== FIREBASE SETUP =====================
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
 import { getDatabase, ref, set, get, onValue, remove, push, update } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updatePassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-auth.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updatePassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBO6nDGdYWHWd5CQiYnbNojq8Yi7i1YJRc",
@@ -2252,13 +2258,34 @@ async function doLogin() {
   if(!email||!pass) { showLoginError('Completá usuario y contraseña'); return; }
   try {
     showLoginError('Verificando...', '#60a5fa');
-    const cred = await signInWithEmailAndPassword(auth, email, pass);
-    // Auth OK — cargar datos del usuario desde DB
+    // Auth: el ingreso al sistema lo completa el listener onAuthStateChanged (enterSession),
+    // que también corre solo al refrescar si la sesión está persistida.
+    await signInWithEmailAndPassword(auth, email, pass);
+  } catch(e) {
+    const msg = e.code === 'auth/invalid-credential' || e.code === 'auth/user-not-found' || e.code === 'auth/wrong-password'
+      ? 'Usuario o contraseña incorrectos'
+      : e.code === 'auth/too-many-requests'
+      ? 'Demasiados intentos. Esperá unos minutos.'
+      : 'Error al iniciar sesión. Intentá de nuevo.';
+    showLoginError(msg);
+  }
+}
+
+// Completa el ingreso al sistema una vez que Firebase confirmó la sesión (login
+// manual o sesión persistida restaurada al refrescar). Idempotente: no re-entra
+// si el usuario ya está activo.
+let _entering = false;
+async function enterSession(email) {
+  if (!email) return false;
+  if (currentUser && currentUser.email && currentUser.email.toLowerCase() === email.toLowerCase()) return true;
+  if (_entering) return false;
+  _entering = true;
+  try {
     await loadAllData();
     const usuarios = DB.get('usuarios',[]);
-    const u = usuarios.find(x => x.email.toLowerCase()===email.toLowerCase());
-    if(!u) { await signOut(auth); showLoginError('Usuario no registrado en el sistema'); return; }
-    if(u.estado==='inactivo') { await signOut(auth); showLoginError('Usuario inactivo. Contactá al administrador'); return; }
+    const u = usuarios.find(x => x.email && x.email.toLowerCase()===email.toLowerCase());
+    if(!u) { await signOut(auth); showLoginError('Usuario no registrado en el sistema'); return false; }
+    if(u.estado==='inactivo') { await signOut(auth); showLoginError('Usuario inactivo. Contactá al administrador'); return false; }
     u.ultimoAcceso = new Date().toISOString();
     await DB.set('usuarios', usuarios);
     const roles = DB.get('roles',[]);
@@ -2273,13 +2300,9 @@ async function doLogin() {
     showSection('dashboard');
     updateDate();
     aplicarRecurrentes();
-  } catch(e) {
-    const msg = e.code === 'auth/invalid-credential' || e.code === 'auth/user-not-found' || e.code === 'auth/wrong-password'
-      ? 'Usuario o contraseña incorrectos'
-      : e.code === 'auth/too-many-requests'
-      ? 'Demasiados intentos. Esperá unos minutos.'
-      : 'Error al iniciar sesión. Intentá de nuevo.';
-    showLoginError(msg);
+    return true;
+  } finally {
+    _entering = false;
   }
 }
 
@@ -2813,19 +2836,23 @@ function renderReservas() {
     return matchQ && matchE && matchP;
   });
 
+  // Orden explícito y consistente: por fecha de entrada, más reciente primero.
+  // Sin esto, Object.values mezcla ids viejos y push keys y las nuevas caen "en el medio".
+  filtered.sort((a,b) => (a.entrada<b.entrada?1 : a.entrada>b.entrada?-1 : 0));
+
   const tbody = document.getElementById('tablaReservas');
   if(!filtered.length) {
     tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--text3)">Sin reservas</td></tr>';
     return;
   }
-  tbody.innerHTML = filtered.map(r => {
+  tbody.innerHTML = filtered.map((r, i) => {
     const nights = nightsBetween(r.entrada, r.salida);
     const total = fmtMoney(r.precio * nights, r.moneda);
     const canCheckin = r.estado==='confirmada';
     const canCheckout = r.estado==='checkin';
     const hasSaldo = Number(r.saldo||0) > 0;
     return `<tr>
-      <td style="font-family:'DM Mono';font-size:11px;color:var(--text3)">${r.id}</td>
+      <td style="font-family:'DM Mono';font-size:11px;color:var(--text3)">${i+1}</td>
       <td>${getHuespedNombre(r.huespedId, r)}</td>
       <td>Cabaña ${r.hab}</td>
       <td>${fmtFecha(r.entrada)}</td><td>${fmtFecha(r.salida)}</td>
@@ -2834,14 +2861,14 @@ function renderReservas() {
       <td>${platBadge(r.plataforma)}</td>
       <td>${estadoBadge(r.estado)}</td>
       <td>${pagoBadge(r)}</td>
-      <td style="display:flex;gap:4px;flex-wrap:wrap;">
-        ${canCheckin ? `<button class="btn btn-green btn-sm" onclick="doCheckin('${r.id}')">Check-in</button>` : ''}
-        ${canCheckout ? `<button class="btn btn-amber btn-sm" onclick="doCheckout('${r.id}')">Check-out</button>` : ''}
-        ${(canCheckin||canCheckout) ? `<button class="btn btn-ghost btn-sm" onclick="openCambioCama('${r.id}')">🔄 Cabaña</button>` : ''}
-        ${canCheckout ? `<button class="btn btn-blue btn-sm" onclick="openExtender('${r.id}')">+ Días</button>` : ''}
-        ${(canCheckin||canCheckout) && hasSaldo ? `<button class="btn btn-green btn-sm" onclick="openPago('${r.id}')">💰 Cobrar</button>` : ''}
-        <button class="btn btn-ghost btn-sm" onclick="editReserva('${r.id}')">✏️ Editar</button>
-        <button class="btn btn-red btn-sm" onclick="confirmDelete('reserva','${r.id}','reserva de ${getHuespedNombre(r.huespedId, r)}')">🗑</button>
+      <td class="acciones">
+        ${canCheckin ? `<button class="btn btn-green btn-icon" title="Check-in" onclick="doCheckin('${r.id}')">✅</button>` : ''}
+        ${canCheckout ? `<button class="btn btn-amber btn-icon" title="Check-out" onclick="doCheckout('${r.id}')">🚪</button>` : ''}
+        ${(canCheckin||canCheckout) ? `<button class="btn btn-ghost btn-icon" title="Cambiar cabaña" onclick="openCambioCama('${r.id}')">🔄</button>` : ''}
+        ${canCheckout ? `<button class="btn btn-blue btn-icon" title="Extender días" onclick="openExtender('${r.id}')">➕</button>` : ''}
+        ${(canCheckin||canCheckout) && hasSaldo ? `<button class="btn btn-green btn-icon" title="Cobrar saldo" onclick="openPago('${r.id}')">💰</button>` : ''}
+        <button class="btn btn-ghost btn-icon" title="Editar" onclick="editReserva('${r.id}')">✏️</button>
+        <button class="btn btn-red btn-icon" title="Eliminar" onclick="confirmDelete('reserva','${r.id}','reserva de ${getHuespedNombre(r.huespedId, r)}')">🗑</button>
       </td>
     </tr>`;
   }).join('');
@@ -3284,7 +3311,9 @@ function renderCheckin() {
 
 // ===================== HUÉSPEDES =====================
 function renderHuespedes() {
-  const huespedes = getHuespedes();
+  // Orden explícito y consistente: alfabético por apellido, luego nombre.
+  const huespedes = getHuespedes().sort((a,b) =>
+    (a.apellido||'').localeCompare(b.apellido||'','es') || (a.nombre||'').localeCompare(b.nombre||'','es'));
   const q = document.getElementById('filterHuesped')?.value.toLowerCase()||'';
   const filtered = q ? huespedes.filter(h=>(h.nombre+' '+h.apellido+h.dni).toLowerCase().includes(q)) : huespedes;
 
@@ -3299,10 +3328,10 @@ function renderHuespedes() {
         <td>${h.nac}</td><td>${h.tel||'—'}</td><td>${h.email||'—'}</td>
         <td style="text-align:center">${h.estadias||0}</td>
         <td>${getScoreBadge(h.score)}</td>
-        <td style="display:flex;gap:4px;">
-          <button class="btn btn-ghost btn-sm" onclick="showGuestDetail('${h.id}')">Ver</button>
-          <button class="btn btn-ghost btn-sm" onclick="openEditHuesped('${h.id}')">✏️</button>
-          <button class="btn btn-red btn-sm" onclick="confirmDelete('huesped','${h.id}','${h.nombre} ${h.apellido}')">🗑</button>
+        <td class="acciones">
+          <button class="btn btn-ghost btn-icon" title="Ver ficha" onclick="showGuestDetail('${h.id}')">👁</button>
+          <button class="btn btn-ghost btn-icon" title="Editar" onclick="openEditHuesped('${h.id}')">✏️</button>
+          <button class="btn btn-red btn-icon" title="Eliminar" onclick="confirmDelete('huesped','${h.id}','${h.nombre} ${h.apellido}')">🗑</button>
         </td>
       </tr>`).join('')
     : '<tr><td colspan="7" style="text-align:center;color:var(--text3)">Sin huéspedes</td></tr>';
@@ -5457,9 +5486,27 @@ checkPublicMode();
 checkListaNegraMode();
 // Botón formulario público en login — event listener directo para evitar problema de módulo
 document.getElementById('btnPublicForm')?.addEventListener('click', showPublicRegistrationForm);
-loadAllData().then(() => {
-  showSection('dashboard');
-});
+
+// Auto-login: persistencia local explícita + onAuthStateChanged. Si hay una sesión
+// persistida (p. ej. al refrescar), entra directo sin pedir login de nuevo; si no,
+// muestra el login. No corre en modo público (registro / lista negra).
+const _bootParams = new URLSearchParams(window.location.search);
+const _publicMode = _bootParams.get('registro') === '1' || _bootParams.get('listanegra') === '1';
+if (!_publicMode) {
+  setPersistence(auth, browserLocalPersistence)
+    .catch(e => console.error('persistence error:', e))
+    .finally(() => {
+      onAuthStateChanged(auth, async (user) => {
+        if (user && user.email) {
+          await enterSession(user.email);
+        } else {
+          currentUser = null;
+          document.getElementById('loginScreen').style.display = 'flex';
+          document.getElementById('app').style.display = 'none';
+        }
+      });
+    });
+}
 
 // ===================== PIPELINE CRM =====================
 const ETAPAS = [
