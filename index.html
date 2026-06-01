@@ -1639,7 +1639,7 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
 <script type="module">
 // ===================== FIREBASE SETUP =====================
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
-import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js";
+import { getDatabase, ref, set, get, onValue, remove, push } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updatePassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-auth.js";
 
 const firebaseConfig = {
@@ -1677,6 +1677,117 @@ const DB = {
   }
 };
 
+// ============================================================================
+// RESERVAS: escritura por hijo + sync en vivo (piloto del patrón de concurrencia)
+// El nodo cabanas/reservas pasa de array a objeto indexado por id:
+//   cabanas/reservas/{id} = {...}
+// Las escrituras tocan SOLO ese hijo (set/remove), nunca pisan el nodo entero,
+// así dos usuarios simultáneos no se borran reservas entre sí.
+// ============================================================================
+const pendingReservas = new Set();    // ids con escritura local en vuelo
+const pendingReservasDel = new Set(); // ids con borrado local en vuelo
+let reservasLiveReady = false;
+
+// Lectura: siempre como array para que .filter/.find/.sort sigan funcionando.
+// Object.values funciona igual si el nodo viejo todavía fuera un array.
+function getReservas() {
+  return Object.values(cache.reservas || {});
+}
+
+// Asegura que el cache de reservas sea un objeto indexado (normalización defensiva)
+function ensureReservasObj() {
+  if (!cache.reservas || Array.isArray(cache.reservas)) {
+    const arr = Object.values(cache.reservas || {});
+    cache.reservas = Object.fromEntries(arr.filter(r => r && r.id).map(r => [r.id, r]));
+  }
+  return cache.reservas;
+}
+
+// Genera un id con push key de Firebase (en vez de 'r'+Date.now())
+function nuevaReservaId() {
+  return push(ref(db, 'cabanas/reservas')).key;
+}
+
+// Escritura por hijo: NO pisa el resto del nodo
+async function writeReserva(reg) {
+  if (!reg || !reg.id) return;
+  const id = reg.id;
+  ensureReservasObj();
+  cache.reservas[id] = reg;        // update optimista del cache
+  pendingReservas.add(id);
+  try {
+    await set(ref(db, 'cabanas/reservas/' + id), reg);
+  } catch(e) { console.error('Firebase write error (reserva):', e); }
+  pendingReservas.delete(id);
+}
+
+// Borrado por hijo
+async function removeReserva(id) {
+  if (!id) return;
+  ensureReservasObj();
+  delete cache.reservas[id];       // update optimista del cache
+  pendingReservasDel.add(id);
+  try {
+    await remove(ref(db, 'cabanas/reservas/' + id));
+  } catch(e) { console.error('Firebase remove error (reserva):', e); }
+  pendingReservasDel.delete(id);
+}
+
+// Sync en vivo: escucha cambios remotos y actualiza cache + vistas.
+function attachReservasLive() {
+  onValue(ref(db, 'cabanas/reservas'), snap => {
+    const remote = snap.exists() ? snap.val() : {};
+    // remote puede venir como objeto {id:reg} o, si quedara dato viejo, array
+    const next = Array.isArray(remote)
+      ? Object.fromEntries(remote.filter(r => r && r.id).map(r => [r.id, r]))
+      : { ...remote };
+    // No pisar escrituras locales a medio guardar (respetar pendingWrites)
+    pendingReservas.forEach(id => {
+      if (cache.reservas && cache.reservas[id]) next[id] = cache.reservas[id];
+    });
+    pendingReservasDel.forEach(id => { delete next[id]; });
+    cache.reservas = next;
+    rerenderReservasViews();
+  });
+}
+
+// Re-render de las vistas que dependen de reservas, sin tocar un modal abierto.
+function rerenderReservasViews() {
+  const isActive = s => document.getElementById('section-' + s)?.classList.contains('active');
+  // No re-renderizar la lista de reservas mientras se edita una en el modal.
+  const reservaModalOpen = document.getElementById('modalReserva')?.classList.contains('open');
+  if (isActive('reservas') && !reservaModalOpen) renderReservas();
+  if (isActive('grilla')) renderGrilla();
+  if (isActive('dashboard')) renderDashboard();
+  if (isActive('checkin')) renderCheckin();
+  if (isActive('mapa')) renderMapa(document.getElementById('mapaFecha')?.value);
+}
+
+// Migración única: re-indexa el nodo por id (array o claves numéricas -> {id:reg}).
+// No destruye datos: preserva las reservas existentes con su id como clave.
+async function migrateReservasToIndexed() {
+  const snap = await get(ref(db, 'cabanas/reservas'));
+  if (!snap.exists()) return;
+  const val = snap.val();
+  if (!Array.isArray(val)) {
+    // ya es objeto: si todas las claves coinciden con el id, ya está migrado
+    const ok = Object.entries(val).every(([k, r]) => r && r.id === k);
+    if (ok) return;
+  }
+  const arr = Array.isArray(val) ? val.filter(Boolean) : Object.values(val);
+  const indexed = {};
+  arr.forEach(r => { if (r && r.id) indexed[r.id] = r; });
+  await set(ref(db, 'cabanas/reservas'), indexed);
+}
+
+// Init una sola vez: migra el formato y engancha el listener en vivo.
+async function initReservasLive() {
+  if (reservasLiveReady) return;
+  await migrateReservasToIndexed();
+  attachReservasLive();
+  reservasLiveReady = true;
+}
+
 async function loadAllData() {
   showLoader(true);
   try {
@@ -1685,10 +1796,22 @@ async function loadAllData() {
       const data = snapshot.val();
       // No pisar claves con escrituras locales pendientes (evita race condition)
       Object.keys(data).forEach(k => {
+        // 'reservas' lo gobierna el listener en vivo (onValue); no lo pisamos acá.
+        if (k === 'reservas') return;
         if (!pendingWrites.has(k)) cache[k] = data[k];
       });
+      // Sembrar reservas en cache la primera vez (hasta que onValue dispare).
+      if (cache.reservas === undefined) {
+        const r = data.reservas;
+        cache.reservas = Array.isArray(r)
+          ? Object.fromEntries(r.filter(x => x && x.id).map(x => [x.id, x]))
+          : (r || {});
+      }
     }
     await initData();
+    // Migración + sync en vivo de reservas (una sola vez). Aislado para que un
+    // fallo de permisos no rompa el resto de la carga.
+    try { await initReservasLive(); } catch(e) { console.error('reservas live init error:', e); }
     // await loadApiKeyFromDB(); // CHAT DESACTIVADO TEMPORALMENTE
   } catch(e) {
     console.error('Firebase read error:', e);
