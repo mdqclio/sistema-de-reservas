@@ -753,7 +753,7 @@ td.acciones .btn:last-child { margin-right: 0; }
           <h3>Huéspedes registrados</h3>
           <div style="display:flex;gap:8px;align-items:center;">
             <button class="btn btn-ghost btn-sm" onclick="showPublicFormLink()">🔗 Link auto-registro</button>
-            <button class="btn btn-blue btn-sm" onclick="openModal('modalHuesped')">+ Nuevo huésped</button>
+            <button class="btn btn-blue btn-sm" onclick="openHuespedModal()">+ Nuevo huésped</button>
           </div>
         </div>
         <table>
@@ -1313,7 +1313,7 @@ td.acciones .btn:last-child { margin-right: 0; }
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modalHuesped')">Cancelar</button>
-      <button class="btn btn-blue" onclick="saveHuesped()">Registrar Huésped</button>
+      <button class="btn btn-blue" id="btnGuardarHuesped" onclick="saveHuesped()">Registrar Huésped</button>
     </div>
   </div>
 </div>
@@ -1647,6 +1647,8 @@ td.acciones .btn:last-child { margin-right: 0; }
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
 import { getDatabase, ref, set, get, onValue, remove, push, update } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updatePassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-auth.js";
+// Storage: 'ref' va con alias (sRef) porque Realtime Database ya usa 'ref'.
+import { getStorage, ref as sRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-storage.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBO6nDGdYWHWd5CQiYnbNojq8Yi7i1YJRc",
@@ -1660,6 +1662,7 @@ const firebaseConfig = {
 const firebaseApp = initializeApp(firebaseConfig);
 const db = getDatabase(firebaseApp);
 const auth = getAuth(firebaseApp);
+const storage = getStorage(firebaseApp);
 
 // ===================== DATA STORE =====================
 // Cache local para rendimiento
@@ -3395,9 +3398,13 @@ async function saveGuestNotes(id) {
   showNotif('✅ Notas guardadas');
 }
 
+// File de la foto de DNI seleccionada para el alta de huésped (se sube a Storage al guardar).
+let selectedHuespedFile = null;
+
 function previewDoc(input) {
   const file = input.files[0];
   if(!file) return;
+  selectedHuespedFile = file; // se sube a Storage en saveHuesped
   const reader = new FileReader();
   reader.onload = e => {
     const img = document.getElementById('docPreview');
@@ -3408,20 +3415,79 @@ function previewDoc(input) {
   reader.readAsDataURL(file);
 }
 
-function saveHuesped() {
+// Comprime/redimensiona una imagen (File) a ~maxW px de ancho, JPEG calidad q.
+// Devuelve un Blob; si algo falla, cae al File original (la subida igual funciona).
+function compressImage(file, maxW = 1000, q = 0.8) {
+  return new Promise((resolve) => {
+    try {
+      const reader = new FileReader();
+      reader.onload = e => {
+        const img = new Image();
+        img.onload = () => {
+          const scale = Math.min(1, maxW / img.width);
+          const w = Math.round(img.width * scale);
+          const h = Math.round(img.height * scale);
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          canvas.toBlob(blob => resolve(blob || file), 'image/jpeg', q);
+        };
+        img.onerror = () => resolve(file);
+        img.src = e.target.result;
+      };
+      reader.onerror = () => resolve(file);
+      reader.readAsDataURL(file);
+    } catch(_) { resolve(file); }
+  });
+}
+
+// Sube la foto de DNI a Storage en huespedes/{id}/dni.jpg y devuelve la URL https.
+async function uploadHuespedFoto(huespedId, file) {
+  const blob = await compressImage(file, 1000, 0.8);
+  const storageRef = sRef(storage, 'huespedes/' + huespedId + '/dni.jpg');
+  await uploadBytes(storageRef, blob, { contentType: 'image/jpeg' });
+  return await getDownloadURL(storageRef);
+}
+
+// Abre el modal de alta de huésped en limpio (resetea campos y foto previa).
+function openHuespedModal() {
+  ['h-nombre','h-apellido','h-dni','h-nac','h-tel','h-email','h-cumple','h-fecha-esp']
+    .forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+  selectedHuespedFile = null;
+  const fileInput = document.getElementById('h-foto'); if(fileInput) fileInput.value='';
+  const prev = document.getElementById('docPreview'); if(prev){ prev.src=''; prev.style.display='none'; }
+  openModal('modalHuesped');
+}
+
+async function saveHuesped() {
   const nombre = document.getElementById('h-nombre').value.trim();
   const apellido = document.getElementById('h-apellido').value.trim();
   const dni = document.getElementById('h-dni').value.trim();
   if(!nombre||!apellido||!dni) { showNotif('Nombre, apellido y DNI son obligatorios','error'); return; }
-  const foto = document.getElementById('docPreview').src || null;
-  writeHuesped({ // escritura por hijo
-    id: nuevoHuespedId(), nombre, apellido, dni,
+  const huespedId = nuevoHuespedId();
+  const btn = document.getElementById('btnGuardarHuesped');
+  // Si hay una foto NUEVA seleccionada, subirla a Storage ANTES de guardar.
+  let foto = null;
+  if (selectedHuespedFile instanceof File) {
+    if(btn){ btn.disabled = true; btn.textContent = 'Subiendo...'; }
+    try {
+      foto = await uploadHuespedFoto(huespedId, selectedHuespedFile);
+    } catch(e) {
+      console.error('Error subiendo foto DNI:', e);
+      if(btn){ btn.disabled = false; btn.textContent = 'Registrar Huésped'; }
+      showNotif('No se pudo subir la foto del DNI. Intentá de nuevo.', 'error');
+      return; // NO guardar a ciegas si la subida falló
+    }
+    if(btn){ btn.disabled = false; btn.textContent = 'Registrar Huésped'; }
+  }
+  await writeHuesped({ // escritura por hijo
+    id: huespedId, nombre, apellido, dni,
     nac: document.getElementById('h-nac').value,
     tel: document.getElementById('h-tel').value,
     email: document.getElementById('h-email').value,
     cumple: document.getElementById('h-cumple').value.trim(),
     fechaEsp: document.getElementById('h-fecha-esp').value.trim(),
-    foto: foto && foto !== window.location.href ? foto : null,
+    foto, // URL https de Storage (o null si no se cargó foto)
     estadias: 0
   });
   closeModal('modalHuesped');
@@ -3429,6 +3495,8 @@ function saveHuesped() {
   showNotif('Huésped registrado: '+nombre+' '+apellido);
   // reset form
   ['h-nombre','h-apellido','h-dni','h-nac','h-tel','h-email','h-cumple','h-fecha-esp'].forEach(id=>document.getElementById(id).value='');
+  selectedHuespedFile = null;
+  const fileInput = document.getElementById('h-foto'); if(fileInput) fileInput.value='';
   document.getElementById('docPreview').style.display='none';
 }
 
@@ -5926,7 +5994,7 @@ Object.assign(window, {
   openModal, closeModal,
   renderReservas, renderDashboard, renderMapa, renderMapaFecha, renderCheckin,
   renderHuespedes, renderPrecios, renderAcct, renderCaja, renderRoles, renderUsuarios,
-  saveReserva, saveHuesped, saveMovimiento, saveRol, saveUsuario, savePago, saveExtension, saveHorario,
+  saveReserva, saveHuesped, openHuespedModal, saveMovimiento, saveRol, saveUsuario, savePago, saveExtension, saveHorario,
   fetchCotizacionDolar,
   saveCategoria, deleteCategoria, openCategoriasModal, renderListaCategorias,
   saveProveedor, deleteProveedor, openProveedorModal, renderProveedores,
