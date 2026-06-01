@@ -1639,7 +1639,7 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
 <script type="module">
 // ===================== FIREBASE SETUP =====================
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
-import { getDatabase, ref, set, get, onValue, remove, push } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js";
+import { getDatabase, ref, set, get, onValue, remove, push, update } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updatePassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-auth.js";
 
 const firebaseConfig = {
@@ -1763,22 +1763,40 @@ function rerenderReservasViews() {
   if (isActive('mapa')) renderMapa(document.getElementById('mapaFecha')?.value);
 }
 
-// Migración única: re-indexa el nodo por id (array o claves numéricas -> {id:reg}).
-// No destruye datos: preserva las reservas existentes con su id como clave.
-async function migrateReservasToIndexed() {
-  const snap = await get(ref(db, 'cabanas/reservas'));
-  if (!snap.exists()) return;
-  const val = snap.val();
-  if (!Array.isArray(val)) {
-    // ya es objeto: si todas las claves coinciden con el id, ya está migrado
-    const ok = Object.entries(val).every(([k, r]) => r && r.id === k);
-    if (ok) return;
+// Migración única y SEGURA, gobernada por un flag PERSISTENTE en la DB
+// (cabanas/_migrado/{coleccion}). Corre como mucho UNA VEZ EN LA VIDA del nodo:
+// si el flag ya está puesto, no toca nada (solo un get chico). NUNCA hace un
+// set() de nodo entero —eso pisaría escrituras por-hijo concurrentes de otro
+// navegador y borraría registros—. Para convertir datos legacy (array o claves
+// numéricas) a {id:reg} usa update() (merge): re-escribe cada registro con su id
+// como clave y borra SOLO la clave vieja, dejando intactos los hijos concurrentes.
+async function migrateNodeToIndexed(coleccion) {
+  const flagRef = ref(db, 'cabanas/_migrado/' + coleccion);
+  const flagSnap = await get(flagRef);
+  if (flagSnap.exists() && flagSnap.val()) return; // ya migrado: no tocar el nodo
+
+  const snap = await get(ref(db, 'cabanas/' + coleccion));
+  if (snap.exists()) {
+    const val = snap.val();
+    // entries: [clave, registro]. Si es array, la clave es el índice numérico.
+    const entries = Array.isArray(val)
+      ? val.map((r, i) => [String(i), r])
+      : Object.entries(val);
+    const updates = {};
+    for (const [k, r] of entries) {
+      // Solo re-indexa lo mal-clavado (clave !== id). Lo ya correcto no se toca.
+      if (r && r.id && r.id !== k) {
+        updates[r.id] = r;  // re-escribe el registro con su id como clave (merge)
+        updates[k] = null;  // borra la clave vieja (índice numérico / legacy)
+      }
+    }
+    // update() mergea: toca SOLO estas claves, deja intactos los hijos concurrentes.
+    if (Object.keys(updates).length) await update(ref(db, 'cabanas/' + coleccion), updates);
   }
-  const arr = Array.isArray(val) ? val.filter(Boolean) : Object.values(val);
-  const indexed = {};
-  arr.forEach(r => { if (r && r.id) indexed[r.id] = r; });
-  await set(ref(db, 'cabanas/reservas'), indexed);
+  await set(flagRef, true); // marca persistente: no vuelve a migrar nunca más
 }
+
+async function migrateReservasToIndexed() { await migrateNodeToIndexed('reservas'); }
 
 // Init una sola vez: migra el formato y engancha el listener en vivo.
 async function initReservasLive() {
@@ -1873,20 +1891,8 @@ function rerenderHuespedesViews() {
   if (isActive('mapa')) renderMapa(document.getElementById('mapaFecha')?.value);
 }
 
-// Migración única: re-indexa el nodo por id (array o claves numéricas -> {id:reg}).
-async function migrateHuespedesToIndexed() {
-  const snap = await get(ref(db, 'cabanas/huespedes'));
-  if (!snap.exists()) return;
-  const val = snap.val();
-  if (!Array.isArray(val)) {
-    const ok = Object.entries(val).every(([k, h]) => h && h.id === k);
-    if (ok) return;
-  }
-  const arr = Array.isArray(val) ? val.filter(Boolean) : Object.values(val);
-  const indexed = {};
-  arr.forEach(h => { if (h && h.id) indexed[h.id] = h; });
-  await set(ref(db, 'cabanas/huespedes'), indexed);
-}
+// Migración única y segura (flag persistente, update() merge — ver migrateNodeToIndexed).
+async function migrateHuespedesToIndexed() { await migrateNodeToIndexed('huespedes'); }
 
 // Init una sola vez: migra el formato y engancha el listener en vivo.
 async function initHuespedesLive() {
@@ -1977,20 +1983,8 @@ function rerenderMovimientosViews() {
   if (isActive('dashboard')) renderDashboard();
 }
 
-// Migración única: re-indexa el nodo por id (array o claves numéricas -> {id:reg}).
-async function migrateMovimientosToIndexed() {
-  const snap = await get(ref(db, 'cabanas/movimientos'));
-  if (!snap.exists()) return;
-  const val = snap.val();
-  if (!Array.isArray(val)) {
-    const ok = Object.entries(val).every(([k, m]) => m && m.id === k);
-    if (ok) return;
-  }
-  const arr = Array.isArray(val) ? val.filter(Boolean) : Object.values(val);
-  const indexed = {};
-  arr.forEach(m => { if (m && m.id) indexed[m.id] = m; });
-  await set(ref(db, 'cabanas/movimientos'), indexed);
-}
+// Migración única y segura (flag persistente, update() merge — ver migrateNodeToIndexed).
+async function migrateMovimientosToIndexed() { await migrateNodeToIndexed('movimientos'); }
 
 // Init una sola vez: migra el formato y engancha el listener en vivo.
 async function initMovimientosLive() {
