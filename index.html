@@ -710,7 +710,7 @@ td.acciones .btn:last-child { margin-right: 0; }
           </div>
         </div>
         <table>
-          <thead><tr><th>#</th><th>Huésped</th><th>Cabaña</th><th>Entrada</th><th>Salida</th><th>Noches</th><th>Total</th><th>Plataforma</th><th>Estado</th><th>Pago</th><th>Acción</th></tr></thead>
+          <thead><tr><th>Huésped</th><th>Cabaña</th><th>Entrada</th><th>Salida</th><th>Noches</th><th>Total</th><th>Plataforma</th><th>Estado</th><th>Pago</th><th>Acción</th></tr></thead>
           <tbody id="tablaReservas"></tbody>
         </table>
       </div>
@@ -2836,23 +2836,22 @@ function renderReservas() {
     return matchQ && matchE && matchP;
   });
 
-  // Orden explícito y consistente: por fecha de entrada, más reciente primero.
-  // Sin esto, Object.values mezcla ids viejos y push keys y las nuevas caen "en el medio".
-  filtered.sort((a,b) => (a.entrada<b.entrada?1 : a.entrada>b.entrada?-1 : 0));
+  // Orden explícito: la última reserva creada arriba (createdAt desc).
+  // Las viejas sin createdAt caen al fondo (fallback 0).
+  filtered.sort((a,b) => (b.createdAt||0) - (a.createdAt||0));
 
   const tbody = document.getElementById('tablaReservas');
   if(!filtered.length) {
-    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--text3)">Sin reservas</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text3)">Sin reservas</td></tr>';
     return;
   }
-  tbody.innerHTML = filtered.map((r, i) => {
+  tbody.innerHTML = filtered.map(r => {
     const nights = nightsBetween(r.entrada, r.salida);
     const total = fmtMoney(r.precio * nights, r.moneda);
     const canCheckin = r.estado==='confirmada';
     const canCheckout = r.estado==='checkin';
     const hasSaldo = Number(r.saldo||0) > 0;
     return `<tr>
-      <td style="font-family:'DM Mono';font-size:11px;color:var(--text3)">${i+1}</td>
       <td>${getHuespedNombre(r.huespedId, r)}</td>
       <td>Cabaña ${r.hab}</td>
       <td>${fmtFecha(r.entrada)}</td><td>${fmtFecha(r.salida)}</td>
@@ -3071,8 +3070,9 @@ async function saveReserva() {
     const existing = reservas.find(x => x.id === editId) || {};
     reg = { ...existing, id: editId, ...newData };
   } else {
-    // Nueva reserva con push key de Firebase
-    reg = { id: nuevaReservaId(), ...newData };
+    // Nueva reserva con push key de Firebase. createdAt: campo aditivo para
+    // ordenar la lista (última creada arriba); no afecta la escritura por-hijo.
+    reg = { id: nuevaReservaId(), ...newData, createdAt: Date.now() };
   }
   await writeReserva(reg); // escritura por hijo: no pisa otras reservas
   if(pagado > 0) {
