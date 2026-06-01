@@ -1896,6 +1896,110 @@ async function initHuespedesLive() {
   huespedesLiveReady = true;
 }
 
+// ============================================================================
+// MOVIMIENTOS: mismo patrón que reservas (escritura por hijo + sync en vivo).
+// El nodo cabanas/movimientos pasa de array a objeto indexado por id:
+//   cabanas/movimientos/{id} = {...}
+// Cierra el agujero de caja: dos cobros/checkins simultáneos ya no se pisan,
+// porque cada movimiento se escribe en su propio hijo (set), nunca el nodo entero.
+// ============================================================================
+const pendingMovimientos = new Set();    // ids con escritura local en vuelo
+const pendingMovimientosDel = new Set(); // ids con borrado local en vuelo
+let movimientosLiveReady = false;
+
+// Lectura: siempre como array para que .filter/.reduce/.sort sigan funcionando.
+function getMovimientos() {
+  return Object.values(cache.movimientos || {});
+}
+
+// Asegura que el cache de movimientos sea un objeto indexado (normalización defensiva)
+function ensureMovimientosObj() {
+  if (!cache.movimientos || Array.isArray(cache.movimientos)) {
+    const arr = Object.values(cache.movimientos || {});
+    cache.movimientos = Object.fromEntries(arr.filter(m => m && m.id).map(m => [m.id, m]));
+  }
+  return cache.movimientos;
+}
+
+// Genera un id con push key de Firebase (en vez de 'm'+Date.now(), que puede
+// colisionar entre dos usuarios en el mismo milisegundo).
+function nuevoMovimientoId() {
+  return push(ref(db, 'cabanas/movimientos')).key;
+}
+
+// Escritura por hijo: NO pisa el resto del nodo
+async function writeMovimiento(reg) {
+  if (!reg || !reg.id) return;
+  const id = reg.id;
+  ensureMovimientosObj();
+  cache.movimientos[id] = reg;        // update optimista del cache
+  pendingMovimientos.add(id);
+  try {
+    await set(ref(db, 'cabanas/movimientos/' + id), reg);
+  } catch(e) { console.error('Firebase write error (movimiento):', e); }
+  pendingMovimientos.delete(id);
+}
+
+// Borrado por hijo
+async function removeMovimiento(id) {
+  if (!id) return;
+  ensureMovimientosObj();
+  delete cache.movimientos[id];       // update optimista del cache
+  pendingMovimientosDel.add(id);
+  try {
+    await remove(ref(db, 'cabanas/movimientos/' + id));
+  } catch(e) { console.error('Firebase remove error (movimiento):', e); }
+  pendingMovimientosDel.delete(id);
+}
+
+// Sync en vivo: escucha cambios remotos y actualiza cache + vistas.
+function attachMovimientosLive() {
+  onValue(ref(db, 'cabanas/movimientos'), snap => {
+    const remote = snap.exists() ? snap.val() : {};
+    const next = Array.isArray(remote)
+      ? Object.fromEntries(remote.filter(m => m && m.id).map(m => [m.id, m]))
+      : { ...remote };
+    // No pisar escrituras locales a medio guardar.
+    pendingMovimientos.forEach(id => {
+      if (cache.movimientos && cache.movimientos[id]) next[id] = cache.movimientos[id];
+    });
+    pendingMovimientosDel.forEach(id => { delete next[id]; });
+    cache.movimientos = next;
+    rerenderMovimientosViews();
+  });
+}
+
+// Re-render de las vistas que dependen de movimientos.
+function rerenderMovimientosViews() {
+  const isActive = s => document.getElementById('section-' + s)?.classList.contains('active');
+  if (isActive('contabilidad')) renderAcct(currentAcctTab);
+  if (isActive('caja')) renderCaja();
+  if (isActive('dashboard')) renderDashboard();
+}
+
+// Migración única: re-indexa el nodo por id (array o claves numéricas -> {id:reg}).
+async function migrateMovimientosToIndexed() {
+  const snap = await get(ref(db, 'cabanas/movimientos'));
+  if (!snap.exists()) return;
+  const val = snap.val();
+  if (!Array.isArray(val)) {
+    const ok = Object.entries(val).every(([k, m]) => m && m.id === k);
+    if (ok) return;
+  }
+  const arr = Array.isArray(val) ? val.filter(Boolean) : Object.values(val);
+  const indexed = {};
+  arr.forEach(m => { if (m && m.id) indexed[m.id] = m; });
+  await set(ref(db, 'cabanas/movimientos'), indexed);
+}
+
+// Init una sola vez: migra el formato y engancha el listener en vivo.
+async function initMovimientosLive() {
+  if (movimientosLiveReady) return;
+  await migrateMovimientosToIndexed();
+  attachMovimientosLive();
+  movimientosLiveReady = true;
+}
+
 async function loadAllData() {
   showLoader(true);
   try {
@@ -1905,7 +2009,7 @@ async function loadAllData() {
       // No pisar claves con escrituras locales pendientes (evita race condition)
       Object.keys(data).forEach(k => {
         // Estos nodos los gobierna su listener en vivo (onValue); no los pisamos acá.
-        if (k === 'reservas' || k === 'huespedes') return;
+        if (k === 'reservas' || k === 'huespedes' || k === 'movimientos') return;
         if (!pendingWrites.has(k)) cache[k] = data[k];
       });
       // Sembrar reservas en cache la primera vez (hasta que onValue dispare).
@@ -1922,12 +2026,20 @@ async function loadAllData() {
           ? Object.fromEntries(hh.filter(x => x && x.id).map(x => [x.id, x]))
           : (hh || {});
       }
+      // Sembrar movimientos en cache la primera vez (hasta que onValue dispare).
+      if (cache.movimientos === undefined) {
+        const mm = data.movimientos;
+        cache.movimientos = Array.isArray(mm)
+          ? Object.fromEntries(mm.filter(x => x && x.id).map(x => [x.id, x]))
+          : (mm || {});
+      }
     }
     await initData();
     // Migración + sync en vivo de reservas (una sola vez). Aislado para que un
     // fallo de permisos no rompa el resto de la carga.
     try { await initReservasLive(); } catch(e) { console.error('reservas live init error:', e); }
     try { await initHuespedesLive(); } catch(e) { console.error('huespedes live init error:', e); }
+    try { await initMovimientosLive(); } catch(e) { console.error('movimientos live init error:', e); }
     // await loadApiKeyFromDB(); // CHAT DESACTIVADO TEMPORALMENTE
   } catch(e) {
     console.error('Firebase read error:', e);
@@ -1959,9 +2071,10 @@ async function initData() {
   // reservas arranca vacío como objeto indexado por id (cabanas/reservas/{id}).
   // No sembramos un array: el nodo se crea con la primera escritura por hijo.
   await DB.set('beds', {});
-  await DB.set('movimientos', [
-    { id: 'm1', tipo:'ingreso', cat:'reserva', moneda:'ARS', monto:27000, metodo:'efectivo', fecha:today, concepto:'Check-in María González' },
-  ]);
+  // movimientos arranca como objeto indexado por id (cabanas/movimientos/{id}).
+  await DB.set('movimientos', {
+    m1: { id: 'm1', tipo:'ingreso', cat:'reserva', moneda:'ARS', monto:27000, metodo:'efectivo', fecha:today, concepto:'Check-in María González' },
+  });
   await DB.set('precios', {
     temporadas: [
       { id:'t1', nombre:'Temporada Alta (verano)', fecha_inicio:'2024-12-15', fecha_fin:'2025-02-28', tipo:'alta', anual:true },
@@ -2231,7 +2344,7 @@ function renderDashboard() {
   document.getElementById('stat-occ').textContent = `${occupied}/12`;
   document.getElementById('stat-occ-pct').textContent = Math.round(occupied/12*100)+'% ocupación';
 
-  const todayMovs = DB.get('movimientos',[]).filter(m=>m.fecha===tod&&m.tipo==='ingreso');
+  const todayMovs = getMovimientos().filter(m=>m.fecha===tod&&m.tipo==='ingreso');
   const ingARS = todayMovs.filter(m=>m.moneda==='ARS').reduce((a,b)=>a+Number(b.monto),0);
   const ingUSD = todayMovs.filter(m=>m.moneda==='USD').reduce((a,b)=>a+Number(b.monto),0);
   document.getElementById('stat-today-income').textContent = fmtMoney(ingARS);
@@ -2340,7 +2453,7 @@ function renderFechasImportantes() {
 let _charts = {};
 function renderDashboardCharts() {
   const reservas = getReservas();
-  const movimientos = DB.get('movimientos', []);
+  const movimientos = getMovimientos();
   const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   const hoy = new Date();
 
@@ -2856,9 +2969,7 @@ async function saveReserva() {
   }
   await writeReserva(reg); // escritura por hijo: no pisa otras reservas
   if(pagado > 0) {
-    const movs = DB.get('movimientos',[]);
-    movs.push({ id:'m'+Date.now(), tipo:'ingreso', cat:'reserva', moneda, monto:pagado, metodo:newData.pago, fecha:today(), concepto:`${estadoPago==='senia'?'Seña':'Pago'} reserva ${getHuespedNombre(h)} - Cabaña ${newData.hab}` });
-    await DB.set('movimientos', movs);
+    await writeMovimiento({ id:nuevoMovimientoId(), tipo:'ingreso', cat:'reserva', moneda, monto:pagado, metodo:newData.pago, fecha:today(), concepto:`${estadoPago==='senia'?'Seña':'Pago'} reserva ${getHuespedNombre(h)} - Cabaña ${newData.hab}` }); // escritura por hijo
   }
   savingReserva = false;
   if(btnGuardar) { btnGuardar.disabled = false; btnGuardar.textContent = 'Guardar Reserva'; }
@@ -2906,17 +3017,15 @@ async function confirmCheckin() {
   // Registrar pago si no había pago previo
   if(!r.pagado || r.pagado === 0) {
     const nights = nightsBetween(r.entrada, r.salida);
-    const movs = DB.get('movimientos',[]);
     const montoTotal = r.precio * nights;
-    movs.push({ id:'m'+Date.now(), tipo:'ingreso', cat:'Reserva / Check-in', moneda:r.moneda, monto:montoTotal, metodo:r.pago, fecha:today(), concepto:`Check-in ${getHuespedNombre(r.huespedId)} - Cab.${r.hab}` });
+    await writeMovimiento({ id:nuevoMovimientoId(), tipo:'ingreso', cat:'Reserva / Check-in', moneda:r.moneda, monto:montoTotal, metodo:r.pago, fecha:today(), concepto:`Check-in ${getHuespedNombre(r.huespedId)} - Cab.${r.hab}` }); // escritura por hijo
     // Comisión automática de plataforma (feature 6)
     const precios = DB.get('precios', {});
     const platData = (precios.plataformas||[]).find(p => p.plat === (r.plataforma||'directo'));
     if (platData && platData.comision > 0) {
       const comision = Math.round(montoTotal * platData.comision / 100);
-      movs.push({ id:'m'+Date.now()+'c', tipo:'egreso', cat:'Comisión plataforma', moneda:r.moneda, monto:comision, metodo:'transferencia', fecha:today(), concepto:`Comisión ${r.plataforma} ${platData.comision}% - Cab.${r.hab}` });
+      await writeMovimiento({ id:nuevoMovimientoId(), tipo:'egreso', cat:'Comisión plataforma', moneda:r.moneda, monto:comision, metodo:'transferencia', fecha:today(), concepto:`Comisión ${r.plataforma} ${platData.comision}% - Cab.${r.hab}` }); // escritura por hijo
     }
-    await DB.set('movimientos', movs);
     r.pagado = montoTotal;
     r.saldo = 0;
     r.estadoPago = 'total';
@@ -2964,9 +3073,7 @@ function savePago() {
   r.saldo = Math.max((Number(r.saldo)||0) - monto, 0);
   r.estadoPago = r.saldo <= 0 ? 'total' : 'senia';
   writeReserva(r); // escritura por hijo
-  const movs = DB.get('movimientos',[]);
-  movs.push({ id:'m'+Date.now(), tipo:'ingreso', cat:'reserva', moneda:r.moneda, monto, metodo, fecha:today(), concepto });
-  DB.set('movimientos', movs);
+  writeMovimiento({ id:nuevoMovimientoId(), tipo:'ingreso', cat:'reserva', moneda:r.moneda, monto, metodo, fecha:today(), concepto }); // escritura por hijo
   closeModal('modalPago');
   renderReservas();
   showNotif('💰 Pago registrado: '+fmtMoney(monto, r.moneda));
@@ -3020,9 +3127,7 @@ async function saveExtension() {
   r.salida = nuevaSalida;
   if(cobrar === 'si') {
     r.pagado = (Number(r.pagado)||0) + montoExtra;
-    const movs = DB.get('movimientos',[]);
-    movs.push({ id:'m'+Date.now(), tipo:'ingreso', cat:'reserva', moneda:r.moneda, monto:montoExtra, metodo, fecha:today(), concepto:`Extensión ${extra} noche(s) - ${getHuespedNombre(r.huespedId)} Cab.${r.hab}` });
-    await DB.set('movimientos', movs);
+    await writeMovimiento({ id:nuevoMovimientoId(), tipo:'ingreso', cat:'reserva', moneda:r.moneda, monto:montoExtra, metodo, fecha:today(), concepto:`Extensión ${extra} noche(s) - ${getHuespedNombre(r.huespedId)} Cab.${r.hab}` }); // escritura por hijo
   } else {
     r.saldo = (Number(r.saldo)||0) + montoExtra;
     r.estadoPago = 'senia';
@@ -3559,8 +3664,10 @@ function auditLog(accion, entidad, detalle) {
   DB.set('auditoria', log);
 }
 
+let currentAcctTab = 'ingresos'; // tab activo de contabilidad (para re-render en vivo)
 function renderAcct(tab) {
-  const movs = DB.get('movimientos', []);
+  currentAcctTab = tab;
+  const movs = getMovimientos();
   const c = document.getElementById('acctContent');
   if (!c) return;
 
@@ -3679,7 +3786,7 @@ function renderCuentasPorCobrar(c) {
 
 function renderPresupuesto(c) {
   const presupuestos = DB.get('presupuestos', []);
-  const movs = DB.get('movimientos', []);
+  const movs = getMovimientos();
   const mes = new Date().getMonth();
   const year = new Date().getFullYear();
   const movsmes = movs.filter(m => { const d = new Date(m.fecha); return d.getMonth()===mes && d.getFullYear()===year && m.tipo==='egreso'; });
@@ -3810,9 +3917,8 @@ async function aplicarRecurrentes() {
   let aplicados = 0;
   for (const r of recs) {
     if (Number(r.dia) === diaHoy && r.ultimaAplicacion !== hoy) {
-      const movs = DB.get('movimientos', []);
-      movs.push({
-        id: 'm' + Date.now() + Math.random(),
+      await writeMovimiento({ // escritura por hijo
+        id: nuevoMovimientoId(),
         tipo: 'egreso',
         cat: r.cat || 'Recurrente',
         moneda: r.moneda || 'ARS',
@@ -3823,7 +3929,6 @@ async function aplicarRecurrentes() {
         proveedorId: r.proveedorId || '',
         esRecurrente: true,
       });
-      await DB.set('movimientos', movs);
       r.ultimaAplicacion = hoy;
       aplicados++;
     }
@@ -3967,7 +4072,7 @@ async function deleteProveedor(idx) {
 }
 
 function exportarCSV() {
-  const movs = DB.get('movimientos', []);
+  const movs = getMovimientos();
   if (!movs.length) { showNotif('No hay movimientos para exportar', 'error'); return; }
   const provs = DB.get('proveedores', []);
   const headers = ['Fecha','Tipo','Categoría','Concepto','Moneda','Monto','TC','Monto ARS equiv.','Método','Proveedor','Impuesto','% Impuesto','Referencia'];
@@ -4001,7 +4106,7 @@ function switchAcctTab(tab, el) {
 function renderCaja() {
   const tod = today();
   document.getElementById('mov-fecha').value = tod;
-  const movs = DB.get('movimientos',[]).filter(m=>m.fecha===tod);
+  const movs = getMovimientos().filter(m=>m.fecha===tod);
   const ingARS = movs.filter(m=>m.tipo==='ingreso'&&m.moneda==='ARS').reduce((a,b)=>a+Number(b.monto),0);
   const ingUSD = movs.filter(m=>m.tipo==='ingreso'&&m.moneda==='USD').reduce((a,b)=>a+Number(b.monto),0);
   const egARS = movs.filter(m=>m.tipo==='egreso'&&m.moneda==='ARS').reduce((a,b)=>a+Number(b.monto),0);
@@ -4036,9 +4141,8 @@ function saveMovimiento() {
   const tieneImpuesto = document.getElementById('mov-impuesto')?.checked;
   const impuestoPct = tieneImpuesto ? Number(document.getElementById('mov-impuesto-pct')?.value || 0) : null;
   const tipo = document.getElementById('mov-tipo').value;
-  const movs = DB.get('movimientos', []);
   const mov = {
-    id: 'm' + Date.now(),
+    id: nuevoMovimientoId(),
     tipo,
     cat: document.getElementById('mov-cat').value,
     moneda,
@@ -4052,8 +4156,7 @@ function saveMovimiento() {
     ref: document.getElementById('mov-ref')?.value?.trim() || '',
   };
   if (tc) mov.tc = tc;
-  movs.push(mov);
-  DB.set('movimientos', movs);
+  writeMovimiento(mov); // escritura por hijo
   auditLog('registrar', 'Movimiento', `${tipo} ${fmtMoney(Number(monto), moneda)} — ${concepto}`);
   closeModal('modalMovimiento');
   renderCaja();
@@ -4064,7 +4167,7 @@ function calcArqueo() {
   const contado = Number(document.getElementById('cajaArqueo')?.value || 0);
   if (!contado) { showNotif('Ingresá el efectivo contado', 'error'); return; }
   const tod = today();
-  const movs = DB.get('movimientos', []).filter(m => m.fecha === tod);
+  const movs = getMovimientos().filter(m => m.fecha === tod);
   const efectivoEsperado = movs.filter(m => m.metodo === 'efectivo').reduce((s,m) => {
     return s + (m.tipo === 'ingreso' ? Number(m.monto) : -Number(m.monto));
   }, 0);
@@ -4083,7 +4186,7 @@ function calcArqueo() {
 
 function cerrarCaja() {
   const tod = today();
-  const movs = DB.get('movimientos', []).filter(m => m.fecha === tod);
+  const movs = getMovimientos().filter(m => m.fecha === tod);
   const ingARS = movs.filter(m=>m.tipo==='ingreso'&&m.moneda==='ARS').reduce((a,b)=>a+Number(b.monto),0);
   const egARS = movs.filter(m=>(m.tipo==='egreso'||m.tipo==='devolucion')&&m.moneda==='ARS').reduce((a,b)=>a+Number(b.monto),0);
   const ingUSD = movs.filter(m=>m.tipo==='ingreso'&&m.moneda==='USD').reduce((a,b)=>a+Number(b.monto),0);
@@ -4609,11 +4712,9 @@ async function saveHorario() {
   });
 
   if(cobrar && monto > 0) {
-    const movs = DB.get('movimientos',[]);
     const label = tipo === 'late' ? 'Late Check-out' : 'Early Check-in';
-    movs.push({ id:'m'+Date.now(), tipo:'ingreso', cat:'reserva', moneda, monto, metodo, fecha:today(),
-      concepto:`${label} ${hora}hs — ${getHuespedNombre(r.huespedId)} Cab.${r.hab}` });
-    await DB.set('movimientos', movs);
+    await writeMovimiento({ id:nuevoMovimientoId(), tipo:'ingreso', cat:'reserva', moneda, monto, metodo, fecha:today(),
+      concepto:`${label} ${hora}hs — ${getHuespedNombre(r.huespedId)} Cab.${r.hab}` }); // escritura por hijo
   }
   await writeReserva(r); // escritura por hijo
   closeModal('modalHorario');
