@@ -1839,7 +1839,8 @@ function showLoader(show) {
 async function initData() {
   if (cache['init_cabanas']) return; // ya inicializado en Firebase
   await DB.set('huespedes', []);
-  await DB.set('reservas', []);
+  // reservas arranca vacío como objeto indexado por id (cabanas/reservas/{id}).
+  // No sembramos un array: el nodo se crea con la primera escritura por hijo.
   await DB.set('beds', {});
   await DB.set('movimientos', [
     { id: 'm1', tipo:'ingreso', cat:'reserva', moneda:'ARS', monto:27000, metodo:'efectivo', fecha:today, concepto:'Check-in María González' },
@@ -2107,7 +2108,7 @@ function pagoBadge(r) {
 
 // ===================== DASHBOARD =====================
 function renderDashboard() {
-  const reservas = DB.get('reservas',[]);
+  const reservas = getReservas();
   const tod = today();
   const occupied = reservas.filter(r=>r.estado==='checkin').length;
   document.getElementById('stat-occ').textContent = `${occupied}/12`;
@@ -2221,7 +2222,7 @@ function renderFechasImportantes() {
 // ===== CHARTS DEL DASHBOARD =====
 let _charts = {};
 function renderDashboardCharts() {
-  const reservas = DB.get('reservas', []);
+  const reservas = getReservas();
   const movimientos = DB.get('movimientos', []);
   const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   const hoy = new Date();
@@ -2316,7 +2317,7 @@ function onEntradaChange() {
 
 // ===================== MAPA CAMAS =====================
 function renderMapa(fechaVer) {
-  const reservas = DB.get('reservas',[]);
+  const reservas = getReservas();
   const bedStates = DB.get('beds',{});
   const grid = document.getElementById('roomsGrid');
   const fechaConsulta = (fechaVer || today()).substring(0, 10);
@@ -2424,7 +2425,7 @@ function renderMapa(fechaVer) {
 
 function cycleBed(bedId) {
   const beds = DB.get('beds',{});
-  const reservas = DB.get('reservas',[]);
+  const reservas = getReservas();
   const resOcupada = reservas.find(r =>
     r.cabaña === bedId &&
     (r.estado === 'checkin' || r.estado === 'confirmada') &&
@@ -2489,7 +2490,7 @@ function cycleBed(bedId) {
 
 // ===================== RESERVAS =====================
 function renderReservas() {
-  const reservas = DB.get('reservas',[]);
+  const reservas = getReservas();
   const q = document.getElementById('filterReserva')?.value.toLowerCase()||'';
   const estado = document.getElementById('filterEstado')?.value||'';
   const plat = document.getElementById('filterPlat')?.value||'';
@@ -2590,7 +2591,7 @@ function updateBedsSelect() {
   const bedId = hab + '-1';
   sel.innerHTML = `<option value="${bedId}" selected>${bedId}</option>`;
   // Verificar disponibilidad
-  const reservas = DB.get('reservas',[]);
+  const reservas = getReservas();
   const beds = habBeds(hab);
   sel.innerHTML = beds.map(b => {
     // Cama bloqueada si tiene checkin activo O reserva confirmada que se superpone con las fechas elegidas
@@ -2644,7 +2645,7 @@ function openNuevaReserva() {
 }
 
 function editReserva(rid) {
-  const reservas = DB.get('reservas', []);
+  const reservas = getReservas();
   const r = reservas.find(x => x.id === rid);
   if (!r) return;
   document.getElementById('modalReservaTitle').textContent = 'Editar Reserva';
@@ -2691,7 +2692,7 @@ async function saveReserva() {
   }
   // Verificar disponibilidad de la cabaña para esas fechas
   const editId = document.getElementById('res-edit-id').value;
-  const reservasExist = DB.get('reservas',[]);
+  const reservasExist = getReservas();
   const conflicto = reservasExist.some(r =>
     r.id !== editId &&
     r.cabaña === cabaña &&
@@ -2711,7 +2712,7 @@ async function saveReserva() {
   const pagado = Number(document.getElementById('res-pagado').value)||0;
   const saldo = Math.max(totalEstadia - pagado, 0);
   const estadoPago = document.getElementById('res-estado-pago').value;
-  const reservas = DB.get('reservas',[]);
+  const reservas = getReservas();
   const huespedData = DB.get('huespedes',[]).find(x=>x.id===h);
   const desayunoVal = document.getElementById('res-desayuno').value;
   const newData = {
@@ -2727,15 +2728,16 @@ async function saveReserva() {
     desayuno: desayunoVal === 'si',
     notas: document.getElementById('res-notas').value,
   };
+  let reg;
   if (editId) {
-    // Editar reserva existente
-    const idx = reservas.findIndex(x => x.id === editId);
-    if (idx >= 0) reservas[idx] = { ...reservas[idx], ...newData };
+    // Editar reserva existente: merge sobre la existente (conserva campos no editados)
+    const existing = reservas.find(x => x.id === editId) || {};
+    reg = { ...existing, id: editId, ...newData };
   } else {
-    // Nueva reserva
-    reservas.push({ id: 'r'+Date.now(), ...newData });
+    // Nueva reserva con push key de Firebase
+    reg = { id: nuevaReservaId(), ...newData };
   }
-  await DB.set('reservas', reservas);
+  await writeReserva(reg); // escritura por hijo: no pisa otras reservas
   if(pagado > 0) {
     const movs = DB.get('movimientos',[]);
     movs.push({ id:'m'+Date.now(), tipo:'ingreso', cat:'reserva', moneda, monto:pagado, metodo:newData.pago, fecha:today(), concepto:`${estadoPago==='senia'?'Seña':'Pago'} reserva ${getHuespedNombre(h)} - Cabaña ${newData.hab}` });
@@ -2751,7 +2753,7 @@ async function saveReserva() {
 }
 
 function doCheckin(rid) {
-  const reservas = DB.get('reservas',[]);
+  const reservas = getReservas();
   const r = reservas.find(x=>x.id===rid);
   if(!r) return;
   // Advertir si el check-in es antes de la fecha de entrada
@@ -2777,7 +2779,7 @@ async function confirmCheckin() {
   const llave = document.getElementById('ci-llave').value.trim();
   const hora = document.getElementById('ci-hora').value;
   const obs = document.getElementById('ci-obs').value;
-  const reservas = DB.get('reservas',[]);
+  const reservas = getReservas();
   const r = reservas.find(x=>x.id===rid);
   if(!r) return;
   r.estado = 'checkin';
@@ -2802,7 +2804,7 @@ async function confirmCheckin() {
     r.saldo = 0;
     r.estadoPago = 'total';
   }
-  await DB.set('reservas', reservas);
+  await writeReserva(r); // escritura por hijo
   // Actualizar estado de cabaña en beds
   const beds = DB.get('beds',{});
   beds[r.cabaña] = 'occupied';
@@ -2815,7 +2817,7 @@ async function confirmCheckin() {
 }
 
 function openPago(rid) {
-  const reservas = DB.get('reservas',[]);
+  const reservas = getReservas();
   const r = reservas.find(x=>x.id===rid);
   if(!r) return;
   const nights = nightsBetween(r.entrada, r.salida);
@@ -2838,13 +2840,13 @@ function savePago() {
   const metodo = document.getElementById('pago-metodo').value;
   const concepto = document.getElementById('pago-concepto').value;
   if(!monto||monto<=0) { showNotif('Ingresá un monto válido','error'); return; }
-  const reservas = DB.get('reservas',[]);
+  const reservas = getReservas();
   const r = reservas.find(x=>x.id===rid);
   if(!r) return;
   r.pagado = (Number(r.pagado)||0) + monto;
   r.saldo = Math.max((Number(r.saldo)||0) - monto, 0);
   r.estadoPago = r.saldo <= 0 ? 'total' : 'senia';
-  DB.set('reservas', reservas);
+  writeReserva(r); // escritura por hijo
   const movs = DB.get('movimientos',[]);
   movs.push({ id:'m'+Date.now(), tipo:'ingreso', cat:'reserva', moneda:r.moneda, monto, metodo, fecha:today(), concepto });
   DB.set('movimientos', movs);
@@ -2854,7 +2856,7 @@ function savePago() {
 }
 
 function openExtender(rid) {
-  const reservas = DB.get('reservas',[]);
+  const reservas = getReservas();
   const r = reservas.find(x=>x.id===rid);
   if(!r) return;
   document.getElementById('ext-res-id').value = rid;
@@ -2893,7 +2895,7 @@ async function saveExtension() {
   const nuevaSalida = document.getElementById('ext-nueva-salida').value;
   const cobrar = document.getElementById('ext-cobrar').value;
   const metodo = document.getElementById('ext-metodo').value;
-  const reservas = DB.get('reservas',[]);
+  const reservas = getReservas();
   const r = reservas.find(x=>x.id===rid);
   if(!r || !nuevaSalida || nuevaSalida <= r.salida) { showNotif('Elegí una fecha posterior a la salida actual','error'); return; }
   const extra = nightsBetween(r.salida, nuevaSalida);
@@ -2908,21 +2910,21 @@ async function saveExtension() {
     r.saldo = (Number(r.saldo)||0) + montoExtra;
     r.estadoPago = 'senia';
   }
-  await DB.set('reservas', reservas);
+  await writeReserva(r); // escritura por hijo
   closeModal('modalExtender');
   renderReservas();
   showNotif(`📅 Estadía extendida ${extra} noche(s) hasta ${nuevaSalida}`);
 }
 
 async function doCheckout(rid) {
-  const reservas = DB.get('reservas',[]);
+  const reservas = getReservas();
   const r = reservas.find(x=>x.id===rid);
   if(!r) return;
   r.estado = 'checkout';
   const beds = DB.get('beds',{});
   beds[r.cabaña] = 'dirty';
   await DB.set('beds', beds);
-  await DB.set('reservas', reservas);
+  await writeReserva(r); // escritura por hijo
   renderReservas();
   renderCheckin();
   renderMapa();
@@ -2931,7 +2933,7 @@ async function doCheckout(rid) {
 
 // ===================== CHECKIN SECTION =====================
 function renderCheckin() {
-  const reservas = DB.get('reservas',[]);
+  const reservas = getReservas();
   const tod = today();
   const pendCheckin = reservas.filter(r=>r.estado==='confirmada'&&r.entrada<=tod);
   const pendCheckout = reservas.filter(r=>r.estado==='checkin'&&r.salida<=tod);
@@ -3011,7 +3013,7 @@ function renderHuespedes() {
 function showGuestDetail(id) {
   const h = DB.get('huespedes',[]).find(x=>x.id===id);
   if(!h) return;
-  const reservas = DB.get('reservas',[]).filter(r=>r.huespedId===id);
+  const reservas = getReservas().filter(r=>r.huespedId===id);
   const completadas = reservas.filter(r=>r.estado==='checkout'||r.estado==='checkin');
   const totalGastado = completadas.reduce((a,r)=>a+Number(r.precio||0)*nightsBetween(r.entrada,r.salida),0);
   const ultimaRes = completadas.sort((a,b)=>b.salida>a.salida?1:-1)[0];
@@ -3524,7 +3526,7 @@ function renderAcct(tab) {
 }
 
 function renderCuentasPorCobrar(c) {
-  const reservas = DB.get('reservas', []);
+  const reservas = getReservas();
   const huespedes = DB.get('huespedes', []);
   const pendientes = reservas.filter(r => {
     const total = r.precio * nightsBetween(r.entrada, r.salida);
@@ -4246,9 +4248,9 @@ function confirmDelete(tipo, id, nombre) {
 
 async function deleteHuesped(id) {
   const huespedes = DB.get('huespedes',[]).filter(h=>h.id!==id);
-  const reservas = DB.get('reservas',[]).filter(r=>r.huespedId!==id);
+  const reservasDelHuesped = getReservas().filter(r=>r.huespedId===id).map(r=>r.id);
   await DB.set('huespedes', huespedes);
-  await DB.set('reservas', reservas);
+  for (const rid of reservasDelHuesped) await removeReserva(rid); // borrado por hijo
   closeModal('modalConfirmDelete');
   renderHuespedes();
   renderReservas();
@@ -4256,8 +4258,7 @@ async function deleteHuesped(id) {
 }
 
 async function deleteReserva(id) {
-  const reservas = DB.get('reservas',[]).filter(r=>r.id!==id);
-  await DB.set('reservas', reservas);
+  await removeReserva(id); // borrado por hijo
   closeModal('modalConfirmDelete');
   renderReservas();
   showNotif('Reserva eliminada');
@@ -4265,7 +4266,7 @@ async function deleteReserva(id) {
 
 // ===================== CAMBIO DE CAMA =====================
 function openCambioCama(rid) {
-  const reservas = DB.get('reservas',[]);
+  const reservas = getReservas();
   const r = reservas.find(x=>x.id===rid);
   if(!r) return;
   document.getElementById('cc-res-id').value = rid;
@@ -4285,7 +4286,7 @@ function openCambioCama(rid) {
 function updateCambioCamaSelect() {
   const rid = document.getElementById('cc-res-id').value;
   const hab = document.getElementById('cc-hab').value;
-  const reservas = DB.get('reservas',[]);
+  const reservas = getReservas();
   const r = reservas.find(x=>x.id===rid);
   if(!r) return;
   const sel = document.getElementById('cc-cabaña');
@@ -4309,7 +4310,7 @@ async function saveCambioCama() {
   const motivo = document.getElementById('cc-motivo').value;
   const nuevaLlave = document.getElementById('cc-llave').value.trim();
   if(!nuevaCama) { showNotif('Seleccioná una cabaña disponible','error'); return; }
-  const reservas = DB.get('reservas',[]);
+  const reservas = getReservas();
   const r = reservas.find(x=>x.id===rid);
   if(!r) return;
   const cabañaAnterior = camaLabel(r.cabaña);
@@ -4322,7 +4323,7 @@ async function saveCambioCama() {
   r.hab = nuevaHab;
   if(nuevaLlave) r.llave = nuevaLlave;
   if(motivo) r.notas = (r.notas ? r.notas+' | ' : '') + 'Cambio de cabaña: '+motivo;
-  await DB.set('reservas', reservas);
+  await writeReserva(r); // escritura por hijo
   closeModal('modalCambioCama');
   renderReservas();
   renderCheckin();
@@ -4443,7 +4444,7 @@ function closeSidebar() {
 
 // ===================== LATE CHECK-OUT / EARLY CHECK-IN =====================
 function openHorario(rid, tipo) {
-  const reservas = DB.get('reservas',[]);
+  const reservas = getReservas();
   const r = reservas.find(x=>x.id===rid);
   if(!r) return;
   document.getElementById('horario-res-id').value = rid;
@@ -4486,7 +4487,7 @@ async function saveHorario() {
   if(!hora) { showNotif('Ingresá la hora','error'); return; }
   if(cobrar && monto <= 0) { showNotif('Ingresá un monto válido','error'); return; }
 
-  const reservas = DB.get('reservas',[]);
+  const reservas = getReservas();
   const r = reservas.find(x=>x.id===rid);
   if(!r) return;
 
@@ -4504,7 +4505,7 @@ async function saveHorario() {
       concepto:`${label} ${hora}hs — ${getHuespedNombre(r.huespedId)} Cab.${r.hab}` });
     await DB.set('movimientos', movs);
   }
-  await DB.set('reservas', reservas);
+  await writeReserva(r); // escritura por hijo
   closeModal('modalHorario');
   renderCheckin();
   const label = tipo === 'late' ? 'Late check-out' : 'Early check-in';
@@ -4513,26 +4514,21 @@ async function saveHorario() {
 
 // ===================== LIMPIAR DUPLICADOS =====================
 async function limpiarDuplicados() {
-  const reservas = DB.get('reservas', []);
+  const reservas = getReservas();
   const vistas = new Set();
-  const limpias = [];
   const duplicadas = [];
   for (const r of reservas) {
     // Clave única: cabaña + entrada + salida
     const key = `${r.cabaña}|${r.entrada}|${r.salida}`;
-    if (vistas.has(key)) {
-      duplicadas.push(r.id);
-    } else {
-      vistas.add(key);
-      limpias.push(r);
-    }
+    if (vistas.has(key)) duplicadas.push(r.id);
+    else vistas.add(key);
   }
   if (duplicadas.length === 0) {
     showNotif('✅ No hay reservas duplicadas', 'success');
     return;
   }
   if (!confirm(`Se encontraron ${duplicadas.length} reserva(s) duplicada(s). ¿Eliminamos?`)) return;
-  await DB.set('reservas', limpias);
+  for (const rid of duplicadas) await removeReserva(rid); // borrado por hijo
   renderReservas();
   showNotif(`🧹 ${duplicadas.length} duplicado(s) eliminado(s)`);
 }
@@ -4652,7 +4648,7 @@ function grillaNavegar(dias) {
 
 function renderGrilla() {
   if (!grillaFechaInicio) grillaFechaInicio = today();
-  const reservas = DB.get('reservas', []);
+  const reservas = getReservas();
   const tod = today();
 
   // Generar array de fechas a mostrar
@@ -4734,7 +4730,7 @@ function renderGrilla() {
 function buildSystemPrompt() {
   // Asegurar que la KB esté en cache (puede no estar si el chat se abrió muy rápido)
   // Los datos se leen de cache que fue populado por loadAllData()
-  const reservas = DB.get('reservas', []);
+  const reservas = getReservas();
   const bedStates = DB.get('beds', {});
   const precios = DB.get('precios', {});
 
