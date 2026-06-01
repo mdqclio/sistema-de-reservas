@@ -2000,6 +2000,87 @@ async function initMovimientosLive() {
   movimientosLiveReady = true;
 }
 
+// ============================================================================
+// BEDS: escritura por hijo + sync en vivo. CASO DISTINTO a reservas:
+// cabanas/beds YA es un objeto indexado por cabaña ({"1-1":estado, ...}), así
+// que NO hay migración array->objeto. Solo cambia la escritura: tocamos el hijo
+// del estado (set/remove en cabanas/beds/{cabId}) en vez de pisar el objeto
+// entero, para que dos usuarios que cambian cabañas distintas no se pisen.
+// El valor puede ser un string ('free'/'dirty'/'maintenance') o un objeto
+// {estado:...}: se preserva tal cual, no se normaliza ni se rompe ningún formato.
+// ============================================================================
+const pendingBeds = new Set();    // cabIds con escritura local en vuelo
+const pendingBedsDel = new Set(); // cabIds con borrado local en vuelo
+let bedsLiveReady = false;
+
+// Lectura: el objeto entero {cabId:estado} (ya viene indexado).
+function getBeds() {
+  return cache.beds || {};
+}
+
+// Asegura que el cache de beds sea un objeto (normalización defensiva)
+function ensureBedsObj() {
+  if (!cache.beds || typeof cache.beds !== 'object' || Array.isArray(cache.beds)) {
+    cache.beds = {};
+  }
+  return cache.beds;
+}
+
+// Escritura por hijo: NO pisa el resto del objeto. `valor` se guarda tal cual
+// (string u objeto {estado}), preservando ambos formatos.
+async function writeBed(cabId, valor) {
+  if (!cabId) return;
+  ensureBedsObj();
+  cache.beds[cabId] = valor;        // update optimista del cache
+  pendingBeds.add(cabId);
+  try {
+    await set(ref(db, 'cabanas/beds/' + cabId), valor);
+  } catch(e) { console.error('Firebase write error (bed):', e); }
+  pendingBeds.delete(cabId);
+}
+
+// Borrado por hijo
+async function removeBed(cabId) {
+  if (!cabId) return;
+  ensureBedsObj();
+  delete cache.beds[cabId];         // update optimista del cache
+  pendingBedsDel.add(cabId);
+  try {
+    await remove(ref(db, 'cabanas/beds/' + cabId));
+  } catch(e) { console.error('Firebase remove error (bed):', e); }
+  pendingBedsDel.delete(cabId);
+}
+
+// Sync en vivo: escucha cambios remotos y actualiza cache + vistas.
+function attachBedsLive() {
+  onValue(ref(db, 'cabanas/beds'), snap => {
+    const remote = snap.exists() ? snap.val() : {};
+    // beds es {cabId:estado}; preservamos string u objeto {estado} sin tocar.
+    const next = (remote && typeof remote === 'object' && !Array.isArray(remote)) ? { ...remote } : {};
+    // No pisar escrituras locales a medio guardar.
+    pendingBeds.forEach(cabId => {
+      if (cache.beds && cache.beds[cabId] !== undefined) next[cabId] = cache.beds[cabId];
+    });
+    pendingBedsDel.forEach(cabId => { delete next[cabId]; });
+    cache.beds = next;
+    rerenderBedsViews();
+  });
+}
+
+// Re-render de las vistas que dependen del estado de las cabañas.
+function rerenderBedsViews() {
+  const isActive = s => document.getElementById('section-' + s)?.classList.contains('active');
+  if (isActive('mapa')) renderMapa(document.getElementById('mapaFecha')?.value);
+  if (isActive('grilla')) renderGrilla();
+}
+
+// Init una sola vez: engancha el listener en vivo. Sin migración (ya es objeto).
+async function initBedsLive() {
+  if (bedsLiveReady) return;
+  attachBedsLive();
+  bedsLiveReady = true;
+}
+
 async function loadAllData() {
   showLoader(true);
   try {
@@ -2009,7 +2090,7 @@ async function loadAllData() {
       // No pisar claves con escrituras locales pendientes (evita race condition)
       Object.keys(data).forEach(k => {
         // Estos nodos los gobierna su listener en vivo (onValue); no los pisamos acá.
-        if (k === 'reservas' || k === 'huespedes' || k === 'movimientos') return;
+        if (k === 'reservas' || k === 'huespedes' || k === 'movimientos' || k === 'beds') return;
         if (!pendingWrites.has(k)) cache[k] = data[k];
       });
       // Sembrar reservas en cache la primera vez (hasta que onValue dispare).
@@ -2033,6 +2114,11 @@ async function loadAllData() {
           ? Object.fromEntries(mm.filter(x => x && x.id).map(x => [x.id, x]))
           : (mm || {});
       }
+      // Sembrar beds en cache la primera vez (ya es objeto {cabId:estado}).
+      if (cache.beds === undefined) {
+        const bb = data.beds;
+        cache.beds = (bb && typeof bb === 'object' && !Array.isArray(bb)) ? bb : {};
+      }
     }
     await initData();
     // Migración + sync en vivo de reservas (una sola vez). Aislado para que un
@@ -2040,6 +2126,7 @@ async function loadAllData() {
     try { await initReservasLive(); } catch(e) { console.error('reservas live init error:', e); }
     try { await initHuespedesLive(); } catch(e) { console.error('huespedes live init error:', e); }
     try { await initMovimientosLive(); } catch(e) { console.error('movimientos live init error:', e); }
+    try { await initBedsLive(); } catch(e) { console.error('beds live init error:', e); }
     // await loadApiKeyFromDB(); // CHAT DESACTIVADO TEMPORALMENTE
   } catch(e) {
     console.error('Firebase read error:', e);
@@ -2548,7 +2635,7 @@ function onEntradaChange() {
 // ===================== MAPA CAMAS =====================
 function renderMapa(fechaVer) {
   const reservas = getReservas();
-  const bedStates = DB.get('beds',{});
+  const bedStates = getBeds();
   const grid = document.getElementById('roomsGrid');
   const fechaConsulta = (fechaVer || today()).substring(0, 10);
   const esModoConsulta = fechaVer && fechaVer.substring(0,10) !== today();
@@ -2654,7 +2741,7 @@ function renderMapa(fechaVer) {
 }
 
 function cycleBed(bedId) {
-  const beds = DB.get('beds',{});
+  const beds = getBeds();
   const reservas = getReservas();
   const resOcupada = reservas.find(r =>
     r.cabaña === bedId &&
@@ -2713,8 +2800,7 @@ function cycleBed(bedId) {
   const states = ['free','dirty','maintenance'];
   const cur = beds[bedId] || 'free';
   const next = states[(states.indexOf(cur)+1)%states.length];
-  beds[bedId] = next;
-  DB.set('beds', beds);
+  writeBed(bedId, next); // escritura por hijo: no pisa otras cabañas
   renderMapa(document.getElementById('mapaFecha')?.value);
 }
 
@@ -3031,10 +3117,8 @@ async function confirmCheckin() {
     r.estadoPago = 'total';
   }
   await writeReserva(r); // escritura por hijo
-  // Actualizar estado de cabaña en beds
-  const beds = DB.get('beds',{});
-  beds[r.cabaña] = 'occupied';
-  await DB.set('beds', beds);
+  // Actualizar estado de cabaña en beds (escritura por hijo)
+  await writeBed(r.cabaña, 'occupied');
   closeModal('modalCheckin');
   renderReservas();
   renderCheckin();
@@ -3143,9 +3227,7 @@ async function doCheckout(rid) {
   const r = reservas.find(x=>x.id===rid);
   if(!r) return;
   r.estado = 'checkout';
-  const beds = DB.get('beds',{});
-  beds[r.cabaña] = 'dirty';
-  await DB.set('beds', beds);
+  await writeBed(r.cabaña, 'dirty'); // escritura por hijo
   await writeReserva(r); // escritura por hijo
   renderReservas();
   renderCheckin();
@@ -4530,10 +4612,9 @@ async function saveCambioCama() {
   if(!r) return;
   const cabañaAnterior = camaLabel(r.cabaña);
   // Limpiar estado manual de beds para ambas cabañas — las reservas son fuente de verdad
-  const beds = DB.get('beds',{});
-  delete beds[r.cabaña];
-  delete beds[nuevaCama];
-  await DB.set('beds', beds);
+  // (borrado por hijo: no pisa el estado de otras cabañas)
+  await removeBed(r.cabaña);
+  await removeBed(nuevaCama);
   r.cabaña = nuevaCama;
   r.hab = nuevaHab;
   if(nuevaLlave) r.llave = nuevaLlave;
@@ -4942,7 +5023,7 @@ function buildSystemPrompt() {
   // Asegurar que la KB esté en cache (puede no estar si el chat se abrió muy rápido)
   // Los datos se leen de cache que fue populado por loadAllData()
   const reservas = getReservas();
-  const bedStates = DB.get('beds', {});
+  const bedStates = getBeds();
   const precios = DB.get('precios', {});
 
   const todayStr = today();
