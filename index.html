@@ -4666,6 +4666,11 @@ function confirmDelete(tipo, id) {
   // Resolvemos el nombre ADENTRO desde el id (push-key, seguro): nunca llega por el onclick.
   let nombre;
   if (tipo === 'huesped') {
+    // No se puede borrar un huésped con reservas asociadas.
+    if (getReservas().some(r => r.huespedId === id)) {
+      showNotif('Este huésped tiene reservas asociadas; no se puede eliminar', 'error');
+      return;
+    }
     const h = getHuespedes().find(x => x.id === id);
     nombre = h ? `${h.nombre||''} ${h.apellido||''}`.trim() : 'huésped';
   } else {
@@ -4674,7 +4679,7 @@ function confirmDelete(tipo, id) {
   }
   const safe = escapeHtml(nombre);
   const msgs = {
-    huesped: `¿Borrar al huésped <strong>${safe}</strong>? También se eliminarán sus reservas asociadas.`,
+    huesped: `¿Borrar al huésped <strong>${safe}</strong>? Esta acción no se puede deshacer.`,
     reserva: `¿Eliminar la <strong>${safe}</strong>? Esta acción no se puede deshacer.`
   };
   document.getElementById('confirmDeleteMsg').innerHTML = msgs[tipo] || `¿Eliminar ${safe}?`;
@@ -4684,10 +4689,13 @@ function confirmDelete(tipo, id) {
 }
 
 async function deleteHuesped(id) {
-  const reservasDelHuesped = getReservas().filter(r=>r.huespedId===id).map(r=>r.id);
+  // Defensa: nunca borrar un huésped que tenga reservas (también lo bloquea confirmDelete).
+  if (getReservas().some(r => r.huespedId === id)) {
+    showNotif('Este huésped tiene reservas asociadas; no se puede eliminar', 'error');
+    return;
+  }
   await removeHuesped(id); // borrado por hijo
   await removeFoto(id).catch(e => console.error('Error borrando foto DNI:', e)); // no dejar foto huérfana
-  for (const rid of reservasDelHuesped) await removeReserva(rid); // borrado por hijo
   closeModal('modalConfirmDelete');
   renderHuespedes();
   renderReservas();
