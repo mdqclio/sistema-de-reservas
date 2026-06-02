@@ -3547,7 +3547,7 @@ function renderPrecios(tab) {
 
   if(tab==='temporada') {
     const rows = (precios.temporadas||[]).map(t=>`<tr>
-      <td><input ${INP} style="width:130px" value="${t.nombre}" onchange="updateTemporada('${t.id}','nombre',this.value)"></td>
+      <td><input ${INP} style="width:130px" value="${escapeHtml(t.nombre)}" onchange="updateTemporada('${t.id}','nombre',this.value)"></td>
       <td>
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
           <label style="font-size:11px;color:var(--text3)">Desde</label>
@@ -3606,7 +3606,7 @@ function renderPrecios(tab) {
   } else if(tab==='finde') {
     const fines = precios.fines_semana_largos || [];
     const rows = fines.map(f=>`<tr>
-      <td><input ${INP} style="width:180px" value="${f.nombre}" onchange="updateFinde('${f.id}','nombre',this.value)"></td>
+      <td><input ${INP} style="width:180px" value="${escapeHtml(f.nombre)}" onchange="updateFinde('${f.id}','nombre',this.value)"></td>
       <td><input type="date" ${INP} style="width:145px" value="${f.fecha_inicio||''}" onchange="updateFinde('${f.id}','fecha_inicio',this.value)"></td>
       <td><input type="date" ${INP} style="width:145px" value="${f.fecha_fin||''}" onchange="updateFinde('${f.id}','fecha_fin',this.value)"></td>
       <td>
@@ -3635,7 +3635,7 @@ function renderPrecios(tab) {
   } else if(tab==='promo') {
     const promos = precios.promociones || [];
     const rows = promos.map(p=>`<tr>
-      <td><input ${INP} style="width:180px" value="${p.nombre}" onchange="updatePromo('${p.id}','nombre',this.value)"></td>
+      <td><input ${INP} style="width:180px" value="${escapeHtml(p.nombre)}" onchange="updatePromo('${p.id}','nombre',this.value)"></td>
       <td><input type="date" ${INP} style="width:145px" value="${p.fecha_inicio||''}" onchange="updatePromo('${p.id}','fecha_inicio',this.value)"></td>
       <td><input type="date" ${INP} style="width:145px" value="${p.fecha_fin||''}" onchange="updatePromo('${p.id}','fecha_fin',this.value)"></td>
       <td>
@@ -3795,7 +3795,7 @@ function getCatOptions(tipoFiltro) {
   const cats = getCategorias();
   return cats
     .filter(c => !tipoFiltro || c.tipo === tipoFiltro || c.tipo === 'ambos' || (tipoFiltro==='egreso' && c.tipo==='devolucion'))
-    .map(c => `<option value="${c.nombre}">${c.nombre}</option>`)
+    .map(c => `<option value="${escapeHtml(c.nombre)}">${escapeHtml(c.nombre)}</option>`)
     .join('');
 }
 
@@ -5493,7 +5493,9 @@ function hideQuickReplies() {
 
 function escapeHtml(t) {
   // Coerce seguro: null/undefined -> '', números -> string. Evita romper en datos opcionales.
-  return String(t ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // Escape estándar de 5 chars: incluye " y ' para que sea seguro también dentro de atributos.
+  return String(t ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 async function sendQuickReply(i) {
