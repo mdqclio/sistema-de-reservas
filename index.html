@@ -2464,7 +2464,7 @@ function renderDashboard() {
 
   document.getElementById('dash-checkins').innerHTML = proxCheckins.length
     ? proxCheckins.map(r=>`<tr>
-        <td>${getHuespedNombre(r.huespedId, r)}</td>
+        <td>${escapeHtml(getHuespedNombre(r.huespedId, r))}</td>
         <td>Cabaña ${r.hab}</td>
         <td>${fmtFecha(r.entrada)}</td>
         <td>${platBadge(r.plataforma)}</td>
@@ -2472,7 +2472,7 @@ function renderDashboard() {
     : '<tr><td colspan="4" style="text-align:center;color:var(--text3)">Sin check-ins pendientes</td></tr>';
   document.getElementById('dash-checkouts').innerHTML = proxCheckouts.length
     ? proxCheckouts.map(r=>`<tr>
-        <td>${getHuespedNombre(r.huespedId, r)}</td>
+        <td>${escapeHtml(getHuespedNombre(r.huespedId, r))}</td>
         <td>Cabaña ${r.hab}</td>
         <td>${fmtFecha(r.salida)}</td>
         <td>${pagoBadge(r)}</td>
@@ -2540,7 +2540,7 @@ function renderFechasImportantes() {
         const waLink = e.tel ? `<a href="https://wa.me/${e.tel}?text=${waMsg}" target="_blank" class="btn btn-green btn-sm">📱 Escribir por WhatsApp</a>` : '';
         return `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;background:var(--surface2);border-radius:var(--radius);">
           <div>
-            <span style="font-weight:600;color:var(--text)">${e.nombre}</span>
+            <span style="font-weight:600;color:var(--text)">${escapeHtml(e.nombre)}</span>
             <span style="margin-left:8px;font-size:12px;color:var(--text3)">${e.label} — ${e.fecha}</span>
           </div>
           <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
@@ -2714,7 +2714,7 @@ function renderMapa(fechaVer) {
             (r.estado === 'checkin' || r.estado === 'confirmada') &&
             r.entrada.substring(0,10) <= fechaConsulta && r.salida.substring(0,10) > fechaConsulta
           );
-          const guestName = res ? getHuespedNombre(res.huespedId).split(' ')[0] : '';
+          const guestName = res ? escapeHtml(getHuespedNombre(res.huespedId).split(' ')[0]) : '';
           const pasajeros = res?.pasajeros || '';
           const desayuno = res?.desayuno;
           const clickable = !esModoConsulta;
@@ -2772,14 +2772,14 @@ function cycleBed(bedId) {
     const nights = nightsBetween(resOcupada.entrada, resOcupada.salida);
     document.getElementById('guestDetailContent').innerHTML = `
       <div class="guest-detail" style="margin-bottom:20px">
-        <div class="guest-avatar">${h?(h.nombre[0]+h.apellido[0]):'?'}</div>
+        <div class="guest-avatar">${h?escapeHtml(h.nombre[0]+h.apellido[0]):'?'}</div>
         <div class="guest-info">
-          <h3>${getHuespedNombre(resOcupada.huespedId, resOcupada)}</h3>
+          <h3>${escapeHtml(getHuespedNombre(resOcupada.huespedId, resOcupada))}</h3>
           <div class="guest-meta">
             <span class="meta-chip">🏕️ Cabaña ${resOcupada.hab}</span>
-            ${resOcupada.llave?`<span class="meta-chip">🔑 Llave: ${resOcupada.llave}</span>`:''}
-            <span class="meta-chip">🌍 ${h?.nac||'—'}</span>
-            ${h?.tel?`<span class="meta-chip"><a href="https://wa.me/${h.tel.replace(/\D/g,'')}" target="_blank" style="color:inherit;text-decoration:none;">📱 ${h.tel}</a></span>`:''}
+            ${resOcupada.llave?`<span class="meta-chip">🔑 Llave: ${escapeHtml(resOcupada.llave)}</span>`:''}
+            <span class="meta-chip">🌍 ${escapeHtml(h?.nac||'—')}</span>
+            ${h?.tel?`<span class="meta-chip"><a href="https://wa.me/${h.tel.replace(/\D/g,'')}" target="_blank" style="color:inherit;text-decoration:none;">📱 ${escapeHtml(h.tel)}</a></span>`:''}
           </div>
         </div>
       </div>
@@ -2807,7 +2807,7 @@ function cycleBed(bedId) {
           <strong style="color:${saldo>0?'#fbbf24':'#34d399'}">${saldo>0?fmtMoney(saldo,resOcupada.moneda):'✓ Al día'}</strong>
         </div>
       </div>
-      ${resOcupada.notas?`<div style="margin-top:12px;padding:10px;background:var(--surface2);border-radius:var(--radius);font-size:13px;color:var(--text2)">📝 ${resOcupada.notas}</div>`:''}
+      ${resOcupada.notas?`<div style="margin-top:12px;padding:10px;background:var(--surface2);border-radius:var(--radius);font-size:13px;color:var(--text2)">📝 ${escapeHtml(resOcupada.notas)}</div>`:''}
     `;
     document.querySelector('#modalGuestDetail h2').textContent = '🏕️ Cabaña ' + bedId.split('-')[0];
     openModal('modalGuestDetail');
@@ -2852,7 +2852,7 @@ function renderReservas() {
     const canCheckout = r.estado==='checkin';
     const hasSaldo = Number(r.saldo||0) > 0;
     return `<tr>
-      <td>${getHuespedNombre(r.huespedId, r)}</td>
+      <td>${escapeHtml(getHuespedNombre(r.huespedId, r))}</td>
       <td>Cabaña ${r.hab}</td>
       <td>${fmtFecha(r.entrada)}</td><td>${fmtFecha(r.salida)}</td>
       <td style="text-align:center">${nights}</td>
@@ -2867,7 +2867,7 @@ function renderReservas() {
         ${canCheckout ? `<button class="btn btn-blue btn-icon" title="Extender días" onclick="openExtender('${r.id}')">➕</button>` : ''}
         ${(canCheckin||canCheckout) && hasSaldo ? `<button class="btn btn-green btn-icon" title="Cobrar saldo" onclick="openPago('${r.id}')">💰</button>` : ''}
         <button class="btn btn-ghost btn-icon" title="Editar" onclick="editReserva('${r.id}')">✏️</button>
-        <button class="btn btn-red btn-icon" title="Eliminar" onclick="confirmDelete('reserva','${r.id}','reserva de ${getHuespedNombre(r.huespedId, r)}')">🗑</button>
+        <button class="btn btn-red btn-icon" title="Eliminar" onclick="confirmDelete('reserva','${r.id}')">🗑</button>
       </td>
     </tr>`;
   }).join('');
@@ -2966,7 +2966,7 @@ function openNuevaReserva() {
   const huespedes = getHuespedes();
   const sel = document.getElementById('res-huesped');
   sel.innerHTML = '<option value="">Seleccionar...</option>' +
-    huespedes.map(h => `<option value="${h.id}">${h.nombre} ${h.apellido}</option>`).join('');
+    huespedes.map(h => `<option value="${h.id}">${escapeHtml(h.nombre)} ${escapeHtml(h.apellido)}</option>`).join('');
   document.getElementById('res-hab').value = '';
   document.getElementById('res-entrada').value = today();
   const manana = new Date(); manana.setDate(manana.getDate()+1);
@@ -2990,7 +2990,7 @@ function editReserva(rid) {
   const huespedes = getHuespedes();
   const sel = document.getElementById('res-huesped');
   sel.innerHTML = '<option value="">Seleccionar...</option>' +
-    huespedes.map(h => `<option value="${h.id}">${h.nombre} ${h.apellido}</option>`).join('');
+    huespedes.map(h => `<option value="${h.id}">${escapeHtml(h.nombre)} ${escapeHtml(h.apellido)}</option>`).join('');
   sel.value = r.huespedId;
   document.getElementById('res-hab').value = r.hab;
   updateBedsSelect();
@@ -3102,7 +3102,7 @@ function doCheckin(rid) {
   document.getElementById('ci-obs').value = '';
   document.getElementById('ci-resumen').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
-      <div><span style="color:var(--text3);display:block;font-size:11px">Huésped</span><strong>${getHuespedNombre(r.huespedId)}</strong></div>
+      <div><span style="color:var(--text3);display:block;font-size:11px">Huésped</span><strong>${escapeHtml(getHuespedNombre(r.huespedId))}</strong></div>
       <div><span style="color:var(--text3);display:block;font-size:11px">Cab. / Cama</span><strong>Cabaña ${r.hab}</strong></div>
       <div><span style="color:var(--text3);display:block;font-size:11px">Salida</span><strong>${fmtFecha(r.salida)}</strong></div>
     </div>`;
@@ -3158,7 +3158,7 @@ function openPago(rid) {
   document.getElementById('pago-concepto').value = `Saldo estadía ${getHuespedNombre(r.huespedId)}`;
   document.getElementById('pago-resumen').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
-      <div><span style="color:var(--text3);display:block;font-size:11px">Huésped</span><strong>${getHuespedNombre(r.huespedId)}</strong></div>
+      <div><span style="color:var(--text3);display:block;font-size:11px">Huésped</span><strong>${escapeHtml(getHuespedNombre(r.huespedId))}</strong></div>
       <div><span style="color:var(--text3);display:block;font-size:11px">Total estadía</span><strong style="color:var(--accent2)">${fmtMoney(total,r.moneda)}</strong></div>
       <div><span style="color:var(--text3);display:block;font-size:11px">Saldo pendiente</span><strong style="color:#fbbf24">${fmtMoney(r.saldo||0,r.moneda)}</strong></div>
     </div>`;
@@ -3195,7 +3195,7 @@ function openExtender(rid) {
   document.getElementById('ext-monto-extra').value = fmtMoney(0, r.moneda);
   document.getElementById('ext-resumen').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
-      <div><span style="color:var(--text3);display:block;font-size:11px">Huésped</span><strong>${getHuespedNombre(r.huespedId)}</strong></div>
+      <div><span style="color:var(--text3);display:block;font-size:11px">Huésped</span><strong>${escapeHtml(getHuespedNombre(r.huespedId))}</strong></div>
       <div><span style="color:var(--text3);display:block;font-size:11px">Salida actual</span><strong style="color:#fbbf24">${fmtFecha(r.salida)}</strong></div>
       <div><span style="color:var(--text3);display:block;font-size:11px">Precio/noche</span><strong style="color:var(--accent2)">${fmtMoney(r.precio,r.moneda)}</strong></div>
     </div>`;
@@ -3266,7 +3266,7 @@ function renderCheckin() {
 
   document.getElementById('tablaCheckin').innerHTML = pendCheckin.length
     ? pendCheckin.map(r=>`<tr>
-        <td>${getHuespedNombre(r.huespedId, r)}</td>
+        <td>${escapeHtml(getHuespedNombre(r.huespedId, r))}</td>
         <td>Cab.${r.hab}</td><td>${fmtFecha(r.entrada)}</td>
         <td style="display:flex;gap:4px;flex-wrap:wrap;">
           <button class="btn btn-green btn-sm" onclick="doCheckin('${r.id}');renderCheckin()">Check-in</button>
@@ -3277,7 +3277,7 @@ function renderCheckin() {
 
   document.getElementById('tablaCheckout').innerHTML = pendCheckout.length
     ? pendCheckout.map(r=>`<tr>
-        <td>${getHuespedNombre(r.huespedId, r)}</td>
+        <td>${escapeHtml(getHuespedNombre(r.huespedId, r))}</td>
         <td>Cab.${r.hab}</td><td>${fmtFecha(r.salida)}</td>
         <td style="display:flex;gap:4px;flex-wrap:wrap;">
           <button class="btn btn-amber btn-sm" onclick="doCheckout('${r.id}');renderCheckin()">Check-out</button>
@@ -3291,9 +3291,9 @@ function renderCheckin() {
         const h = getHuespedes().find(x=>x.id===r.huespedId);
         const saldo = Number(r.saldo||0);
         return `<tr>
-          <td>${getHuespedNombre(r.huespedId, r)}</td>
-          <td>${h?.nac||'—'}</td>
-          <td>${h?.ciudad||'—'}</td>
+          <td>${escapeHtml(getHuespedNombre(r.huespedId, r))}</td>
+          <td>${escapeHtml(h?.nac||'—')}</td>
+          <td>${escapeHtml(h?.ciudad||'—')}</td>
           <td>Cabaña ${r.hab}</td>
 
           <td>${fmtFecha(r.entrada)}${r.horaCheckin?` <span style="color:var(--text3);font-size:11px">${r.horaCheckin}hs</span>`:''}</td>
@@ -3319,19 +3319,19 @@ function renderHuespedes() {
 
   // populate modal select
   const sel = document.getElementById('res-huesped');
-  sel.innerHTML = '<option value="">Seleccionar...</option>'+huespedes.map(h=>`<option value="${h.id}">${h.nombre} ${h.apellido}</option>`).join('');
+  sel.innerHTML = '<option value="">Seleccionar...</option>'+huespedes.map(h=>`<option value="${h.id}">${escapeHtml(h.nombre)} ${escapeHtml(h.apellido)}</option>`).join('');
 
   document.getElementById('tablaHuespedes').innerHTML = filtered.length
     ? filtered.map(h=>`<tr>
-        <td><strong style="color:var(--text)">${h.nombre} ${h.apellido}</strong>${h.pendiente?` <span class="badge amber" style="font-size:10px">Por confirmar</span>`:''}</td>
-        <td style="font-family:'DM Mono';font-size:12px">${h.dni}</td>
-        <td>${h.nac}</td><td>${h.tel||'—'}</td><td>${h.email||'—'}</td>
+        <td><strong style="color:var(--text)">${escapeHtml(h.nombre)} ${escapeHtml(h.apellido)}</strong>${h.pendiente?` <span class="badge amber" style="font-size:10px">Por confirmar</span>`:''}</td>
+        <td style="font-family:'DM Mono';font-size:12px">${escapeHtml(h.dni)}</td>
+        <td>${escapeHtml(h.nac)}</td><td>${escapeHtml(h.tel||'—')}</td><td>${escapeHtml(h.email||'—')}</td>
         <td style="text-align:center">${h.estadias||0}</td>
         <td>${getScoreBadge(h.score)}</td>
         <td class="acciones">
           <button class="btn btn-ghost btn-icon" title="Ver ficha" onclick="showGuestDetail('${h.id}')">👁</button>
           <button class="btn btn-ghost btn-icon" title="Editar" onclick="openEditHuesped('${h.id}')">✏️</button>
-          <button class="btn btn-red btn-icon" title="Eliminar" onclick="confirmDelete('huesped','${h.id}','${h.nombre} ${h.apellido}')">🗑</button>
+          <button class="btn btn-red btn-icon" title="Eliminar" onclick="confirmDelete('huesped','${h.id}')">🗑</button>
         </td>
       </tr>`).join('')
     : '<tr><td colspan="7" style="text-align:center;color:var(--text3)">Sin huéspedes</td></tr>';
@@ -3349,14 +3349,14 @@ function showGuestDetail(id) {
 
   document.getElementById('guestDetailContent').innerHTML = `
     <div class="guest-detail" style="margin-bottom:16px">
-      <div class="guest-avatar">${h.nombre[0]}${h.apellido[0]}</div>
+      <div class="guest-avatar">${escapeHtml(h.nombre[0])}${escapeHtml(h.apellido[0])}</div>
       <div class="guest-info">
-        <h3>${h.nombre} ${h.apellido}</h3>
+        <h3>${escapeHtml(h.nombre)} ${escapeHtml(h.apellido)}</h3>
         <div class="guest-meta">
-          <span class="meta-chip">🪪 ${h.dni}</span>
-          <span class="meta-chip">🌍 ${h.nac||'—'}</span>
-          ${h.tel?`<span class="meta-chip"><a href="https://wa.me/${h.tel.replace(/\D/g,'')}" target="_blank" style="color:inherit;text-decoration:none;">📱 ${h.tel}</a></span>`:''}
-          ${h.email?`<span class="meta-chip">✉️ ${h.email}</span>`:''}
+          <span class="meta-chip">🪪 ${escapeHtml(h.dni)}</span>
+          <span class="meta-chip">🌍 ${escapeHtml(h.nac||'—')}</span>
+          ${h.tel?`<span class="meta-chip"><a href="https://wa.me/${h.tel.replace(/\D/g,'')}" target="_blank" style="color:inherit;text-decoration:none;">📱 ${escapeHtml(h.tel)}</a></span>`:''}
+          ${h.email?`<span class="meta-chip">✉️ ${escapeHtml(h.email)}</span>`:''}
           ${h.cumple?`<span class="meta-chip">🎂 ${h.cumple}</span>`:''}
           ${h.fechaEsp?`<span class="meta-chip">✨ ${h.fechaEsp}</span>`:''}
         </div>
@@ -3371,7 +3371,7 @@ function showGuestDetail(id) {
     ${diasDesde !== null && diasDesde >= 300 ? `<div style="margin-top:12px;padding:10px 14px;background:rgba(59,130,246,0.1);border:1px solid var(--accent);border-radius:var(--radius);font-size:13px;color:var(--accent2)">💡 Han pasado ${diasDesde} días desde su última visita — buena oportunidad para reconectar.</div>` : ''}
     <div style="margin-top:14px;">
       <label style="font-size:12px;color:var(--text3);display:block;margin-bottom:6px">Notas internas</label>
-      <textarea id="fichaNotas-${id}" rows="3" style="width:100%;padding:9px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:13px;resize:vertical;">${h.notas||''}</textarea>
+      <textarea id="fichaNotas-${id}" rows="3" style="width:100%;padding:9px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:13px;resize:vertical;">${escapeHtml(h.notas||'')}</textarea>
       <button class="btn btn-blue btn-sm" style="margin-top:6px" onclick="saveGuestNotes('${id}')">Guardar notas</button>
     </div>
     ${h.foto
@@ -3944,7 +3944,7 @@ function renderAcct(tab) {
               const impInfo = m.impuesto ? ` <span style="font-size:10px;color:var(--amber)">IMP ${m.impuestoPct}%</span>` : '';
               return `<tr>
                 <td style="font-family:'DM Mono';font-size:12px">${fmtFecha(m.fecha)}</td>
-                <td>${m.concepto}${impInfo}</td>
+                <td>${escapeHtml(m.concepto)}${impInfo}</td>
                 <td><span class="badge ${m.tipo==='ingreso'?'green':'red'}">${m.cat||'—'}</span></td>
                 <td style="font-weight:500;color:${color}">${signo}${fmtMoney(m.monto,m.moneda)}${tcInfo}</td>
                 <td>${m.metodo||'—'}</td>
@@ -3981,7 +3981,7 @@ function renderCuentasPorCobrar(c) {
       <thead><tr><th>Huésped</th><th>Cabaña</th><th>Check-in</th><th>Check-out</th><th>Total</th><th>Pagado</th><th>Pendiente</th><th>Estado</th></tr></thead>
       <tbody>${pendientes.length
         ? pendientes.map(r => `<tr>
-            <td>${r.hNombre}</td>
+            <td>${escapeHtml(r.hNombre)}</td>
             <td>Cabaña ${r.hab}</td>
             <td style="font-family:'DM Mono';font-size:12px">${fmtFecha(r.entrada)}</td>
             <td style="font-family:'DM Mono';font-size:12px">${fmtFecha(r.salida)}</td>
@@ -4329,7 +4329,7 @@ function renderCaja() {
   document.getElementById('tablaCaja').innerHTML = movs.length
     ? movs.map(m=>`<tr>
         <td style="font-family:'DM Mono';font-size:12px">${fmtFecha(m.fecha)}</td>
-        <td>${m.concepto}</td>
+        <td>${escapeHtml(m.concepto)}</td>
         <td><span class="badge ${m.tipo==='ingreso'?'green':'red'}">${m.tipo}</span></td>
         <td style="font-weight:500;color:${m.tipo==='ingreso'?'#34d399':'#f87171'}">${m.tipo==='ingreso'?'+':'-'}${fmtMoney(m.monto,m.moneda)}</td>
         <td>${m.metodo}</td>
@@ -4432,7 +4432,7 @@ function renderRoles() {
   const grid = document.getElementById('rolesGrid');
   grid.innerHTML = roles.map(r => `
     <div class="role-card">
-      <h4>${r.nombre} ${r.id==='rol-admin'?'<span class="badge blue" style="font-size:10px">Admin</span>':''}</h4>
+      <h4>${escapeHtml(r.nombre)} ${r.id==='rol-admin'?'<span class="badge blue" style="font-size:10px">Admin</span>':''}</h4>
       <div class="perm-list">
         ${MODULES.map(m => {
           const perm = r.permisos[m]||'n';
@@ -4513,7 +4513,7 @@ function renderUsuarios() {
         return `<tr>
           <td><strong style="color:var(--text)">${u.nombre}</strong>${isSelf?' <span class="badge blue" style="font-size:10px">Vos</span>':''}</td>
           <td style="font-family:'DM Mono';font-size:12px">${u.email}</td>
-          <td>${rol?`<span class="badge blue">${rol.nombre}</span>`:'—'}</td>
+          <td>${rol?`<span class="badge blue">${escapeHtml(rol.nombre)}</span>`:'—'}</td>
           <td><span class="badge ${u.estado==='activo'?'green':'gray'}">${u.estado}</span></td>
           <td style="font-size:12px;color:var(--text3)">${lastAccess}</td>
           <td style="display:flex;gap:6px">
@@ -4555,7 +4555,7 @@ function editUsuario(id) {
 
 function populateRolSelect(selected) {
   const roles = DB.get('roles',[]);
-  document.getElementById('u-rol').innerHTML = roles.map(r=>`<option value="${r.id}" ${r.id===selected?'selected':''}>${r.nombre}</option>`).join('');
+  document.getElementById('u-rol').innerHTML = roles.map(r=>`<option value="${r.id}" ${r.id===selected?'selected':''}>${escapeHtml(r.nombre)}</option>`).join('');
 }
 
 function toggleUsuarioEstado(id) {
@@ -4662,12 +4662,22 @@ async function saveEditHuesped() {
   showNotif('Huésped actualizado: '+nombre+' '+apellido);
 }
 
-function confirmDelete(tipo, id, nombre) {
+function confirmDelete(tipo, id) {
+  // Resolvemos el nombre ADENTRO desde el id (push-key, seguro): nunca llega por el onclick.
+  let nombre;
+  if (tipo === 'huesped') {
+    const h = getHuespedes().find(x => x.id === id);
+    nombre = h ? `${h.nombre||''} ${h.apellido||''}`.trim() : 'huésped';
+  } else {
+    const r = getReservas().find(x => x.id === id);
+    nombre = r ? 'reserva de ' + getHuespedNombre(r.huespedId, r) : 'reserva';
+  }
+  const safe = escapeHtml(nombre);
   const msgs = {
-    huesped: `¿Borrar al huésped <strong>${nombre}</strong>? También se eliminarán sus reservas asociadas.`,
-    reserva: `¿Eliminar la <strong>${nombre}</strong>? Esta acción no se puede deshacer.`
+    huesped: `¿Borrar al huésped <strong>${safe}</strong>? También se eliminarán sus reservas asociadas.`,
+    reserva: `¿Eliminar la <strong>${safe}</strong>? Esta acción no se puede deshacer.`
   };
-  document.getElementById('confirmDeleteMsg').innerHTML = msgs[tipo] || `¿Eliminar ${nombre}?`;
+  document.getElementById('confirmDeleteMsg').innerHTML = msgs[tipo] || `¿Eliminar ${safe}?`;
   const btn = document.getElementById('confirmDeleteBtn');
   btn.onclick = () => tipo === 'huesped' ? deleteHuesped(id) : deleteReserva(id);
   openModal('modalConfirmDelete');
@@ -4702,7 +4712,7 @@ function openCambioCama(rid) {
   document.getElementById('cc-llave').value = r.llave || '';
   document.getElementById('cc-resumen').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
-      <div><span style="color:var(--text3);display:block;font-size:11px">Huésped</span><strong>${getHuespedNombre(r.huespedId)}</strong></div>
+      <div><span style="color:var(--text3);display:block;font-size:11px">Huésped</span><strong>${escapeHtml(getHuespedNombre(r.huespedId))}</strong></div>
       <div><span style="color:var(--text3);display:block;font-size:11px">Cama actual</span><strong style="color:#fbbf24">Cab.${r.hab} — Cama ${camaLabel(r.cabaña)}</strong></div>
       <div><span style="color:var(--text3);display:block;font-size:11px">Período</span><strong>${fmtFecha(r.entrada)} → ${fmtFecha(r.salida)}</strong></div>
     </div>`;
@@ -4894,7 +4904,7 @@ function openHorario(rid, tipo) {
   document.getElementById('horario-notas').value = '';
   document.getElementById('horario-resumen').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-      <div><span style="color:var(--text3);display:block;font-size:11px">Huésped</span><strong>${getHuespedNombre(r.huespedId)}</strong></div>
+      <div><span style="color:var(--text3);display:block;font-size:11px">Huésped</span><strong>${escapeHtml(getHuespedNombre(r.huespedId))}</strong></div>
       <div><span style="color:var(--text3);display:block;font-size:11px">Cab. / Cama</span><strong>Cabaña ${r.hab}</strong></div>
       <div><span style="color:var(--text3);display:block;font-size:11px">${isLate?'Salida estándar':'Entrada estándar'}</span><strong style="color:#fbbf24">${isLate?'10:00 hs':'14:00 hs'}</strong></div>
       <div><span style="color:var(--text3);display:block;font-size:11px">${isLate?'Fecha de salida':'Fecha de entrada'}</span><strong>${isLate?fmtFecha(r.salida):fmtFecha(r.entrada)}</strong></div>
@@ -5007,9 +5017,9 @@ function renderListaNegra() {
     return;
   }
   tbody.innerHTML = lista.map(h => `<tr>
-    <td><strong style="color:var(--text)">${h.nombre} ${h.apellido}</strong></td>
+    <td><strong style="color:var(--text)">${escapeHtml(h.nombre)} ${escapeHtml(h.apellido)}</strong></td>
     <td>${getScoreBadge(h.score)}</td>
-    <td style="font-size:12px;color:var(--text2)">${h.obs || '—'}</td>
+    <td style="font-size:12px;color:var(--text2)">${escapeHtml(h.obs || '—')}</td>
     <td style="text-align:center">${h.estadias || 0}</td>
     <td style="font-size:12px;color:var(--text3)">Puerto Delfín</td>
   </tr>`).join('');
@@ -5048,8 +5058,8 @@ async function showListaNegraPublica() {
           ${lista.map(h => `
             <div style="background:var(--surface);border:1px solid rgba(220,12,12,0.25);border-radius:var(--radius2);padding:16px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px;">
               <div>
-                <strong style="color:var(--text);font-size:15px;">${h.nombre} ${h.apellido}</strong>
-                ${h.obs ? `<p style="font-size:12px;color:var(--text2);margin-top:4px">📝 ${h.obs}</p>` : ''}
+                <strong style="color:var(--text);font-size:15px;">${escapeHtml(h.nombre)} ${escapeHtml(h.apellido)}</strong>
+                ${h.obs ? `<p style="font-size:12px;color:var(--text2);margin-top:4px">📝 ${escapeHtml(h.obs)}</p>` : ''}
               </div>
               <div style="flex-shrink:0">${getScoreBadge(h.score)}</div>
             </div>`).join('')}
@@ -5140,8 +5150,8 @@ function renderGrilla() {
           const esEntrada = res.entrada.substring(0,10) === f;
           cellClass = res.estado === 'checkin' ? 'gc-occupied' : res.estado === 'confirmada' ? 'gc-confirmed' : 'gc-checkout';
           if (esEntrada) {
-            const nombre = getHuespedNombre(res.huespedId).split(' ')[0];
-            innerHtml = `<div class="grilla-span ${res.estado}" onclick="cycleBed('${b.id}')" title="${getHuespedNombre(res.huespedId)}">${nombre}</div>`;
+            const nombre = escapeHtml(getHuespedNombre(res.huespedId).split(' ')[0]);
+            innerHtml = `<div class="grilla-span ${res.estado}" onclick="cycleBed('${b.id}')" title="${escapeHtml(getHuespedNombre(res.huespedId))}">${nombre}</div>`;
           }
         }
 
@@ -5463,8 +5473,8 @@ async function saveEditedBotMsg(btn) {
 function showQuickReplies() {
   const c = document.getElementById('chatQuickBtns');
   if (!c) return;
-  c.innerHTML = getQuickReplies().map(r =>
-    `<button class="chat-quick-btn" onclick="sendQuickReply('${r.msg.replace(/'/g, "&#39;")}')">${r.label}</button>`
+  c.innerHTML = getQuickReplies().map((r, i) =>
+    `<button class="chat-quick-btn" onclick="sendQuickReply(${i})">${escapeHtml(r.label)}</button>`
   ).join('');
 }
 
@@ -5474,12 +5484,16 @@ function hideQuickReplies() {
 }
 
 function escapeHtml(t) {
-  return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // Coerce seguro: null/undefined -> '', números -> string. Evita romper en datos opcionales.
+  return String(t ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-async function sendQuickReply(msg) {
+async function sendQuickReply(i) {
+  // Recibe el índice (no el texto): resolvemos el mensaje adentro para no inyectar strings de usuario en el onclick.
+  const r = getQuickReplies()[i];
+  if (!r) return;
   hideQuickReplies();
-  await sendMessage(msg);
+  await sendMessage(r.msg);
 }
 
 async function sendChat() {
@@ -5646,12 +5660,12 @@ function renderPipeline() {
       </div>
       ${cards.map(l => `
         <div class="kanban-card" onclick="openLeadModal('${l.id}')">
-          <div class="kanban-card-name">${l.nombre}</div>
+          <div class="kanban-card-name">${escapeHtml(l.nombre)}</div>
           <div class="kanban-card-detail">
             ${l.cabaña ? `🏕 Cabaña ${l.cabaña}` : ''}${l.personas ? ` · ${l.personas} personas` : ''}<br>
             ${l.desde ? `📅 ${fmtFecha(l.desde)}${l.hasta?' → '+fmtFecha(l.hasta):''}` : ''}
             ${l.monto ? `<br>💰 ${fmtMoney(Number(l.monto))}` : ''}
-            ${l.notas ? `<br><span style="color:var(--text3)">${l.notas.slice(0,60)}${l.notas.length>60?'…':''}</span>` : ''}
+            ${l.notas ? `<br><span style="color:var(--text3)">${escapeHtml(l.notas.slice(0,60))}${l.notas.length>60?'…':''}</span>` : ''}
           </div>
           <div class="kanban-card-footer">
             <span class="kanban-pill ${etapa.color}">${etapa.label.split(' ').slice(1).join(' ')}</span>
@@ -5676,11 +5690,11 @@ function openLeadModal(leadId) {
     <h2>${l ? 'Editar consulta' : 'Nueva consulta'}</h2>
     <input type="hidden" id="lead-id" value="${l?.id||''}">
     <div class="form-row">
-      <div class="form-group"><label>Nombre *</label><input id="lead-nombre" value="${l?.nombre||''}" placeholder="Juan García"></div>
-      <div class="form-group"><label>Teléfono</label><input id="lead-tel" value="${l?.tel||''}" placeholder="+54 9 ..."></div>
+      <div class="form-group"><label>Nombre *</label><input id="lead-nombre" value="${escapeHtml(l?.nombre||'')}" placeholder="Juan García"></div>
+      <div class="form-group"><label>Teléfono</label><input id="lead-tel" value="${escapeHtml(l?.tel||'')}" placeholder="+54 9 ..."></div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label>Email</label><input id="lead-email" value="${l?.email||''}" placeholder="juan@email.com"></div>
+      <div class="form-group"><label>Email</label><input id="lead-email" value="${escapeHtml(l?.email||'')}" placeholder="juan@email.com"></div>
       <div class="form-group"><label>Personas</label><input id="lead-personas" type="number" value="${l?.personas||''}" min="1" max="20"></div>
     </div>
     <div class="form-row">
@@ -5688,7 +5702,7 @@ function openLeadModal(leadId) {
       <div class="form-group"><label>Fecha hasta</label><input id="lead-hasta" type="date" value="${l?.hasta||''}"></div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label>Cabaña preferida</label><input id="lead-cabana" value="${l?.cabaña||''}" placeholder="Ej: 9 o cualquiera"></div>
+      <div class="form-group"><label>Cabaña preferida</label><input id="lead-cabana" value="${escapeHtml(l?.cabaña||'')}" placeholder="Ej: 9 o cualquiera"></div>
       <div class="form-group"><label>Monto cotizado (ARS)</label><input id="lead-monto" type="number" value="${l?.monto||''}" placeholder="0"></div>
     </div>
     <div class="form-row">
@@ -5703,7 +5717,7 @@ function openLeadModal(leadId) {
         </select>
       </div>
     </div>
-    <div class="form-group"><label>Notas</label><textarea id="lead-notas" rows="3" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);padding:9px 12px;width:100%;font-size:13px;">${l?.notas||''}</textarea></div>
+    <div class="form-group"><label>Notas</label><textarea id="lead-notas" rows="3" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);padding:9px 12px;width:100%;font-size:13px;">${escapeHtml(l?.notas||'')}</textarea></div>
     <div class="modal-footer">
       ${l ? `<button class="btn btn-red" onclick="deleteLead('${l.id}')">Eliminar</button>` : ''}
       <button class="btn btn-ghost" onclick="closeLeadModal()">Cancelar</button>
@@ -5905,9 +5919,9 @@ function renderQuickRepliesList(qrs) {
   if (!list) return;
   list.innerHTML = qrs.map((r, i) => `
     <div style="display:flex;gap:8px;align-items:center;">
-      <input type="text" value="${r.label||''}" placeholder="Etiqueta (emoji + texto)" id="qr-label-${i}"
+      <input type="text" value="${escapeHtml(r.label||'')}" placeholder="Etiqueta (emoji + texto)" id="qr-label-${i}"
         style="flex:1;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px;">
-      <input type="text" value="${r.msg||''}" placeholder="Mensaje que envía el cliente" id="qr-msg-${i}"
+      <input type="text" value="${escapeHtml(r.msg||'')}" placeholder="Mensaje que envía el cliente" id="qr-msg-${i}"
         style="flex:2;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px;">
       <button class="btn btn-red btn-sm" onclick="removeQuickReply(${i})">✕</button>
     </div>`).join('');
