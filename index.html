@@ -4721,7 +4721,7 @@ function openCambioCama(rid) {
   document.getElementById('cc-resumen').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
       <div><span style="color:var(--text3);display:block;font-size:11px">Huésped</span><strong>${escapeHtml(getHuespedNombre(r.huespedId))}</strong></div>
-      <div><span style="color:var(--text3);display:block;font-size:11px">Cama actual</span><strong style="color:#fbbf24">Cab.${r.hab} — Cama ${camaLabel(r.cabaña)}</strong></div>
+      <div><span style="color:var(--text3);display:block;font-size:11px">Cabaña actual</span><strong style="color:#fbbf24">Cab.${r.hab} — ${camaLabel(r.cabaña)}</strong></div>
       <div><span style="color:var(--text3);display:block;font-size:11px">Período</span><strong>${fmtFecha(r.entrada)} → ${fmtFecha(r.salida)}</strong></div>
     </div>`;
   updateCambioCamaSelect();
