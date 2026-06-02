@@ -2900,21 +2900,25 @@ function getTipoTemporada(fecha) {
   return 'media';
 }
 
+// Precio por noche por defecto de una cabaña, según la temporada de la fecha.
+// Sale de precios.habitaciones (NO hardcodeado); si no hay datos para esa cabaña, 0.
+function precioDefaultCabana(hab, fecha) {
+  const precios = DB.get('precios', {});
+  const cabana = (precios.habitaciones || []).find(h => h.hab === hab);
+  if (!cabana) return 0;
+  const tipo = getTipoTemporada(fecha || today());
+  if (tipo === 'alta') return Number(cabana.precio_alta) || Number(cabana.precio_base) || 0;
+  if (tipo === 'baja') return Number(cabana.precio_baja) || Number(cabana.precio_base) || 0;
+  return Number(cabana.precio_base) || 0;
+}
+
 function onHabChange() {
   const hab = document.getElementById('res-hab').value;
   const precioEl = document.getElementById('res-precio');
   const entradaEl = document.getElementById('res-entrada');
   if (!hab) return;
-  const precios = DB.get('precios', {});
-  const cabana = (precios.habitaciones || []).find(h => h.hab === hab);
-  if (cabana) {
-    const fecha = entradaEl?.value || today();
-    const tipo = getTipoTemporada(fecha);
-    let precio = cabana.precio_base;
-    if (tipo === 'alta') precio = cabana.precio_alta;
-    else if (tipo === 'baja') precio = cabana.precio_baja;
-    precioEl.value = precio;
-  }
+  // Autocompletar el precio de la cabaña elegida (visible y sobrescribible por el usuario).
+  precioEl.value = precioDefaultCabana(hab, entradaEl?.value);
 }
 
 function updateBedsSelect() {
@@ -3041,7 +3045,8 @@ async function saveReserva() {
     showNotif('Esa cabaña ya está reservada para esas fechas','error'); return; 
   }
   savingReserva = true;
-  const precio = Number(document.getElementById('res-precio').value)||510000;
+  // Fallback derivado de la cabaña/temporada (NO un número fijo): evita subcobrar las 9-12.
+  const precio = Number(document.getElementById('res-precio').value) || precioDefaultCabana(hab, entrada);
   const moneda = document.getElementById('res-moneda').value;
   const nights = nightsBetween(entrada, salida);
   const totalEstadia = precio * nights;
