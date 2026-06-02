@@ -1119,7 +1119,7 @@ td.acciones .btn:last-child { margin-right: 0; }
 <!-- MODAL CAMBIO DE CAMA -->
 <div class="modal-overlay" id="modalCambioCama">
   <div class="modal">
-    <h2>🔄 Cambio de Cama</h2>
+    <h2>🔄 Cambio de Cabaña</h2>
     <input type="hidden" id="cc-res-id">
     <div id="cc-resumen" style="background:var(--surface2);border-radius:var(--radius);padding:12px;margin-bottom:16px;font-size:13px;"></div>
     <div class="form-row">
@@ -3103,7 +3103,7 @@ function doCheckin(rid) {
   document.getElementById('ci-resumen').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
       <div><span style="color:var(--text3);display:block;font-size:11px">Huésped</span><strong>${escapeHtml(getHuespedNombre(r.huespedId))}</strong></div>
-      <div><span style="color:var(--text3);display:block;font-size:11px">Cab. / Cama</span><strong>Cabaña ${r.hab}</strong></div>
+      <div><span style="color:var(--text3);display:block;font-size:11px">Cab. / Cabaña</span><strong>Cabaña ${r.hab}</strong></div>
       <div><span style="color:var(--text3);display:block;font-size:11px">Salida</span><strong>${fmtFecha(r.salida)}</strong></div>
     </div>`;
   openModal('modalCheckin');
@@ -4425,7 +4425,7 @@ function cerrarCaja() {
 
 // ===================== ROLES =====================
 const MODULES = ['dashboard','mapa','reservas','checkin','huespedes','precios','contabilidad','caja'];
-const MODULE_LABELS = { dashboard:'Dashboard', mapa:'Mapa Camas', reservas:'Reservas', checkin:'Check-in/out', huespedes:'Huéspedes', precios:'Precios', contabilidad:'Contabilidad', caja:'Caja' };
+const MODULE_LABELS = { dashboard:'Dashboard', mapa:'Mapa Cabañas', reservas:'Reservas', checkin:'Check-in/out', huespedes:'Huéspedes', precios:'Precios', contabilidad:'Contabilidad', caja:'Caja' };
 
 function renderRoles() {
   const roles = DB.get('roles',[]);
@@ -4743,7 +4743,7 @@ function updateCambioCamaSelect() {
       (x.estado === 'checkin' || x.estado === 'confirmada') &&
       x.entrada < r.salida && x.salida > r.entrada
     );
-    return `<option value="${b.id}" ${blocked?'disabled':''}>Cama ${b.label}${blocked?' (ocupada)':''}</option>`;
+    return `<option value="${b.id}" ${blocked?'disabled':''}>Cabaña ${b.label}${blocked?' (ocupada)':''}</option>`;
   }).filter(Boolean).join('');
   if(!sel.innerHTML) sel.innerHTML = '<option disabled>No hay cabañas disponibles en esta habitación</option>';
 }
@@ -4913,7 +4913,7 @@ function openHorario(rid, tipo) {
   document.getElementById('horario-resumen').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
       <div><span style="color:var(--text3);display:block;font-size:11px">Huésped</span><strong>${escapeHtml(getHuespedNombre(r.huespedId))}</strong></div>
-      <div><span style="color:var(--text3);display:block;font-size:11px">Cab. / Cama</span><strong>Cabaña ${r.hab}</strong></div>
+      <div><span style="color:var(--text3);display:block;font-size:11px">Cab. / Cabaña</span><strong>Cabaña ${r.hab}</strong></div>
       <div><span style="color:var(--text3);display:block;font-size:11px">${isLate?'Salida estándar':'Entrada estándar'}</span><strong style="color:#fbbf24">${isLate?'10:00 hs':'14:00 hs'}</strong></div>
       <div><span style="color:var(--text3);display:block;font-size:11px">${isLate?'Fecha de salida':'Fecha de entrada'}</span><strong>${isLate?fmtFecha(r.salida):fmtFecha(r.entrada)}</strong></div>
     </div>`;
