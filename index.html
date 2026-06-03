@@ -336,6 +336,24 @@ td.acciones .btn:last-child { margin-right: 0; }
 }
 .grilla-cell.gc-free { background: transparent; }
 .grilla-cell.gc-sel { background: var(--accent2); outline: 2px solid var(--accent2); outline-offset: -2px; }
+/* Conversaciones (inbox omnicanal) */
+.conv-layout { display:grid; grid-template-columns:300px 1fr; gap:12px; height:calc(100vh - 150px); min-height:420px; }
+.conv-list-pane { background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); overflow:auto; }
+.conv-item { padding:10px 12px; border-bottom:1px solid var(--border); cursor:pointer; }
+.conv-item:hover { background:var(--surface3); }
+.conv-item-active { background:var(--surface3); }
+.conv-badge { background:var(--accent2); color:#fff; border-radius:10px; font-size:11px; padding:1px 7px; }
+.conv-thread-pane { display:flex; flex-direction:column; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+.conv-header { padding:12px; border-bottom:1px solid var(--border); min-height:20px; }
+.conv-chip { background:var(--surface3); border:1px solid var(--border); border-radius:12px; font-size:11px; padding:2px 8px; }
+.conv-msgs { flex:1; overflow:auto; padding:14px; display:flex; flex-direction:column; gap:8px; }
+.conv-bubble { max-width:75%; padding:8px 11px; border-radius:12px; font-size:13px; display:flex; flex-direction:column; gap:2px; }
+.conv-bubble.de-contacto { align-self:flex-start; background:var(--surface3); border-bottom-left-radius:3px; }
+.conv-bubble.de-saliente { align-self:flex-end; background:var(--accent2); color:#fff; border-bottom-right-radius:3px; }
+.conv-msg-autor { font-size:11px; font-weight:600; opacity:.85; }
+.conv-msg-hora { font-size:10px; opacity:.7; align-self:flex-end; }
+.conv-input-box { display:flex; gap:8px; padding:10px; border-top:1px solid var(--border); }
+.conv-input-box textarea { flex:1; resize:none; }
 .grilla-cell.gc-occupied { background: rgba(59,130,246,0.25); }
 .grilla-cell.gc-confirmed { background: rgba(13,148,136,0.2); }
 .grilla-cell.gc-checkout { background: rgba(100,116,139,0.12); }
@@ -569,6 +587,9 @@ td.acciones .btn:last-child { margin-right: 0; }
       -->
       <div class="nav-item admin-only" onclick="showSection('knowledge');closeSidebar()" id="nav-knowledge" style="display:none;">
         <span class="icon">🧠</span> Base de Conocimiento
+      </div>
+      <div class="nav-item" onclick="showSection('conversaciones');closeSidebar()" id="nav-conversaciones">
+        <span class="icon">💬</span> Conversaciones
       </div>
       <div class="nav-item" onclick="showSection('huespedes');closeSidebar()" id="nav-huespedes">
         <span class="icon">👤</span> Huéspedes
@@ -931,6 +952,24 @@ td.acciones .btn:last-child { margin-right: 0; }
         <button class="btn btn-blue" onclick="openLeadModal()">+ Nueva consulta</button>
       </div>
       <div class="kanban-board" id="kanbanBoard"></div>
+    </div>
+
+    <!-- CONVERSACIONES (INBOX OMNICANAL) -->
+    <div id="section-conversaciones" class="section">
+      <div class="conv-layout">
+        <div class="conv-list-pane">
+          <div style="padding:10px 12px;border-bottom:1px solid var(--border);font-size:13px;color:var(--text3);">Bandeja</div>
+          <div id="conv-list"></div>
+        </div>
+        <div class="conv-thread-pane">
+          <div id="conv-header" class="conv-header"></div>
+          <div id="conv-msgs" class="conv-msgs"></div>
+          <div id="conv-input-box" class="conv-input-box" style="display:none;">
+            <textarea id="conv-input" rows="1" placeholder="Escribí un mensaje…" onkeydown="convInputKey(event)"></textarea>
+            <button class="btn btn-blue" onclick="enviarMensajeConv()">Enviar</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- CONFIGURACIÓN DEL BOT -->
@@ -2258,6 +2297,9 @@ const colKnowledge  = makeLiveCollection('knowledge_base',
   () => { if (sectionActive('knowledge') && !anyModalOpen()
             && ![...document.querySelectorAll('.kb-text-edit')].some(t => t.style.display === 'block')) renderKnowledge(); },
   migrateKnowledge);
+// Conversaciones: colección plana → vive como las demás. Los MENSAJES están anidados por
+// conversación (cabanas/mensajes/{convId}) y NO entran acá: se leen con onValue puntual.
+const colConversaciones = makeLiveCollection('conversaciones', liveRerender('conversaciones', () => renderConversaciones()));
 
 async function loadAllData() {
   showLoader(true);
@@ -2522,7 +2564,7 @@ function applyRoleUI(rolKey, rolObj) {
 const sectionTitles = {
   dashboard:'Dashboard', mapa:'Mapa de Cabañas', reservas:'Reservas',
   checkin:'Check-In / Check-Out', pipeline:'Pipeline CRM', huespedes:'Huéspedes', precios:'Gestión de Precios',
-  grilla:'Grilla de Reservas', listanegra:'Lista Negra', contabilidad:'Contabilidad', caja:'Caja Diaria', usuarios:'Usuarios del Sistema', roles:'Roles y Permisos', knowledge:'Base de Conocimiento', botconfig:'Configuración del Bot'
+  grilla:'Grilla de Reservas', listanegra:'Lista Negra', contabilidad:'Contabilidad', caja:'Caja Diaria', usuarios:'Usuarios del Sistema', roles:'Roles y Permisos', knowledge:'Base de Conocimiento', conversaciones:'Conversaciones', botconfig:'Configuración del Bot'
 };
 
 function showSection(s) {
@@ -2546,6 +2588,7 @@ function showSection(s) {
   if (s === 'usuarios') renderUsuarios();
   if (s === 'roles') renderRoles();
   if (s === 'knowledge') renderKnowledge();
+  if (s === 'conversaciones') loadAllData().then(() => renderConversaciones());
   if (s === 'pipeline') loadAllData().then(() => renderPipeline());
   if (s === 'botconfig') renderBotConfig();
 }
@@ -5964,6 +6007,192 @@ if (!_publicMode) {
 }
 
 // ===================== PIPELINE CRM =====================
+// ===================== CONVERSACIONES (INBOX OMNICANAL) =====================
+// Esqueleto de inbox. Sin n8n: los mensajes salientes quedan 'pendiente' (no se relayan a ningún canal).
+// Modelo en Firebase RTDB (dos nodos separados):
+//   /cabanas/conversaciones/{convId}  -> resumen para la lista (colección plana: colConversaciones)
+//   /cabanas/mensajes/{convId}/{msgId} -> hilo anidado (onValue puntual + set por hijo)
+let convActiva = null;      // convId abierto
+let convHiloUnsub = null;   // fn para desenganchar el onValue del hilo abierto
+const CANAL_ICON = { whatsapp:'🟢', instagram:'📸', facebook:'📘', email:'✉️', web:'🌐' };
+
+// convId determinístico {canal}__{idExterno saneado} (claves RTDB no admiten . # $ [ ] /).
+function convId(canal, idExterno) {
+  const sane = String(idExterno || '').replace(/[.#$\[\]\/\s]/g, '_');
+  return `${canal}__${sane}`;
+}
+
+function renderConversaciones() {
+  const cont = document.getElementById('conv-list');
+  if (!cont) return;
+  const convs = colConversaciones.list().filter(Boolean)
+    .sort((a,b) => (b.actualizadoEn||0) - (a.actualizadoEn||0));
+  if (!convs.length) {
+    cont.innerHTML = `<div style="padding:20px;color:var(--text3);font-size:13px;text-align:center;line-height:1.6;">
+      No hay conversaciones.<br>Sembrá datos de prueba con<br><code>seedConversacionesDemo()</code><br>en la consola.</div>`;
+    return;
+  }
+  cont.innerHTML = convs.map(c => {
+    const icon = CANAL_ICON[c.canal] || '💬';
+    const prev = escapeHtml((c.ultimoMensaje?.texto || '').slice(0,42));
+    const badge = c.noLeidos > 0 ? `<span class="conv-badge">${c.noLeidos}</span>` : '';
+    const pausa = c.botPausado ? `<span title="Bot pausado">⏸</span>` : '';
+    const activa = c.id === convActiva ? ' conv-item-active' : '';
+    return `<div class="conv-item${activa}" onclick="abrirConversacion('${c.id}')">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;">
+        <strong style="font-size:13px;">${icon} ${escapeHtml(c.contacto?.nombre || c.contacto?.idExterno || '—')}</strong>
+        <span style="display:flex;gap:5px;align-items:center;font-size:11px;">${pausa}${badge}</span>
+      </div>
+      <div style="font-size:12px;color:var(--text3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${prev || '—'}</div>
+    </div>`;
+  }).join('');
+}
+
+async function abrirConversacion(cid) {
+  convActiva = cid;
+  if (convHiloUnsub) { convHiloUnsub(); convHiloUnsub = null; }
+  // Marcar leído (noLeidos = 0) por hijo.
+  const conv = colConversaciones.list().find(c => c && c.id === cid);
+  if (conv && conv.noLeidos) {
+    await colConversaciones.write({ ...conv, noLeidos: 0 });
+  }
+  renderConversaciones();
+  renderConvHeader(cid);
+  // onValue puntual sobre el hilo anidado (NO va en makeLiveCollection).
+  convHiloUnsub = onValue(ref(db, 'cabanas/mensajes/' + cid), snap => {
+    renderHilo(cid, snap.exists() ? snap.val() : {});
+  });
+}
+
+function renderConvHeader(cid) {
+  const conv = colConversaciones.list().find(c => c && c.id === cid);
+  const hd = document.getElementById('conv-header');
+  const box = document.getElementById('conv-input-box');
+  if (!conv) { if(hd) hd.innerHTML = ''; if(box) box.style.display='none'; return; }
+  box.style.display = 'flex';
+  const icon = CANAL_ICON[conv.canal] || '💬';
+  // Chips de contexto (solo lectura).
+  let chips = '';
+  if (conv.huespedId) chips += `<span class="conv-chip">👤 ${escapeHtml(getHuespedNombre(conv.huespedId))}</span>`;
+  if (conv.leadId) {
+    const lead = colPipeline.list().find(l => l && l.id === conv.leadId);
+    const etapa = lead ? (ETAPAS.find(e => e.id === lead.etapa)?.label || lead.etapa) : null;
+    if (etapa) chips += `<span class="conv-chip">${escapeHtml(etapa)}</span>`;
+  }
+  const pausado = conv.botPausado;
+  hd.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+      <div>
+        <strong>${icon} ${escapeHtml(conv.contacto?.nombre || '—')}</strong>
+        <span style="font-size:12px;color:var(--text3);margin-left:6px;">${escapeHtml(conv.canal)}</span>
+        ${chips ? `<div style="margin-top:5px;display:flex;gap:6px;flex-wrap:wrap;">${chips}</div>` : ''}
+      </div>
+      <button class="btn btn-sm ${pausado?'btn-blue':'btn-ghost'}" onclick="togglePausaBot('${conv.id}')">
+        ${pausado ? '▶ Reanudar bot' : '⏸ Pausar bot'}
+      </button>
+    </div>`;
+}
+
+function renderHilo(cid, msgsObj) {
+  if (cid !== convActiva) return;
+  const cont = document.getElementById('conv-msgs');
+  if (!cont) return;
+  const msgs = Object.values(msgsObj || {}).filter(Boolean).sort((a,b)=>(a.ts||0)-(b.ts||0));
+  if (!msgs.length) { cont.innerHTML = `<div style="color:var(--text3);font-size:13px;text-align:center;margin-top:20px;">Sin mensajes.</div>`; return; }
+  cont.innerHTML = msgs.map(m => {
+    const lado = m.de === 'contacto' ? 'de-contacto' : 'de-saliente';
+    const hora = m.ts ? new Date(m.ts).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}) : '';
+    const quien = m.de === 'contacto' ? '' : `<span class="conv-msg-autor">${escapeHtml(m.autor||m.de)}${m.de==='bot'?' 🤖':''}</span>`;
+    const pend = m.estado === 'pendiente' ? ' · ⏳' : '';
+    return `<div class="conv-bubble ${lado}">
+      ${quien}<div>${escapeHtml(m.texto||'')}</div>
+      <span class="conv-msg-hora">${hora}${escapeHtml(pend)}</span>
+    </div>`;
+  }).join('');
+  cont.scrollTop = cont.scrollHeight;
+}
+
+async function togglePausaBot(cid) {
+  const conv = colConversaciones.list().find(c => c && c.id === cid);
+  if (!conv) return;
+  const nuevo = !conv.botPausado;
+  await colConversaciones.write({   // escritura por hijo
+    ...conv,
+    botPausado: nuevo,
+    pausadoPor: nuevo ? (currentUser?.name || 'staff') : null,
+    pausadoEn: nuevo ? Date.now() : null,
+    actualizadoEn: Date.now(),
+  });
+  renderConvHeader(cid);
+  renderConversaciones();
+}
+
+async function enviarMensajeConv() {
+  const cid = convActiva;
+  if (!cid) return;
+  const inp = document.getElementById('conv-input');
+  const texto = (inp.value || '').trim();
+  if (!texto) return;
+  const conv = colConversaciones.list().find(c => c && c.id === cid);
+  if (!conv) return;
+  const ts = Date.now();
+  const msgId = push(ref(db, 'cabanas/mensajes/' + cid)).key;
+  const msg = { id: msgId, ts, de: 'humano', autor: currentUser?.name || 'staff', texto, estado: 'pendiente' };
+  // Mensaje: set por hijo (NO se pisa el resto del hilo). Sin n8n queda 'pendiente'.
+  await set(ref(db, 'cabanas/mensajes/' + cid + '/' + msgId), msg);
+  // Resumen de la conversación: escritura por hijo.
+  await colConversaciones.write({ ...conv, ultimoMensaje: { texto, ts, de: 'humano' }, actualizadoEn: ts });
+  inp.value = '';
+  renderConversaciones();
+}
+
+// Enter envía; Shift+Enter = salto de línea.
+function convInputKey(ev) {
+  if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); enviarMensajeConv(); }
+}
+
+// --- DATOS DE PRUEBA: NO se llama en el login. Invocar a mano desde la consola:
+//        seedConversacionesDemo()
+//     Para BORRARLAS desde la consola:
+//        remove(ref(db,'cabanas/conversaciones')); remove(ref(db,'cabanas/mensajes'));
+async function seedConversacionesDemo() {
+  const now = Date.now();
+  const demos = [
+    { canal:'whatsapp', contacto:{nombre:'Lucía Gómez', idExterno:'5492235550101', telefono:'+5492235550101'},
+      msgs:[ {de:'contacto', texto:'Hola! Tienen cabaña para 4 este finde?'},
+             {de:'bot', autor:'Bot', texto:'¡Hola Lucía! Sí, la cabaña 5 está libre.'},
+             {de:'contacto', texto:'Genial, ¿cuánto sale la noche?'} ] },
+    { canal:'instagram', contacto:{nombre:'Martín Viajero', idExterno:'martin.viajero', handle:'@martin.viajero'},
+      msgs:[ {de:'contacto', texto:'Buenas, ¿hacen check-in tarde?'},
+             {de:'humano', autor:'Franco', texto:'Hola Martín, sí, hasta las 22h.'} ] },
+    { canal:'email', contacto:{nombre:'Carlos Pérez', idExterno:'carlos@mail.com', email:'carlos@mail.com'},
+      msgs:[ {de:'contacto', texto:'Consulta por disponibilidad en enero.'} ] },
+  ];
+  for (let i = 0; i < demos.length; i++) {
+    const d = demos[i];
+    const cid = convId(d.canal, d.contacto.idExterno);
+    let lastTs = now + i*1000;
+    for (let j = 0; j < d.msgs.length; j++) {
+      const m = d.msgs[j];
+      lastTs = now + i*1000 + j*100;
+      const msgId = push(ref(db, 'cabanas/mensajes/' + cid)).key;
+      await set(ref(db, 'cabanas/mensajes/' + cid + '/' + msgId),  // set por hijo
+        { id: msgId, ts: lastTs, de: m.de, autor: m.autor || m.de, texto: m.texto, estado: m.de==='contacto'?'recibido':'enviado' });
+    }
+    const last = d.msgs[d.msgs.length-1];
+    await colConversaciones.write({   // escritura por hijo
+      id: cid, canal: d.canal, contacto: d.contacto, estado: 'abierta',
+      botPausado: false, pausadoPor: null, pausadoEn: null, asignadoA: null,
+      noLeidos: d.msgs.filter(m => m.de === 'contacto').length,
+      ultimoMensaje: { texto: last.texto, ts: lastTs, de: last.de },
+      huespedId: null, reservaId: null, leadId: null,
+      creadoEn: now, actualizadoEn: lastTs,
+    });
+  }
+  console.log('✅ seedConversacionesDemo: ' + demos.length + ' conversaciones creadas. Borrar con: remove(ref(db,"cabanas/conversaciones")); remove(ref(db,"cabanas/mensajes"));');
+  if (sectionActive('conversaciones')) renderConversaciones();
+}
+window.seedConversacionesDemo = seedConversacionesDemo;
+
 const ETAPAS = [
   { id: 'consulta',    label: '💬 Consulta',           color: 'consulta' },
   { id: 'presupuesto', label: '📋 Presupuesto enviado', color: 'presupuesto' },
@@ -6378,6 +6607,8 @@ Object.assign(window, {
   addFinde, updateFinde, deleteFinde,
   addPromo, updatePromo, deletePromo,
   togglePerm, deleteRol, toggleUsuarioEstado,
+  grillaCellClick, setHuespedMode, openReservaDesdeGrilla,
+  renderConversaciones, abrirConversacion, togglePausaBot, enviarMensajeConv, convInputKey,
 });
 </script>
 </body>
