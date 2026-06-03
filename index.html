@@ -2568,6 +2568,7 @@ async function enterSession(email) {
     showSection('dashboard');
     updateDate();
     aplicarRecurrentes();
+    auditLog('login', 'Sesión', email);
     return true;
   } finally {
     _entering = false;
@@ -2588,6 +2589,7 @@ function rolToKey(rolId) {
 }
 
 async function doLogout() {
+  auditLog('logout', 'Sesión', currentUser?.email || '');
   await signOut(auth);
   currentUser = null;
   document.getElementById('loginScreen').style.display = 'flex';
@@ -3087,6 +3089,7 @@ function cycleBed(bedId) {
   const cur = beds[bedId] || 'free';
   const next = states[(states.indexOf(cur)+1)%states.length];
   writeBed(bedId, next); // escritura por hijo: no pisa otras cabañas
+  auditLog('cambio estado', 'Cabaña', `Cab ${bedId} → ${next}`);
   renderMapa(document.getElementById('mapaFecha')?.value);
 }
 
@@ -3400,6 +3403,7 @@ async function saveReserva() {
   if (modoHuesped === 'nuevo' && document.getElementById('section-huespedes')?.classList.contains('active')) renderHuespedes();
   if (document.getElementById('section-grilla')?.classList.contains('active')) renderGrilla();
   if (document.getElementById('section-mapa')?.classList.contains('active')) renderMapa(document.getElementById('mapaFecha')?.value);
+  auditLog(editId ? 'editar' : 'crear', 'Reserva', `${getHuespedNombre(h, reg)} · Cab ${hab} · ${entrada}→${salida}`);
   showNotif('Reserva guardada correctamente');
 }
 
@@ -3456,6 +3460,7 @@ async function confirmCheckin() {
   await writeReserva(r); // escritura por hijo
   // Actualizar estado de cabaña en beds (escritura por hijo)
   await writeBed(r.cabaña, 'occupied');
+  auditLog('check-in', 'Reserva', `${getHuespedNombre(r.huespedId, r)} · Cab ${r.hab}`);
   closeModal('modalCheckin');
   renderReservas();
   renderCheckin();
@@ -3566,6 +3571,7 @@ async function doCheckout(rid) {
   r.estado = 'checkout';
   await writeBed(r.cabaña, 'dirty'); // escritura por hijo
   await writeReserva(r); // escritura por hijo
+  auditLog('check-out', 'Reserva', `${getHuespedNombre(r.huespedId, r)} · Cab ${r.hab}`);
   renderReservas();
   renderCheckin();
   renderMapa();
@@ -3846,6 +3852,7 @@ async function saveHuesped() {
   });
   closeModal('modalHuesped');
   renderHuespedes();
+  auditLog('crear', 'Huésped', `${nombre || '?'} ${apellido || ''}`.trim());
   showNotif('Huésped registrado: '+nombre+' '+apellido);
   // reset form
   ['h-nombre','h-apellido','h-dni','h-nac','h-tel','h-email','h-cumple','h-fecha-esp'].forEach(id=>document.getElementById(id).value='');
@@ -4020,13 +4027,16 @@ function deleteTemporada(id) {
   const p = DB.get('precios',{});
   p.temporadas = (p.temporadas||[]).filter(x=>x.id!==id);
   DB.set('precios', p);
+  auditLog('borrar', 'Precios', `Temporada ${id}`);
   renderPrecios('temporada');
 }
 function addTemporada() {
   const p = DB.get('precios',{});
   if(!p.temporadas) p.temporadas=[];
-  p.temporadas.push({ id:'t'+Date.now(), nombre:'Nueva temporada', fecha_inicio:'', fecha_fin:'', tipo:'media', anual:true });
+  const nueva = { id:'t'+Date.now(), nombre:'Nueva temporada', fecha_inicio:'', fecha_fin:'', tipo:'media', anual:true };
+  p.temporadas.push(nueva);
   DB.set('precios', p);
+  auditLog('crear', 'Precios', `Temporada ${nueva.nombre}`);
   renderPrecios('temporada');
 }
 
@@ -4035,6 +4045,7 @@ function updateHabPrecio(hab, field, val) {
   const h = (p.habitaciones||[]).find(x=>x.hab===hab);
   if(h) h[field] = Number(val);
   DB.set('precios', p);
+  auditLog('editar', 'Precios', `Cab ${hab} ${field}=${val}`);
 }
 function updatePlatPrecio(plat, field, val) {
   const p = DB.get('precios',{});
@@ -4069,6 +4080,7 @@ function addPromo() {
   if(!p.promociones) p.promociones=[];
   p.promociones.push({ id:'pr'+Date.now(), nombre:'Promo', fecha_inicio:'', fecha_fin:'', tipo:'descuento_pct', valor:10, condicion:'' });
   DB.set('precios', p);
+  auditLog('crear', 'Precios', `Promo`);
   renderPrecios('promo');
 }
 function updatePromo(id, field, val) {
@@ -4187,9 +4199,9 @@ function auditLog(accion, entidad, detalle) {
     detalle: String(detalle).slice(0, 120)
   };
   colAuditoria.write(entry); // por hijo: no pisa el log que escribe otro usuario
-  // Tope: conservar los 500 más recientes; borra los más viejos por hijo.
+  // Tope: conservar los 1000 más recientes; borra los más viejos por hijo.
   const all = colAuditoria.list().slice().sort((a, b) => (a.ts || 0) - (b.ts || 0));
-  if (all.length > 500) all.slice(0, all.length - 500).forEach(e => { if (e?.id) colAuditoria.remove(e.id); });
+  if (all.length > 1000) all.slice(0, all.length - 1000).forEach(e => { if (e?.id) colAuditoria.remove(e.id); });
 }
 
 let currentAcctTab = 'ingresos'; // tab activo de contabilidad (para re-render en vivo)
@@ -4783,6 +4795,7 @@ function togglePerm(roleId, module, type) {
 
 function deleteRol(id) {
   colRoles.remove(id); // por hijo
+  auditLog('borrar', 'Rol', id);
   renderRoles();
   showNotif('Rol eliminado');
 }
@@ -4797,6 +4810,7 @@ function saveRol() {
     permisos[m] = w ? 'rw' : r ? 'r' : 'n';
   });
   colRoles.write({ id:'rol-'+Date.now(), nombre, permisos }); // por hijo
+  auditLog('crear', 'Rol', nombre);
   closeModal('modalRol');
   renderRoles();
   showNotif('Rol creado: '+nombre);
@@ -4914,6 +4928,7 @@ async function saveUsuario() {
       showNotif(msg,'error'); return;
     }
   }
+  auditLog(id ? 'editar' : 'crear', 'Usuario', `${nombre} (${rol})`);
   closeModal('modalUsuario');
   renderUsuarios();
 }
@@ -4994,8 +5009,11 @@ async function deleteHuesped(id) {
     showNotif('Este huésped tiene reservas asociadas; no se puede eliminar', 'error');
     return;
   }
+  const hBorrado = getHuespedes().find(x => x.id === id);
+  const nombreBorrado = hBorrado ? `${hBorrado.nombre || ''} ${hBorrado.apellido || ''}`.trim() : id;
   await removeHuesped(id); // borrado por hijo
   await removeFoto(id).catch(e => console.error('Error borrando foto DNI:', e)); // no dejar foto huérfana
+  auditLog('borrar', 'Huésped', nombreBorrado || '?');
   closeModal('modalConfirmDelete');
   renderHuespedes();
   renderReservas();
@@ -5003,7 +5021,12 @@ async function deleteHuesped(id) {
 }
 
 async function deleteReserva(id) {
+  const rBorrada = getReservas().find(x => x.id === id);
+  const detalleBorrada = rBorrada
+    ? `${getHuespedNombre(rBorrada.huespedId, rBorrada)} · Cab ${rBorrada.hab} · ${rBorrada.entrada}→${rBorrada.salida}`
+    : id;
   await removeReserva(id); // borrado por hijo
+  auditLog('borrar', 'Reserva', detalleBorrada);
   closeModal('modalConfirmDelete');
   renderReservas();
   showNotif('Reserva eliminada');
@@ -6371,6 +6394,7 @@ async function saveLead() {
   const idx = leads.findIndex(l => l.id === id);
   if (idx >= 0) leads[idx] = data; else leads.push(data);
   await colPipeline.write(data); // por hijo: solo este lead
+  auditLog(idx >= 0 ? 'editar' : 'crear', 'Lead', nombre);
   closeLeadModal();
   renderPipeline();
   showNotif('✅ Consulta guardada');
@@ -6385,12 +6409,15 @@ async function moveLeadEtapa(leadId, dir) {
   if (newIdx < 0 || newIdx >= ETAPAS.length) return;
   l.etapa = ETAPAS[newIdx].id;
   await colPipeline.write(l); // por hijo
+  auditLog('mover', 'Lead', `${l.nombre || '?'} → ${ETAPAS[newIdx].nombre || ETAPAS[newIdx].id}`);
   renderPipeline();
 }
 
 async function deleteLead(leadId) {
   if (!confirm('¿Eliminar esta consulta?')) return;
+  const leadBorrado = colPipeline.list().find(x => x.id === leadId);
   await colPipeline.remove(leadId); // por hijo
+  auditLog('borrar', 'Lead', leadBorrado?.nombre || leadId);
   closeLeadModal();
   renderPipeline();
   showNotif('Consulta eliminada');
@@ -6481,6 +6508,7 @@ async function saveKnowledgeEntry() {
   const texto = input.value.trim();
   if (!texto) { showNotif('Escribí algo antes de agregar', 'error'); return; }
   await colKnowledge.write({ id: colKnowledge.nuevoId(), texto, fecha: today() }); // por hijo
+  auditLog('editar', 'Base de Conocimiento', texto);
   input.value = '';
   renderKnowledge();
   showNotif('✅ Entrada agregada a la base de conocimiento');
@@ -6542,6 +6570,7 @@ async function saveBotConfig() {
   stored.servicios          = document.getElementById('bcf-servicios').value.trim();
   stored.info_adicional     = document.getElementById('bcf-adicional').value.trim();
   await DB.set('bot_config', stored);
+  auditLog('editar', 'Config Bot', '');
   showNotif('✅ Configuración del hostel guardada');
 }
 
