@@ -335,6 +335,7 @@ td.acciones .btn:last-child { margin-right: 0; }
   cursor: pointer; position: relative; vertical-align: middle;
 }
 .grilla-cell.gc-free { background: transparent; }
+.grilla-cell.gc-sel { background: var(--accent2); outline: 2px solid var(--accent2); outline-offset: -2px; }
 .grilla-cell.gc-occupied { background: rgba(59,130,246,0.25); }
 .grilla-cell.gc-confirmed { background: rgba(13,148,136,0.2); }
 .grilla-cell.gc-checkout { background: rgba(100,116,139,0.12); }
@@ -969,18 +970,39 @@ td.acciones .btn:last-child { margin-right: 0; }
   <div class="modal">
     <h2 id="modalReservaTitle">Nueva Reserva</h2>
     <input type="hidden" id="res-edit-id">
-    <div class="form-row">
-      <div class="form-group"><label>Huésped *</label>
+    <input type="hidden" id="res-huesped-mode" value="existente">
+    <div class="form-group">
+      <label>Huésped *</label>
+      <div style="display:flex;gap:6px;margin-bottom:8px;">
+        <button type="button" class="btn btn-blue" id="res-modo-existente" onclick="setHuespedMode('existente')" style="flex:1;padding:6px">Existente</button>
+        <button type="button" class="btn btn-ghost" id="res-modo-nuevo" onclick="setHuespedMode('nuevo')" style="flex:1;padding:6px">Nuevo</button>
+      </div>
+      <div id="res-huesped-existente">
         <select id="res-huesped"><option value="">Seleccionar...</option></select>
       </div>
-      <div class="form-group"><label>Plataforma *</label>
-        <select id="res-plat">
-          <option value="directo">Directo</option>
-          <option value="booking">Booking.com</option>
-          <option value="airbnb">Airbnb</option>
-          <option value="otro">Otro</option>
-        </select>
+      <div id="res-huesped-nuevo" style="display:none">
+        <div class="form-row">
+          <div class="form-group"><label>Nombre *</label><input type="text" id="hn-nombre"></div>
+          <div class="form-group"><label>Apellido *</label><input type="text" id="hn-apellido"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Teléfono *</label><input type="text" id="hn-tel"></div>
+          <div class="form-group"><label>Email</label><input type="email" id="hn-email"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>DNI</label><input type="text" id="hn-dni"></div>
+          <div class="form-group"><label>Nacionalidad</label><input type="text" id="hn-nac"></div>
+        </div>
+        <div class="form-group"><label>Ciudad</label><input type="text" id="hn-ciudad"></div>
       </div>
+    </div>
+    <div class="form-group"><label>Plataforma *</label>
+      <select id="res-plat">
+        <option value="directo">Directo</option>
+        <option value="booking">Booking.com</option>
+        <option value="airbnb">Airbnb</option>
+        <option value="otro">Otro</option>
+      </select>
     </div>
     <div class="form-row">
       <div class="form-group"><label>Cabaña *</label>
@@ -3134,6 +3156,8 @@ function openNuevaReserva() {
   const sel = document.getElementById('res-huesped');
   sel.innerHTML = '<option value="">Seleccionar...</option>' +
     huespedes.map(h => `<option value="${h.id}">${escapeHtml(h.nombre)} ${escapeHtml(h.apellido)}</option>`).join('');
+  clearHuespedNuevo();
+  setHuespedMode('existente');
   document.getElementById('res-hab').value = '';
   document.getElementById('res-entrada').value = today();
   const manana = new Date(); manana.setDate(manana.getDate()+1);
@@ -3158,6 +3182,8 @@ function editReserva(rid) {
   const sel = document.getElementById('res-huesped');
   sel.innerHTML = '<option value="">Seleccionar...</option>' +
     huespedes.map(h => `<option value="${h.id}">${escapeHtml(h.nombre)} ${escapeHtml(h.apellido)}</option>`).join('');
+  clearHuespedNuevo();
+  setHuespedMode('existente'); // editar siempre usa huésped existente
   sel.value = r.huespedId;
   document.getElementById('res-hab').value = r.hab;
   updateBedsSelect();
@@ -3183,15 +3209,34 @@ async function saveReserva() {
   if(savingReserva) return;
   const btnGuardar = document.getElementById('btnGuardarReserva');
   if(btnGuardar) { btnGuardar.disabled = true; btnGuardar.textContent = 'Guardando...'; }
-  const h = document.getElementById('res-huesped').value;
+  const modoHuesped = document.getElementById('res-huesped-mode')?.value || 'existente';
+  let h = modoHuesped === 'existente' ? document.getElementById('res-huesped').value : '';
   const hab = document.getElementById('res-hab').value;
   const habVal = document.getElementById('res-hab').value;
   const cabaña = document.getElementById('res-cabaña').value || (habVal ? habVal+'-1' : '');
   const entrada = document.getElementById('res-entrada').value;
   const salida = document.getElementById('res-salida').value;
-  if(!h||!hab||!cabaña||!entrada||!salida) {
+  if(!hab||!cabaña||!entrada||!salida||(modoHuesped==='existente'&&!h)) {
     if(btnGuardar) { btnGuardar.disabled = false; btnGuardar.textContent = 'Guardar Reserva'; }
     showNotif('Completá todos los campos obligatorios','error'); return;
+  }
+  // Huésped nuevo: obligatorios nombre, apellido, tel. El resto opcional (completable luego).
+  let nuevoHuespedData = null;
+  if (modoHuesped === 'nuevo') {
+    const nombre = document.getElementById('hn-nombre').value.trim();
+    const apellido = document.getElementById('hn-apellido').value.trim();
+    const tel = document.getElementById('hn-tel').value.trim();
+    if(!nombre||!apellido||!tel) {
+      if(btnGuardar) { btnGuardar.disabled = false; btnGuardar.textContent = 'Guardar Reserva'; }
+      showNotif('Huésped nuevo: nombre, apellido y teléfono son obligatorios','error'); return;
+    }
+    nuevoHuespedData = {
+      nombre, apellido, tel,
+      dni: document.getElementById('hn-dni').value.trim(),
+      nac: document.getElementById('hn-nac').value.trim(),
+      ciudad: document.getElementById('hn-ciudad').value.trim(),
+      email: document.getElementById('hn-email').value.trim(),
+    };
   }
   // Verificar disponibilidad de la cabaña para esas fechas
   const editId = document.getElementById('res-edit-id').value;
@@ -3217,7 +3262,16 @@ async function saveReserva() {
   const saldo = Math.max(totalEstadia - pagado, 0);
   const estadoPago = document.getElementById('res-estado-pago').value;
   const reservas = getReservas();
-  const huespedData = getHuespedes().find(x=>x.id===h);
+  // Crear el huésped nuevo recién acá (post-validación de disponibilidad) para no dejar
+  // huéspedes huérfanos si la cabaña estaba ocupada. Escritura por hijo (writeHuesped).
+  let huespedData;
+  if (modoHuesped === 'nuevo') {
+    h = nuevoHuespedId();
+    huespedData = { id: h, ...nuevoHuespedData, tieneFoto: false, estadias: 0 };
+    await writeHuesped(huespedData);
+  } else {
+    huespedData = getHuespedes().find(x=>x.id===h);
+  }
   const desayunoVal = document.getElementById('res-desayuno').value;
   const newData = {
     huespedId: h,
@@ -3250,6 +3304,7 @@ async function saveReserva() {
   if(btnGuardar) { btnGuardar.disabled = false; btnGuardar.textContent = 'Guardar Reserva'; }
   closeModal('modalReserva');
   renderReservas();
+  if (modoHuesped === 'nuevo' && document.getElementById('section-huespedes')?.classList.contains('active')) renderHuespedes();
   if (document.getElementById('section-grilla')?.classList.contains('active')) renderGrilla();
   if (document.getElementById('section-mapa')?.classList.contains('active')) renderMapa(document.getElementById('mapaFecha')?.value);
   showNotif('Reserva guardada correctamente');
@@ -5288,9 +5343,9 @@ function renderGrilla() {
     const hs = String(h);
     const beds = habBeds(hs);
 
-    // Fila por cabaña (sin separador ya que cada cabaña es una unidad)
-    html += `<tr class="grilla-hab-header"><td colspan="${fechas.length + 1}">Cabaña ${h}</td></tr>`;
-
+    // Una sola fila de datos por cabaña (habBeds devuelve 1 unidad). Antes se emitía
+    // además una fila-cabecera 'grilla-hab-header' que, al haber 1 sola unidad, quedaba
+    // pegada a la fila de datos y se veía como cabaña duplicada. Se eliminó.
     beds.forEach(b => {
       html += `<tr><td class="cabaña-label">Cabaña ${b.label}</td>`;
 
@@ -5315,7 +5370,11 @@ function renderGrilla() {
           }
         }
 
-        html += `<td class="grilla-cell ${cellClass}${isToday ? ' gc-today' : ''}">${innerHtml}</td>`;
+        // Las celdas libres son punto de carga: 2 clicks marcan rango y abren el modal unificado.
+        const clickable = (cellClass === 'gc-free')
+          ? ` onclick="grillaCellClick(this,'${b.id}','${hs}','${f}')" style="cursor:pointer"`
+          : '';
+        html += `<td class="grilla-cell ${cellClass}${isToday ? ' gc-today' : ''}" data-cab="${b.id}" data-fecha="${f}"${clickable}>${innerHtml}</td>`;
       });
 
       html += '</tr>';
@@ -5326,6 +5385,114 @@ function renderGrilla() {
   document.getElementById('grillaContainer').innerHTML = html;
 }
 
+// ---- Carga unificada desde la grilla: selección de rango por 2 clicks ----
+// Estado de la selección tentativa (1er click). Se limpia al 2º click o al cambiar de fila.
+let grillaSel = null; // { cab, hab, fecha, el }
+
+// ¿La celda (cabaña, fecha) está ocupada? Mismo criterio que la grilla:
+// reserva en estado confirmada|checkin|checkout que cubre la fecha (entrada<=f<salida).
+function grillaCeldaOcupada(cabId, fecha) {
+  return getReservas().some(r =>
+    r.cabaña === cabId &&
+    (r.estado === 'checkin' || r.estado === 'confirmada' || r.estado === 'checkout') &&
+    r.entrada.substring(0,10) <= fecha && r.salida.substring(0,10) > fecha
+  );
+}
+
+function grillaClearSel() {
+  document.querySelectorAll('#grillaContainer .gc-sel').forEach(td => td.classList.remove('gc-sel'));
+  grillaSel = null;
+}
+
+// Suma días a una fecha 'YYYY-MM-DD' y devuelve 'YYYY-MM-DD'.
+function addDaysStr(fecha, n) {
+  const d = new Date(fecha + 'T12:00:00');
+  d.setDate(d.getDate() + n);
+  return d.toISOString().split('T')[0];
+}
+
+// Click sobre celda libre. 1er click = entrada (marca tentativa). 2º click (misma fila) = salida.
+function grillaCellClick(el, cabId, hab, fecha) {
+  // 2º click en otra cabaña → reinicia la selección en la nueva fila.
+  if (grillaSel && grillaSel.cab !== cabId) grillaClearSel();
+
+  if (!grillaSel) {
+    grillaSel = { cab: cabId, hab, fecha, el };
+    el.classList.add('gc-sel'); // resaltar inicio tentativo
+    return;
+  }
+
+  // 2º click misma fila: definir rango. La salida es exclusiva, así que la última
+  // noche ocupada es max(a,b) y la fecha de salida es esa noche + 1 día.
+  const a = grillaSel.fecha, b = fecha;
+  const entrada = a <= b ? a : b;
+  const ultimaNoche = a <= b ? b : a;
+  const salida = addDaysStr(ultimaNoche, 1);
+
+  // Validar que TODAS las noches entre entrada y ultimaNoche estén libres.
+  for (let f = entrada; f <= ultimaNoche; f = addDaysStr(f, 1)) {
+    if (grillaCeldaOcupada(cabId, f)) {
+      showNotif('Hay una cabaña ocupada dentro del rango. Elegí otras fechas.', 'error');
+      grillaClearSel();
+      return;
+    }
+  }
+
+  grillaClearSel();
+  openReservaDesdeGrilla(hab, cabId, entrada, salida);
+}
+
+// Abre el modal de reserva (mismo modalReserva) precargado desde la grilla:
+// cabaña + fechas + precio por temporada. Conviven los dos modos de huésped.
+function openReservaDesdeGrilla(hab, cabId, entrada, salida) {
+  document.getElementById('modalReservaTitle').textContent = 'Nueva Reserva';
+  document.getElementById('res-edit-id').value = '';
+  document.getElementById('btnGuardarReserva').textContent = 'Guardar Reserva';
+  // Poblar selector de huéspedes existentes
+  const huespedes = getHuespedes();
+  const sel = document.getElementById('res-huesped');
+  sel.innerHTML = '<option value="">Seleccionar...</option>' +
+    huespedes.map(h => `<option value="${h.id}">${escapeHtml(h.nombre)} ${escapeHtml(h.apellido)}</option>`).join('');
+  clearHuespedNuevo();
+  setHuespedMode('existente');
+  // Cabaña + fechas precargadas
+  document.getElementById('res-hab').value = hab;
+  document.getElementById('res-entrada').value = entrada;
+  document.getElementById('res-salida').value = salida;
+  updateBedsSelect();
+  document.getElementById('res-cabaña').value = cabId;
+  // Precio por temporada (NO hardcodeado)
+  document.getElementById('res-precio').value = precioDefaultCabana(hab, entrada);
+  // Reset del resto
+  document.getElementById('res-pagado').value = '';
+  document.getElementById('res-notas').value = '';
+  document.getElementById('res-pasajeros').value = '';
+  document.getElementById('res-desayuno').value = 'si';
+  calcTotalReserva();
+  openModal('modalReserva');
+}
+
+// Alterna entre huésped existente (select) y huésped nuevo (campos inline).
+function setHuespedMode(mode) {
+  document.getElementById('res-huesped-mode').value = mode;
+  const blkExist = document.getElementById('res-huesped-existente');
+  const blkNuevo = document.getElementById('res-huesped-nuevo');
+  const btnExist = document.getElementById('res-modo-existente');
+  const btnNuevo = document.getElementById('res-modo-nuevo');
+  const nuevo = mode === 'nuevo';
+  blkExist.style.display = nuevo ? 'none' : '';
+  blkNuevo.style.display = nuevo ? '' : 'none';
+  btnExist?.classList.toggle('btn-blue', !nuevo);
+  btnExist?.classList.toggle('btn-ghost', nuevo);
+  btnNuevo?.classList.toggle('btn-blue', nuevo);
+  btnNuevo?.classList.toggle('btn-ghost', !nuevo);
+}
+
+// Vacía los campos del bloque "huésped nuevo" (al abrir/reabrir el modal).
+function clearHuespedNuevo() {
+  ['hn-nombre','hn-apellido','hn-tel','hn-email','hn-dni','hn-nac','hn-ciudad']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+}
 
 // ===================== CHATBOT PUERTO DELFÍN =====================
 function buildSystemPrompt() {
