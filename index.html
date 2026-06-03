@@ -367,7 +367,7 @@ td.acciones .btn:last-child { margin-right: 0; }
 }
 .grilla-span {
   position: absolute; top: 2px; left: 0; right: 0; bottom: 2px;
-  border-radius: 3px; display: flex; align-items: center; padding: 0 4px;
+  border-radius: 3px; display: flex; align-items: center; justify-content: center; padding: 0 4px;
   font-size: 9px; font-weight: 600; white-space: nowrap; overflow: hidden;
   text-overflow: ellipsis; cursor: pointer; z-index: 1;
 }
@@ -5449,34 +5449,37 @@ function renderGrilla() {
       ].filter(Boolean).join(' · ');
       html += `<tr><td class="cabaña-label"><div class="cabaña-nombre">Cabaña ${b.label}</div>${meta ? `<div class="cabaña-config">${meta}</div>` : ''}</td>`;
 
-      // Para cada fecha, ver si hay reserva
-      fechas.forEach((f, fi) => {
-        const res = reservas.find(r =>
-          r.cabaña === b.id &&
-          (r.estado === 'checkin' || r.estado === 'confirmada' || r.estado === 'checkout') &&
-          r.entrada.substring(0,10) <= f && r.salida.substring(0,10) > f
-        );
+      // Reserva que cubre la fecha f en esta cabaña (mismo criterio de estados).
+      const resEnFecha = (f) => reservas.find(r =>
+        r.cabaña === b.id &&
+        (r.estado === 'checkin' || r.estado === 'confirmada' || r.estado === 'checkout') &&
+        r.entrada.substring(0,10) <= f && r.salida.substring(0,10) > f
+      );
 
+      for (let i = 0; i < fechas.length; i++) {
+        const f = fechas[i];
         const isToday = f === tod;
-        let cellClass = 'gc-free';
-        let innerHtml = '';
+        const res = resEnFecha(f);
 
         if (res) {
-          cellClass = res.estado === 'checkin' ? 'gc-occupied' : res.estado === 'confirmada' ? 'gc-confirmed' : 'gc-checkout';
-          const nombre = escapeHtml(getHuespedNombre(res.huespedId).split(' ')[0]);
-          innerHtml = `<div class="grilla-span ${res.estado}" onclick="cycleBed('${b.id}')" title="${escapeHtml(getHuespedNombre(res.huespedId))}">${nombre}</div>`;
+          // Fusionar los días consecutivos visibles de la MISMA reserva en una sola celda
+          let span = 1;
+          while (i + span < fechas.length) {
+            const r2 = resEnFecha(fechas[i + span]);
+            if (r2 && r2.id === res.id) span++; else break;
+          }
+          const cls = res.estado === 'checkin' ? 'gc-occupied' : res.estado === 'confirmada' ? 'gc-confirmed' : 'gc-checkout';
+          const nombre = escapeHtml(getHuespedNombre(res.huespedId, res));
+          const saldo = (Number(res.total) || Number(res.precio) || 0) - (Number(res.pagado) || 0);
+          const debe = saldo > 0 ? ` · <span style="color:#fca5a5;font-weight:600">debe ${fmtPrecioCorto(saldo)}</span>` : '';
+          html += `<td class="grilla-cell ${cls}${isToday ? ' gc-today' : ''}" colspan="${span}" onclick="cycleBed('${b.id}')"><div class="grilla-span ${res.estado}" title="${nombre}">${nombre}${debe}</div></td>`;
+          i += span - 1;
         } else {
-          // Celda libre: mostrar precio por noche (solo display, no rompe el onclick de selección).
           const pr = precioDefaultCabana(hs, f);
-          if (pr > 0) innerHtml = `<div class="grilla-precio">${fmtPrecioCorto(pr)}</div>`;
+          const inner = pr > 0 ? `<div class="grilla-precio">${fmtPrecioCorto(pr)}</div>` : '';
+          html += `<td class="grilla-cell gc-free${isToday ? ' gc-today' : ''}" data-cab="${b.id}" data-fecha="${f}" onclick="grillaCellClick(this,'${b.id}','${hs}','${f}')" style="cursor:pointer">${inner}</td>`;
         }
-
-        // Las celdas libres son punto de carga: 2 clicks marcan rango y abren el modal unificado.
-        const clickable = (cellClass === 'gc-free')
-          ? ` onclick="grillaCellClick(this,'${b.id}','${hs}','${f}')" style="cursor:pointer"`
-          : '';
-        html += `<td class="grilla-cell ${cellClass}${isToday ? ' gc-today' : ''}" data-cab="${b.id}" data-fecha="${f}"${clickable}>${innerHtml}</td>`;
-      });
+      }
 
       html += '</tr>';
     });
