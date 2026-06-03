@@ -2993,7 +2993,11 @@ function renderMapa(fechaVer) {
               );
               state = (resActiva && resActiva.estado === 'checkin') ? 'occupied' : 'occupied-confirmed';
             } else {
-              state = bedStates[b.id] || 'free'; // solo aplica dirty/maintenance si está libre
+              // Sin reserva activa: el color solo refleja overlays manuales (sucia/mantenimiento).
+              // Cualquier otro valor en beds (ej. 'occupied' viejo de un check-in sin checkout) se ignora
+              // → la cabaña se ve Libre (verde), consistente con el badge que sale de las reservas.
+              const manual = bedStates[b.id];
+              state = (manual === 'dirty' || manual === 'maintenance') ? manual : 'free';
             }
           }
           const res = reservas.find(r =>
