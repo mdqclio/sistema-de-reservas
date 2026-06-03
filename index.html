@@ -318,28 +318,26 @@ td.acciones .btn:last-child { margin-right: 0; }
 .star:hover { transform:scale(1.2); }
 
 /* ===== GRILLA ===== */
-.grilla-table { border-collapse: collapse; font-size: 12px; width: max-content; }
+.grilla-table { border-collapse: collapse; font-size: 12px; width: 100%; table-layout: fixed; }
 .grilla-table th {
   background: var(--surface2); color: var(--text3); font-size: 10px;
   text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 4px;
-  border: 1px solid var(--border); white-space: nowrap;
-  width: 60px; min-width: 60px; max-width: 60px; text-align: center;
+  border: 1px solid var(--border); white-space: nowrap; text-align: center;
 }
 .grilla-table th.today-col { background: rgba(59,130,246,0.2); color: var(--accent2); }
 .grilla-table td.cabaña-label {
   font-size: 11px; color: var(--text2); padding: 4px 10px;
   border: 1px solid var(--border); white-space: nowrap; background: var(--surface2);
-  position: sticky; left: 0; z-index: 2; min-width: 120px;
+  position: sticky; left: 0; z-index: 2; width: 180px;
 }
 .grilla-table td.cabaña-label .cabaña-nombre { font-weight: 600; color: var(--text); }
 .grilla-table td.cabaña-label .cabaña-config { font-size: 9px; color: var(--text3, var(--text2)); opacity: .7; }
 .grilla-table td.grilla-cell {
   border: 1px solid var(--border); padding: 2px; height: 28px;
-  width: 60px; min-width: 60px; max-width: 60px;
   cursor: pointer; position: relative; vertical-align: middle;
 }
 .grilla-cell.gc-free { background: transparent; }
-.grilla-cell .grilla-precio { font-size: 9px; color: var(--text3, var(--text2)); text-align: center; opacity: .75; pointer-events: none; }
+.grilla-cell .grilla-precio { font-size: 9px; color: #fff; text-align: center; opacity: .9; pointer-events: none; }
 .grilla-cell.gc-sel { background: var(--accent2); outline: 2px solid var(--accent2); outline-offset: -2px; }
 /* Conversaciones (inbox omnicanal) */
 .conv-layout { display:grid; grid-template-columns:300px 1fr; gap:12px; height:calc(100vh - 150px); min-height:420px; }
@@ -5422,7 +5420,7 @@ function renderGrilla() {
   let html = '<table class="grilla-table">';
 
   // Header fechas
-  html += '<thead><tr><th style="position:sticky;left:0;z-index:3;background:var(--surface2)">Cabaña</th>';
+  html += '<thead><tr><th style="position:sticky;left:0;z-index:3;background:var(--surface2);width:180px">Cabaña</th>';
   fechas.forEach(f => {
     const d = new Date(f + 'T12:00:00');
     const isToday = f === tod;
