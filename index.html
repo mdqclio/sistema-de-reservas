@@ -337,6 +337,7 @@ td.acciones .btn:last-child { margin-right: 0; }
   cursor: pointer; position: relative; vertical-align: middle;
 }
 .grilla-cell.gc-free { background: transparent; }
+.grilla-cell .grilla-precio { font-size: 9px; color: var(--text3, var(--text2)); text-align: center; opacity: .75; pointer-events: none; }
 .grilla-cell.gc-sel { background: var(--accent2); outline: 2px solid var(--accent2); outline-offset: -2px; }
 /* Conversaciones (inbox omnicanal) */
 .conv-layout { display:grid; grid-template-columns:300px 1fr; gap:12px; height:calc(100vh - 150px); min-height:420px; }
@@ -3180,6 +3181,15 @@ function precioDefaultCabana(hab, fecha) {
   return Number(cabana.precio_base) || 0;
 }
 
+// Precio abreviado en miles para la grilla. 510000 → "$510k"; 637500 → "$637,5k"; <1000 → "$n".
+function fmtPrecioCorto(n) {
+  n = Number(n) || 0;
+  if (n >= 1000) {
+    return '$' + (n / 1000).toLocaleString('es-AR', { maximumFractionDigits: 1 }) + 'k';
+  }
+  return '$' + n;
+}
+
 function onHabChange() {
   const hab = document.getElementById('res-hab').value;
   const precioEl = document.getElementById('res-precio');
@@ -5458,6 +5468,10 @@ function renderGrilla() {
             const nombre = escapeHtml(getHuespedNombre(res.huespedId).split(' ')[0]);
             innerHtml = `<div class="grilla-span ${res.estado}" onclick="cycleBed('${b.id}')" title="${escapeHtml(getHuespedNombre(res.huespedId))}">${nombre}</div>`;
           }
+        } else {
+          // Celda libre: mostrar precio por noche (solo display, no rompe el onclick de selección).
+          const pr = precioDefaultCabana(hs, f);
+          if (pr > 0) innerHtml = `<div class="grilla-precio">${fmtPrecioCorto(pr)}</div>`;
         }
 
         // Las celdas libres son punto de carga: 2 clicks marcan rango y abren el modal unificado.
