@@ -597,9 +597,6 @@ td.acciones .btn:last-child { margin-right: 0; }
       <div class="nav-item" onclick="showSection('huespedes');closeSidebar()" id="nav-huespedes">
         <span class="icon">👤</span> Huéspedes
       </div>
-      <div class="nav-item" onclick="showSection('precios');closeSidebar()" id="nav-precios">
-        <span class="icon">💲</span> Precios
-      </div>
       <div class="nav-section admin-only" style="display:none;">Administración</div>
       <div class="nav-item admin-only" onclick="showSection('contabilidad');closeSidebar()" id="nav-contabilidad" style="display:none;">
         <span class="icon">📒</span> Contabilidad
@@ -610,11 +607,18 @@ td.acciones .btn:last-child { margin-right: 0; }
       <div class="nav-item admin-only" onclick="showSection('listanegra');closeSidebar()" id="nav-listanegra" style="display:none;">
         <span class="icon">🚫</span> Lista Negra
       </div>
+      <div class="nav-section">Configuración</div>
+      <div class="nav-item" onclick="showSection('precios');closeSidebar()" id="nav-precios">
+        <span class="icon">💲</span> Precios
+      </div>
       <div class="nav-item admin-only" onclick="showSection('usuarios');closeSidebar()" id="nav-usuarios" style="display:none;">
         <span class="icon">👥</span> Usuarios
       </div>
       <div class="nav-item admin-only" onclick="showSection('roles');closeSidebar()" id="nav-roles" style="display:none;">
         <span class="icon">🔑</span> Roles y Permisos
+      </div>
+      <div class="nav-item admin-only" onclick="showSection('log');closeSidebar()" id="nav-log" style="display:none;">
+        <span class="icon">📋</span> Log de Actividad
       </div>
       <!-- <div class="nav-item admin-only" onclick="showSection('botconfig');closeSidebar()" id="nav-botconfig" style="display:none;">
         <span class="icon">⚙️</span> Config. del Bot
@@ -813,7 +817,6 @@ td.acciones .btn:last-child { margin-right: 0; }
           <div class="tab" onclick="switchAcctTab('presupuesto',this)">📊 Presupuesto</div>
           <div class="tab" onclick="switchAcctTab('recurrentes',this)">🔄 Recurrentes</div>
           <div class="tab" onclick="switchAcctTab('resumen',this)">Resumen</div>
-          <div class="tab" onclick="switchAcctTab('auditoria',this)">🔍 Auditoría</div>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
           <button class="btn btn-ghost btn-sm" onclick="openCategoriasModal()">📂 Categorías</button>
@@ -927,6 +930,9 @@ td.acciones .btn:last-child { margin-right: 0; }
       </div>
       <div class="roles-grid" id="rolesGrid"></div>
     </div>
+
+    <!-- LOG DE ACTIVIDAD -->
+    <div id="section-log" class="section"><div id="logContent"></div></div>
 
     <!-- BASE DE CONOCIMIENTO -->
     <div id="section-knowledge" class="section">
@@ -2327,7 +2333,7 @@ const colRoles      = makeLiveCollection('roles',                 liveRerender('
 const colUsuarios   = makeLiveCollection('usuarios',              liveRerender('usuarios', () => renderUsuarios()));
 const colCategorias = makeLiveCollection('categorias',            liveRerender('contabilidad', () => renderAcct(currentAcctTab)));
 const colProveedores= makeLiveCollection('proveedores',           liveRerender('contabilidad', () => renderAcct(currentAcctTab)));
-const colAuditoria  = makeLiveCollection('auditoria',             liveRerender('contabilidad', () => renderAcct(currentAcctTab)));
+const colAuditoria  = makeLiveCollection('auditoria',             liveRerender('log', () => renderLog()));
 const colCierres    = makeLiveCollection('cierres',               liveRerender('caja', () => renderCaja()));
 const colTipoCambio = makeLiveCollection('tipo_cambio_historial', null); // histórico, sin re-render en vivo
 const colRecurrentes= makeLiveCollection('recurrentes',           liveRerender('contabilidad', () => renderAcct(currentAcctTab)));
@@ -2607,7 +2613,7 @@ function applyRoleUI(rolKey, rolObj) {
 const sectionTitles = {
   dashboard:'Dashboard', mapa:'Mapa de Cabañas', reservas:'Reservas',
   checkin:'Check-In / Check-Out', pipeline:'Pipeline CRM', huespedes:'Huéspedes', precios:'Gestión de Precios',
-  grilla:'Grilla de Reservas', listanegra:'Lista Negra', contabilidad:'Contabilidad', caja:'Caja Diaria', usuarios:'Usuarios del Sistema', roles:'Roles y Permisos', knowledge:'Base de Conocimiento', conversaciones:'Conversaciones', botconfig:'Configuración del Bot'
+  grilla:'Grilla de Reservas', listanegra:'Lista Negra', contabilidad:'Contabilidad', caja:'Caja Diaria', usuarios:'Usuarios del Sistema', roles:'Roles y Permisos', log:'Log de Actividad', knowledge:'Base de Conocimiento', conversaciones:'Conversaciones', botconfig:'Configuración del Bot'
 };
 
 function showSection(s) {
@@ -2630,6 +2636,7 @@ function showSection(s) {
   if (s === 'caja') renderCaja();
   if (s === 'usuarios') renderUsuarios();
   if (s === 'roles') renderRoles();
+  if (s === 'log') renderLog();
   if (s === 'knowledge') renderKnowledge();
   if (s === 'conversaciones') loadAllData().then(() => renderConversaciones());
   if (s === 'pipeline') loadAllData().then(() => renderPipeline());
@@ -4507,7 +4514,13 @@ function renderAuditoria(c) {
 
 function setAuditFiltro(v) {
   currentAuditFiltro = v;
-  renderAcct('auditoria');
+  renderLog();
+}
+
+function renderLog() {
+  const c = document.getElementById('logContent');
+  if (!c) return;
+  renderAuditoria(c);
 }
 
 function openCategoriasModal() {
