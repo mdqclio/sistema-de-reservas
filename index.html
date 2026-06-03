@@ -243,6 +243,10 @@ td.acciones .btn:last-child { margin-right: 0; }
   border-radius: var(--radius); color: var(--text); font-size: 13px;
 }
 .filters input:focus, .filters select:focus { border-color: var(--accent); }
+.autocomplete-lista { position:absolute; left:0; right:0; top:100%; z-index:50; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); max-height:220px; overflow-y:auto; box-shadow:0 8px 24px rgba(0,0,0,0.3); }
+.autocomplete-item { padding:8px 12px; cursor:pointer; font-size:14px; color:var(--text); }
+.autocomplete-item:hover { background:var(--surface3); }
+.autocomplete-empty { padding:8px 12px; font-size:13px; color:var(--text3); }
 .search-input { min-width: 220px; }
 
 /* ===== CONTABILIDAD ===== */
@@ -1025,8 +1029,13 @@ td.acciones .btn:last-child { margin-right: 0; }
         <button type="button" class="btn btn-blue" id="res-modo-existente" onclick="setHuespedMode('existente')" style="flex:1;padding:6px">Existente</button>
         <button type="button" class="btn btn-ghost" id="res-modo-nuevo" onclick="setHuespedMode('nuevo')" style="flex:1;padding:6px">Nuevo</button>
       </div>
-      <div id="res-huesped-existente">
-        <select id="res-huesped"><option value="">Seleccionar...</option></select>
+      <div id="res-huesped-existente" style="position:relative">
+        <input type="text" id="res-huesped-buscar" placeholder="Buscar huésped por nombre..." autocomplete="off"
+          oninput="document.getElementById('res-huesped').value='';filtrarHuespedes(this.value)"
+          onfocus="filtrarHuespedes(this.value)"
+          onblur="setTimeout(()=>{const l=document.getElementById('res-huesped-lista');if(l)l.style.display='none'},200)">
+        <input type="hidden" id="res-huesped" value="">
+        <div id="res-huesped-lista" class="autocomplete-lista" style="display:none"></div>
       </div>
       <div id="res-huesped-nuevo" style="display:none">
         <div class="form-row">
@@ -3255,12 +3264,11 @@ function openNuevaReserva() {
   document.getElementById('modalReservaTitle').textContent = 'Nueva Reserva';
   document.getElementById('res-edit-id').value = '';
   document.getElementById('btnGuardarReserva').textContent = 'Guardar Reserva';
-  const huespedes = getHuespedes();
-  const sel = document.getElementById('res-huesped');
-  sel.innerHTML = '<option value="">Seleccionar...</option>' +
-    huespedes.map(h => `<option value="${h.id}">${escapeHtml(h.nombre)} ${escapeHtml(h.apellido)}</option>`).join('');
   clearHuespedNuevo();
   setHuespedMode('existente');
+  document.getElementById('res-huesped').value = '';
+  document.getElementById('res-huesped-buscar').value = '';
+  document.getElementById('res-huesped-lista').style.display = 'none';
   document.getElementById('res-hab').value = '';
   document.getElementById('res-entrada').value = today();
   const manana = new Date(); manana.setDate(manana.getDate()+1);
@@ -3281,13 +3289,11 @@ function editReserva(rid) {
   document.getElementById('modalReservaTitle').textContent = 'Editar Reserva';
   document.getElementById('res-edit-id').value = rid;
   document.getElementById('btnGuardarReserva').textContent = 'Guardar cambios';
-  const huespedes = getHuespedes();
-  const sel = document.getElementById('res-huesped');
-  sel.innerHTML = '<option value="">Seleccionar...</option>' +
-    huespedes.map(h => `<option value="${h.id}">${escapeHtml(h.nombre)} ${escapeHtml(h.apellido)}</option>`).join('');
   clearHuespedNuevo();
   setHuespedMode('existente'); // editar siempre usa huésped existente
-  sel.value = r.huespedId;
+  document.getElementById('res-huesped').value = r.huespedId;
+  document.getElementById('res-huesped-buscar').value = getHuespedNombre(r.huespedId);
+  document.getElementById('res-huesped-lista').style.display = 'none';
   document.getElementById('res-hab').value = r.hab;
   updateBedsSelect();
   document.getElementById('res-cabaña').value = r.cabaña;
@@ -5606,13 +5612,11 @@ function openReservaDesdeGrilla(hab, cabId, entrada, salida) {
   document.getElementById('modalReservaTitle').textContent = 'Nueva Reserva';
   document.getElementById('res-edit-id').value = '';
   document.getElementById('btnGuardarReserva').textContent = 'Guardar Reserva';
-  // Poblar selector de huéspedes existentes
-  const huespedes = getHuespedes();
-  const sel = document.getElementById('res-huesped');
-  sel.innerHTML = '<option value="">Seleccionar...</option>' +
-    huespedes.map(h => `<option value="${h.id}">${escapeHtml(h.nombre)} ${escapeHtml(h.apellido)}</option>`).join('');
   clearHuespedNuevo();
   setHuespedMode('existente');
+  document.getElementById('res-huesped').value = '';
+  document.getElementById('res-huesped-buscar').value = '';
+  document.getElementById('res-huesped-lista').style.display = 'none';
   // Cabaña + fechas precargadas
   document.getElementById('res-hab').value = hab;
   document.getElementById('res-entrada').value = entrada;
@@ -5644,6 +5648,27 @@ function setHuespedMode(mode) {
   btnExist?.classList.toggle('btn-ghost', nuevo);
   btnNuevo?.classList.toggle('btn-blue', nuevo);
   btnNuevo?.classList.toggle('btn-ghost', !nuevo);
+}
+
+// Autocompletado de huésped existente: filtra por nombre/apellido y arma la lista.
+function filtrarHuespedes(q) {
+  const lista = document.getElementById('res-huesped-lista');
+  if (!lista) return;
+  const term = (q || '').trim().toLowerCase();
+  const huespedes = getHuespedes();
+  const matches = (term === '' ? huespedes : huespedes.filter(h =>
+    `${h.nombre||''} ${h.apellido||''}`.toLowerCase().includes(term)
+  )).slice(0, 50);
+  lista.innerHTML = matches.length
+    ? matches.map(h => `<div class="autocomplete-item" onclick="seleccionarHuesped('${h.id}')">${escapeHtml(((h.nombre||'')+' '+(h.apellido||'')).trim())}</div>`).join('')
+    : '<div class="autocomplete-empty">Sin resultados</div>';
+  lista.style.display = '';
+}
+function seleccionarHuesped(id) {
+  document.getElementById('res-huesped').value = id;
+  document.getElementById('res-huesped-buscar').value = getHuespedNombre(id);
+  const l = document.getElementById('res-huesped-lista');
+  if (l) l.style.display = 'none';
 }
 
 // Vacía los campos del bloque "huésped nuevo" (al abrir/reabrir el modal).
@@ -6728,7 +6753,7 @@ Object.assign(window, {
   addFinde, updateFinde, deleteFinde,
   addPromo, updatePromo, deletePromo,
   togglePerm, deleteRol, toggleUsuarioEstado,
-  grillaCellClick, setHuespedMode, openReservaDesdeGrilla,
+  grillaCellClick, setHuespedMode, filtrarHuespedes, seleccionarHuesped, openReservaDesdeGrilla,
   renderConversaciones, abrirConversacion, togglePausaBot, enviarMensajeConv, convInputKey,
 });
 </script>
