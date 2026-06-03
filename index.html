@@ -4205,6 +4205,7 @@ function auditLog(accion, entidad, detalle) {
 }
 
 let currentAcctTab = 'ingresos'; // tab activo de contabilidad (para re-render en vivo)
+let currentAuditFiltro = 'Todos'; // filtro por entidad del visor de auditoría
 function renderAcct(tab) {
   currentAcctTab = tab;
   const movs = getMovimientos();
@@ -4474,22 +4475,39 @@ async function aplicarRecurrentes() {
 
 function renderAuditoria(c) {
   const log = colAuditoria.list();
-  const ultimos = [...log].reverse().slice(0, 100);
+  const entidades = ['Todos', ...Array.from(new Set(log.map(e => e.entidad).filter(Boolean))).sort()];
+  if (!entidades.includes(currentAuditFiltro)) currentAuditFiltro = 'Todos';
+  const filtrado = currentAuditFiltro === 'Todos' ? log : log.filter(e => e.entidad === currentAuditFiltro);
+  const ultimos = [...filtrado].reverse().slice(0, 100);
   c.innerHTML = `
-    <div class="card"><table>
-      <thead><tr><th>Fecha</th><th>Hora</th><th>Usuario</th><th>Acción</th><th>Entidad</th><th>Detalle</th></tr></thead>
-      <tbody>${ultimos.length
-        ? ultimos.map(e=>`<tr>
-            <td style="font-family:'DM Mono';font-size:12px">${fmtFecha(e.fecha)}</td>
-            <td style="font-size:12px;color:var(--text3)">${e.hora||''}</td>
-            <td style="font-size:12px">${e.usuario||'—'}</td>
-            <td><span class="badge blue" style="font-size:10px">${e.accion||'—'}</span></td>
-            <td style="font-size:12px">${e.entidad||'—'}</td>
-            <td style="font-size:12px;color:var(--text2)">${e.detalle||''}</td>
-          </tr>`).join('')
-        : '<tr><td colspan="6" style="text-align:center;color:var(--text3)">Sin registros de auditoría</td></tr>'
-      }</tbody>
-    </table></div>`;
+    <div class="card">
+      <div class="filters" style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
+        <span style="font-size:12px;color:var(--text3)">Filtrar por:</span>
+        <select onchange="setAuditFiltro(this.value)" style="min-width:160px">
+          ${entidades.map(en => `<option value="${en}"${en === currentAuditFiltro ? ' selected' : ''}>${en}</option>`).join('')}
+        </select>
+        <span style="font-size:12px;color:var(--text3)">${filtrado.length} registro(s)</span>
+      </div>
+      <table>
+        <thead><tr><th>Fecha</th><th>Hora</th><th>Usuario</th><th>Acción</th><th>Entidad</th><th>Detalle</th></tr></thead>
+        <tbody>${ultimos.length
+          ? ultimos.map(e=>`<tr>
+              <td style="font-family:'DM Mono';font-size:12px">${fmtFecha(e.fecha)}</td>
+              <td style="font-size:12px;color:var(--text3)">${e.hora||''}</td>
+              <td style="font-size:12px">${e.usuario||'—'}</td>
+              <td><span class="badge blue" style="font-size:10px">${e.accion||'—'}</span></td>
+              <td style="font-size:12px">${e.entidad||'—'}</td>
+              <td style="font-size:12px;color:var(--text2)">${e.detalle||''}</td>
+            </tr>`).join('')
+          : '<tr><td colspan="6" style="text-align:center;color:var(--text3)">Sin registros de auditoría</td></tr>'
+        }</tbody>
+      </table>
+    </div>`;
+}
+
+function setAuditFiltro(v) {
+  currentAuditFiltro = v;
+  renderAcct('auditoria');
 }
 
 function openCategoriasModal() {
@@ -6684,7 +6702,7 @@ Object.assign(window, {
   saveRecurrente, deleteRecurrente, openRecurrenteModal, aplicarRecurrentes,
   savePresupuesto, exportarCSV, calcArqueo,
   openMovimientoModal, onMovTipoChange, onMovMonedaChange, onMovImpuestoChange,
-  renderCuentasPorCobrar, renderPresupuesto, renderRecurrentes, renderAuditoria, renderProveedores,
+  renderCuentasPorCobrar, renderPresupuesto, renderRecurrentes, renderAuditoria, setAuditFiltro, renderProveedores,
   editReserva,
   openEditHuesped, saveEditHuesped, confirmDelete, deleteHuesped, deleteReserva,
   openCambioCama, updateCambioCamaSelect, saveCambioCama,
