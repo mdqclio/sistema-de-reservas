@@ -5462,12 +5462,9 @@ function renderGrilla() {
         let innerHtml = '';
 
         if (res) {
-          const esEntrada = res.entrada.substring(0,10) === f;
           cellClass = res.estado === 'checkin' ? 'gc-occupied' : res.estado === 'confirmada' ? 'gc-confirmed' : 'gc-checkout';
-          if (esEntrada) {
-            const nombre = escapeHtml(getHuespedNombre(res.huespedId).split(' ')[0]);
-            innerHtml = `<div class="grilla-span ${res.estado}" onclick="cycleBed('${b.id}')" title="${escapeHtml(getHuespedNombre(res.huespedId))}">${nombre}</div>`;
-          }
+          const nombre = escapeHtml(getHuespedNombre(res.huespedId).split(' ')[0]);
+          innerHtml = `<div class="grilla-span ${res.estado}" onclick="cycleBed('${b.id}')" title="${escapeHtml(getHuespedNombre(res.huespedId))}">${nombre}</div>`;
         } else {
           // Celda libre: mostrar precio por noche (solo display, no rompe el onclick de selección).
           const pr = precioDefaultCabana(hs, f);
