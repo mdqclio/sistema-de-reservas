@@ -1,9 +1,15 @@
 # Chatbot — Asistente Virtual Puerto Delfín
 
-> ⚠️ **ESTADO: DESACTIVADO TEMPORALMENTE.**
-> El chat está comentado en la UI (nav item y panel flotante) y `loadApiKeyFromDB()`
-> está comentado dentro de `loadAllData()`. La lógica (`buildSystemPrompt`, `sendMessage`,
-> `initChatbot`, etc.) sigue en el código, lista para reactivar descomentando esos bloques.
+> 🚚 **LA IMPLEMENTACIÓN SE MUEVE A `mibot247/botcontrol`.**
+> El bot se construye ahora en un proyecto aparte: **`mibot247/botcontrol`** (multi-tenant,
+> con su propio Firebase `botcontrol-base`) + **n8n en Hetzner**. El flujo (webhook → consulta
+> disponibilidad/precios/KB → respuesta) vive del lado de n8n, reusando la lógica de
+> `buildSystemPrompt`. El **chat embebido en este `index.html` queda DEPRECADO/fallback**.
+>
+> ⚠️ **Estado del chat embebido:** desactivado. Comentado en la UI (nav item y panel flotante)
+> y `loadApiKeyFromDB()` comentado dentro de `loadAllData()`. La lógica (`buildSystemPrompt`,
+> `sendMessage`, `initChatbot`, etc.) sigue en el código como fallback; lo de abajo documenta
+> esa implementación histórica.
 
 ## Stack
 

@@ -40,6 +40,12 @@ colRoles.nuevoId();     // push key de Firebase
 
 - Cada colección tiene su `onValue` que mantiene el cache fresco y respeta las
   escrituras locales en vuelo (sets `pending` / `pendingDel`).
+- El segundo parámetro es un callback de re-render envuelto en
+  `liveRerender(section, fn)` → `() => { if (sectionActive(section) && !anyModalOpen()) fn(); }`.
+  Solo re-renderiza si esa sección está activa y no hay ningún modal abierto (evita pisar
+  un formulario abierto). Ej.: `colAuditoria` usa `liveRerender('log', () => renderLog())`;
+  los callbacks de `reservas`/`huespedes`/`beds` llaman `renderMapa()`/`renderGrilla()`, así
+  el mapa y la grilla se auto-refrescan cuando cambian los datos.
 - Migración array→objeto indexado: `migrateNodeToIndexed(nodo)` (o una `migrate` custom
   para los que no traían `id`: presupuestos y knowledge_base). Corre **una sola vez**,
   gobernada por el flag persistente `cabanas/_migrado/{nodo}`, usando `update()` (merge);
@@ -67,7 +73,7 @@ colRoles.nuevoId();     // push key de Firebase
     temporadas:        [{ id, nombre, fecha_inicio, fecha_fin, tipo, anual }]
     fines_semana_largos: [...]
     promociones:       [...]
-    habitaciones:      [{ hab, nombre, capacidad, precio_base, precio_alta, precio_baja, moneda }]
+    habitaciones:      [{ hab, nombre, tipo, mts2, capacidad, precio_base, precio_alta, precio_baja, moneda }]
     plataformas:       [{ plat, descuento, comision }]   // directo 0% / booking 15% / airbnb 12%
   }
 
@@ -126,13 +132,20 @@ colRoles.nuevoId();     // push key de Firebase
 
 ## Cabañas
 
-|Cabañas|Capacidad |Precio base |
-|-------|----------|------------|
-|1 - 4  |3 personas|$510.000 ARS|
-|5 - 8  |4 personas|$510.000 ARS|
-|9 - 12 |6 personas|$637.500 ARS|
+|Cabañas      |Tipo         |m²  |Capacidad |Precio base |
+|-------------|-------------|----|----------|------------|
+|1, 2, 3, 4   |Monoambiente |38  |3 personas|$510.000 ARS|
+|5, 6, 9, 10  |2 Ambientes  |38  |4 personas|$510.000 ARS|
+|7, 8, 11, 12 |Loft         |60  |6 personas|$637.500 ARS|
 
-Cada cabaña tiene además `precio_alta` y `precio_baja` en el nodo `precios.habitaciones`.
+> **Ojo:** la capacidad NO es contigua por número. Las de 6 pax (Loft) son 7, 8, 11, 12;
+> las de 4 pax (2 Ambientes) son 5, 6, 9, 10. (Corrige el viejo "5-8 / 9-12" por rango.)
+
+`CABANA_CONFIG` (constante en `index.html`, ~línea 1853) es la **única fuente de verdad** de
+`tipo`/`mts2`/`capacidad` por cabaña. La usa el seed (`initData`), una migración una-sola-vez
+(flag `cabanas/_migrado/habitaciones_config`, que corrige los datos ya cargados sin tocar precios)
+y el render de la grilla (margen izquierdo). Cada cabaña tiene además `precio_alta` y `precio_baja`
+en el nodo `precios.habitaciones`.
 
 - Sin vista al mar (se escucha desde las cabañas)
 - A 50m del mar, 4 cuadras del centro de Mar de las Pampas
@@ -140,9 +153,20 @@ Cada cabaña tiene además `precio_alta` y `precio_baja` en el nodo `precios.hab
 
 ## Módulos / secciones (`showSection`)
 
-dashboard · mapa · reservas · grilla · checkin · pipeline · huespedes · listanegra ·
-precios · contabilidad · caja · usuarios · roles · knowledge · botconfig
-*(chatbot existe pero está desactivado)*
+dashboard · mapa · reservas · grilla · checkin · pipeline · conversaciones · huespedes ·
+listanegra · precios · contabilidad · caja · usuarios · roles · **log** · knowledge · botconfig
+*(chatbot embebido existe pero está deprecado/fallback; se mueve a mibot247 — ver CHATBOT.md)*
+
+Agrupación del nav (`sidebarNav`):
+
+- **Principal**: Dashboard, Mapa, Reservas, Grilla
+- **Operaciones**: Check-in/out, Pipeline, Conversaciones, Huéspedes
+- **Administración** (`admin-only`): Contabilidad, Caja, Lista Negra
+- **Configuración**: Precios (todos) · Usuarios, Roles, **Log de Actividad** (`admin-only`)
+
+El **Log de Actividad** (`section-log` / `renderLog`) es ahora su propia sección; antes era una
+pestaña dentro de Contabilidad. `renderLog()` reusa el visor `renderAuditoria(c)` sobre `#logContent`,
+con filtro por entidad (`setAuditFiltro` / `currentAuditFiltro`).
 
 ## Funciones clave en index.html
 
@@ -155,16 +179,20 @@ precios · contabilidad · caja · usuarios · roles · knowledge · botconfig
 |`buildSystemPrompt()`                                                    |Prompt del chat con disponibilidad en tiempo real      |
 |`renderMapa()` / `renderMapaFecha()` / `cycleBed()`                      |Mapa de 12 cabañas                                     |
 |`renderReservas()` / `saveReserva()` / `editReserva()`                   |Reservas                                               |
-|`renderGrilla()`                                                         |Grilla tipo calendario                                 |
+|`filtrarHuespedes(q)` / `seleccionarHuesped(id)`                         |Buscador con autocompletado de huésped en el modal de reserva (input visible `res-huesped-buscar` + oculto `res-huesped`) |
+|`renderGrilla()`                                                         |Grilla calendario; cada reserva = UNA barra (`colspan`) con nombre+apellido centrado y "debe $X" en rojo; celdas libres muestran precio/noche y abren el modal con selección por 2 clicks |
+|`fmtPrecioCorto(n)`                                                      |Precio abreviado en miles (`$510k`, `$637,5k`)         |
+|`precioDefaultCabana(hab, fecha)`                                        |Precio por noche según temporada (alta/baja/base) desde `precios.habitaciones` |
 |`doCheckin()` / `confirmCheckin()` / `doCheckout()`                      |Check-in/out                                           |
 |`renderPipeline()` / `saveLead()` / `moveLeadEtapa()`                    |CRM kanban                                             |
 |`renderHuespedes()` / `renderListaNegra()` / `getScoreBadge()`           |Huéspedes + score                                      |
 |`renderPrecios()` / `addTemporada()` / `addPromo()`                      |Precios                                                |
 |`renderAcct()` / `renderCaja()` / `cerrarCaja()` / `aplicarRecurrentes()`|Contabilidad y caja                                    |
 |`renderRoles()` / `renderUsuarios()` / `saveUsuario()`                   |Roles y usuarios                                       |
+|`renderLog()` / `setAuditFiltro(v)`                                      |Visor del log de auditoría (sección propia) + filtro por entidad |
 |`renderKnowledge()` / `renderBotConfig()`                                |KB y config del bot                                    |
 |`fetchCotizacionDolar()`                                                 |Cotización del dólar                                   |
-|`auditLog()`                                                             |Registro en `auditoria`                                |
+|`auditLog(accion, entidad, detalle)`                                     |Registro en `auditoria` (por hijo). Ahora se llama en **todas** las mutaciones (reservas, huéspedes, checkin/out, precios, usuarios, roles, pipeline, `cycleBed`, KB, bot config) + login/logout. Tope: 1000 registros |
 |`habBeds(hab)`                                                           |Retorna `[{id, label}]` (1 unidad por cabaña)          |
 |`camaLabel(camaId)`                                                      |Retorna “Cabaña X” — **NUNCA usar `cabañaLabel()`**    |
 |`getHuespedNombre(id, reserva)`                                          |Nombre del huésped, con fallback a `reserva.guestName` |
@@ -172,6 +200,17 @@ precios · contabilidad · caja · usuarios · roles · knowledge · botconfig
 ## Pipeline CRM — etapas
 
 `consulta` → `presupuesto` (Presupuesto enviado) → `confirmada` → `perdida`. Tablero kanban.
+
+## Mapa de cabañas — color y auto-refresh
+
+`renderMapa()` deriva la **ocupación de las reservas activas** (estado `checkin`/`confirmada`
+que cubren la fecha consultada), NO del nodo `beds`. En la rama "sin reserva activa", el color
+solo respeta los overlays **manuales** del nodo `beds`: `dirty` (naranja) y `maintenance` (rojo);
+cualquier otro valor (ej. un `'occupied'` viejo de un check-in cuya reserva terminó sin checkout)
+se ignora → la cabaña se ve **Libre/verde**, consistente con el badge (que también sale de las
+reservas). El checkout sí setea `beds` a `'dirty'` a propósito; `cycleBed` cicla los overlays
+manuales. El mapa se auto-refresca: los callbacks en vivo de `reservas`/`huespedes`/`beds`
+llaman `renderMapa()`.
 
 ## Gotchas críticos
 
@@ -188,3 +227,10 @@ precios · contabilidad · caja · usuarios · roles · knowledge · botconfig
 1. **`buildSystemPrompt()` lee del cache** — llamar `loadAllData()` antes para datos frescos.
 1. **Firebase Realtime Database, NO Firestore** — el Firestore creado al inicio no se usa.
 1. **Admin no hardcodeado** — usuarios se crean en Firebase Auth y se cargan en el nodo `usuarios`.
+1. **Handlers inline → `Object.assign(window, {...})`** — toda función usada desde un
+   `onclick`/`onchange`/`oninput` inline DEBE estar registrada en el bloque `Object.assign(window, …)`
+   (el script es `type="module"`, así que su scope no es global). `node --check` **NO** detecta si falta;
+   se rompe recién en runtime. Ej. de esta sesión: `setAuditFiltro`, `filtrarHuespedes`, `seleccionarHuesped`.
+1. **El nodo `beds` puede tener un `'occupied'` viejo** — de un check-in cuya reserva terminó sin
+   checkout. Es inofensivo: `renderMapa` lo ignora (solo respeta `dirty`/`maintenance`) y deriva la
+   ocupación de las reservas. No hace falta limpiarlo.

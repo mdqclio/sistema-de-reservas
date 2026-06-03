@@ -3,14 +3,16 @@
 Sistema de gestión para cabañas, basado en el sistema del Alula Hostel (que ya funciona en producción).
 Deployado en GitHub Pages. Un solo archivo `index.html` (~6.100 líneas, vanilla JS).
 
-**Versión actual**: v1.0
+**Versión actual**: v1.1
 
 ## Stack
 
 - **Frontend**: Vanilla JS + HTML + CSS (sin frameworks)
 - **Base de datos**: Firebase Realtime Database (NO Firestore)
 - **Auth**: Firebase Authentication
-- **Bot**: Groq API (llama-3.3-70b-versatile) — *actualmente DESACTIVADO temporalmente*
+- **Bot**: la implementación se mueve al proyecto aparte **`mibot247/botcontrol`** (multi-tenant,
+  Firebase propio `botcontrol-base`) + n8n en Hetzner. El chatbot embebido en el browser queda
+  **deprecado/fallback**.
 - **Hosting**: GitHub Pages (`mdqclio.github.io/sistema-de-reservas/`)
 
 ## Firebase
@@ -45,11 +47,15 @@ guest-register.html ← autocarga de datos de huéspedes
 > `kb_import.html` ya **no está en el repo** (era de uso único, se removió).
 > `web-puertodelfin.html` (web pública nueva) todavía **no se subió**.
 
-## Módulos del sistema
+## Módulos del sistema (por grupo del nav)
 
-Dashboard · Mapa de Cabañas · Reservas · Grilla · Check-in/out · Pipeline CRM ·
-Huéspedes · Lista Negra · Precios · Contabilidad · Caja Diaria · Usuarios ·
-Roles y Permisos · Base de Conocimiento · Configuración del Bot · (Chat Asistente — desactivado)
+- **Principal**: Dashboard · Mapa de Cabañas · Reservas · Grilla
+- **Operaciones**: Check-in/out · Pipeline CRM · Conversaciones · Huéspedes
+- **Administración**: Contabilidad · Caja Diaria · Lista Negra
+- **Configuración**: Precios · Usuarios · Roles y Permisos · Log de Actividad
+
+*(Base de Conocimiento y Configuración del Bot siguen existiendo; el Chat Asistente embebido
+queda deprecado/fallback — el bot se mueve a `mibot247`.)*
 
 ## Pendientes
 
@@ -63,6 +69,25 @@ Roles y Permisos · Base de Conocimiento · Configuración del Bot · (Chat Asis
 - [ ] Software predictivo de trading (libro pendiente de subir)
 
 ## Hecho recientemente
+
+### Sesión v1.1
+
+- [x] **Concurrencia en TODOS los nodos-colección** vía `makeLiveCollection` (cache vivo con
+  `onValue` + escritura por hijo + migración flag-gated). `liveRerender(section, fn)` re-renderiza
+  solo si la sección está activa y no hay modal. `precios` y `bot_config` siguen siendo blobs.
+- [x] **Grilla rediseñada**: ancho completo (`table-layout:fixed`; label 180px, columnas de fecha 60px);
+  precio por noche en celdas libres (blanco); descripción de cabaña en blanco; cada reserva como UNA
+  barra (`colspan`) con nombre+apellido centrado y "debe $X" (saldo) en rojo; `CABANA_CONFIG` como única
+  fuente de tipo/m²/capacidad (Monoambiente 38m² 3pax = 1-4 · 2 Ambientes 38m² 4pax = 5,6,9,10 ·
+  Loft 60m² 6pax = 7,8,11,12); selección por 2 clicks abre el modal unificado.
+- [x] **Buscador con autocompletado de huésped** en el modal de reserva (reemplaza el `<select>`).
+- [x] **Auditoría integral**: `auditLog` en todas las mutaciones + login/logout (tope 1000); el visor
+  salió de Contabilidad y es su propia sección (**Log de Actividad**) con filtro por entidad.
+- [x] **Nav reorganizado**: nuevo grupo "Configuración" (Precios, Usuarios, Roles, Log).
+- [x] **Fix color del mapa**: cabaña sin reserva activa se ve Libre/verde aunque `beds` tenga un
+  `'occupied'` viejo (la ocupación se deriva de las reservas).
+
+### Anterior
 
 - [x] **Concurrencia resuelta en todos los nodos-colección**: `onValue` (cache vivo) +
   escritura por hijo (`nodo/{id}`) vía la factory `makeLiveCollection`. Dos usuarios ya no

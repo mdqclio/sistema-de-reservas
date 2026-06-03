@@ -8,6 +8,21 @@
 
 -----
 
+## ✅ Hecho esta sesión (v1.1)
+
+- **Concurrencia** en todos los nodos-colección (Bloque 0 #1) — `makeLiveCollection` + `liveRerender`.
+- **Carga huésped+reserva desde la grilla** por 2 clicks (Bloque 1) + grilla rediseñada
+  (barras `colspan`, precio/noche, `CABANA_CONFIG`).
+- **Buscador con autocompletado** de huésped existente en el modal de reserva.
+- **Log de auditoría integral**: `auditLog` en todas las mutaciones + login/logout (tope 1000);
+  visor como sección propia ("Log de Actividad", grupo Configuración) con filtro por entidad.
+- **Fix color del mapa**: la cabaña libre se ve verde aunque `beds` tenga un `'occupied'` viejo.
+
+> Siguen pendientes: precio que defaultea a `510000`, escapar HTML en todos lados, IDs robustos,
+> staging+validación, reglas de seguridad, saldo del check-in a caja, Beds24, y el bot en n8n/mibot247.
+
+-----
+
 ## 🧱 Bloque 0 — Bases técnicas (PREREQUISITOS, antes de integrar nada externo)
 
 - [x] 🔴 **Concurrencia. (HECHO)** `onValue` (cache vivo) + escritura por hijo en
@@ -37,10 +52,10 @@
 
 ## 🎨 Bloque 1 — UI/UX y pestaña de Configuración
 
-- [ ] ✨ **Carga de huésped + reserva desde la grilla.** Selección de rango por
+- [x] ✨ **Carga de huésped + reserva desde la grilla. (HECHO)** Selección de rango por
   **dos clicks** (inicio → fin) sobre celdas libres → abre el formulario unificado
-  con cabaña y fechas pre-cargadas. Mantener la opción de elegir huésped existente
-  (evitar duplicados) además de “huésped nuevo”.
+  con cabaña y fechas pre-cargadas. Elegir huésped existente vía **buscador con autocompletado**
+  (`filtrarHuespedes`/`seleccionarHuesped`, reemplaza el `<select>`) o "huésped nuevo".
 - [ ] ✨ **Fotos de DNI a Firebase Storage.** Subir al bucket (ya existe) y guardar
   solo la URL, no el base64. El render no cambia (`<img src>` aguanta ambos).
   Tocar las 3-4 vías de carga. Cuidar reglas del bucket para uploads públicos.
@@ -71,6 +86,10 @@
 - [ ] ✨ Push de disponibilidad/tarifas hacia Beds24 (si la decisión lo requiere).
 
 ## 🤖 Bloque 3 — Chatbot en Hetzner/n8n + web pública
+
+> **Dirección actual:** el bot se construye en el proyecto aparte **`mibot247/botcontrol`**
+> (multi-tenant, Firebase propio `botcontrol-base`) + n8n en Hetzner. El chat embebido del
+> browser queda deprecado/fallback.
 
 - [ ] ✨ Flujo en n8n: webhook → consulta disponibilidad/precios/KB en RTDB → respuesta.
   Reusar la lógica de `buildSystemPrompt`, pero del lado de n8n.
