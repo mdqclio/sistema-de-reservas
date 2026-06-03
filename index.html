@@ -325,11 +325,13 @@ td.acciones .btn:last-child { margin-right: 0; }
   border: 1px solid var(--border); white-space: nowrap; min-width: 34px; text-align: center;
 }
 .grilla-table th.today-col { background: rgba(59,130,246,0.2); color: var(--accent2); }
-.grilla-table td.cabaña-label { 
-  font-size: 11px; color: var(--text2); padding: 4px 10px; 
+.grilla-table td.cabaña-label {
+  font-size: 11px; color: var(--text2); padding: 4px 10px;
   border: 1px solid var(--border); white-space: nowrap; background: var(--surface2);
   position: sticky; left: 0; z-index: 2; min-width: 120px;
 }
+.grilla-table td.cabaña-label .cabaña-nombre { font-weight: 600; color: var(--text); }
+.grilla-table td.cabaña-label .cabaña-config { font-size: 9px; color: var(--text3, var(--text2)); opacity: .7; }
 .grilla-table td.grilla-cell {
   border: 1px solid var(--border); padding: 2px; height: 28px; min-width: 34px;
   cursor: pointer; position: relative; vertical-align: middle;
@@ -1830,6 +1832,42 @@ function rerenderReservasViews() {
   if (isActive('mapa')) renderMapa(document.getElementById('mapaFecha')?.value);
 }
 
+// Config real de cabañas (fuente de verdad). Usada por el seed, la migración
+// de datos ya cargados y el render de la grilla. tipo/mts2/capacidad por hab.
+const CABANA_CONFIG = {
+  '1':  { tipo:'Monoambiente', mts2:38, capacidad:3 },
+  '2':  { tipo:'Monoambiente', mts2:38, capacidad:3 },
+  '3':  { tipo:'Monoambiente', mts2:38, capacidad:3 },
+  '4':  { tipo:'Monoambiente', mts2:38, capacidad:3 },
+  '5':  { tipo:'2 Ambientes',  mts2:38, capacidad:4 },
+  '6':  { tipo:'2 Ambientes',  mts2:38, capacidad:4 },
+  '7':  { tipo:'Loft',         mts2:60, capacidad:6 },
+  '8':  { tipo:'Loft',         mts2:60, capacidad:6 },
+  '9':  { tipo:'2 Ambientes',  mts2:38, capacidad:4 },
+  '10': { tipo:'2 Ambientes',  mts2:38, capacidad:4 },
+  '11': { tipo:'Loft',         mts2:60, capacidad:6 },
+  '12': { tipo:'Loft',         mts2:60, capacidad:6 },
+};
+
+// Migración una-sola-vez: corrige tipo/mts2/capacidad de las cabañas YA cargadas
+// en Firebase (el seed no re-corre sobre una DB inicializada). PRESERVA los precios
+// existentes; solo escribe tipo/mts2/capacidad según CABANA_CONFIG. Flag persistente.
+async function migrateHabitacionesConfig() {
+  const flagRef = ref(db, 'cabanas/_migrado/habitaciones_config');
+  const flagSnap = await get(flagRef);
+  if (flagSnap.exists() && flagSnap.val()) return;
+  const p = DB.get('precios', {});
+  if (Array.isArray(p.habitaciones) && p.habitaciones.length) {
+    p.habitaciones = p.habitaciones.map(h => {
+      const cfg = CABANA_CONFIG[String(h.hab)];
+      // Conserva precio_base/precio_alta/precio_baja y todo lo demás; solo pisa la config.
+      return cfg ? { ...h, tipo: cfg.tipo, mts2: cfg.mts2, capacidad: cfg.capacidad } : h;
+    });
+    await DB.set('precios', p);
+  }
+  await set(flagRef, true);
+}
+
 // Migración única y SEGURA, gobernada por un flag PERSISTENTE en la DB
 // (cabanas/_migrado/{coleccion}). Corre como mucho UNA VEZ EN LA VIDA del nodo:
 // si el flag ya está puesto, no toca nada (solo un get chico). NUNCA hace un
@@ -2350,6 +2388,8 @@ async function loadAllData() {
     try { await initHuespedesLive(); } catch(e) { console.error('huespedes live init error:', e); }
     try { await initMovimientosLive(); } catch(e) { console.error('movimientos live init error:', e); }
     try { await initBedsLive(); } catch(e) { console.error('beds live init error:', e); }
+    // Corrige tipo/mts2/capacidad de las cabañas ya cargadas (una sola vez, aislada).
+    try { await migrateHabitacionesConfig(); } catch(e) { console.error('habitaciones_config migration error:', e); }
     // Migración + sync en vivo del resto de las colecciones (cada una aislada).
     for (const c of Object.values(liveCollections)) {
       try { await c.init(); } catch(e) { console.error(c.name + ' live init error:', e); }
@@ -2399,18 +2439,18 @@ async function initData() {
     fines_semana_largos: [],
     promociones: [],
     habitaciones: [
-      { hab:'1',  nombre:'Cabaña 1',  capacidad:3, precio_base:510000, precio_alta:637500, precio_baja:400000, moneda:'ARS' },
-      { hab:'2',  nombre:'Cabaña 2',  capacidad:3, precio_base:510000, precio_alta:637500, precio_baja:400000, moneda:'ARS' },
-      { hab:'3',  nombre:'Cabaña 3',  capacidad:3, precio_base:510000, precio_alta:637500, precio_baja:400000, moneda:'ARS' },
-      { hab:'4',  nombre:'Cabaña 4',  capacidad:3, precio_base:510000, precio_alta:637500, precio_baja:400000, moneda:'ARS' },
-      { hab:'5',  nombre:'Cabaña 5',  capacidad:4, precio_base:510000, precio_alta:637500, precio_baja:400000, moneda:'ARS' },
-      { hab:'6',  nombre:'Cabaña 6',  capacidad:4, precio_base:510000, precio_alta:637500, precio_baja:400000, moneda:'ARS' },
-      { hab:'7',  nombre:'Cabaña 7',  capacidad:4, precio_base:510000, precio_alta:637500, precio_baja:400000, moneda:'ARS' },
-      { hab:'8',  nombre:'Cabaña 8',  capacidad:4, precio_base:510000, precio_alta:637500, precio_baja:400000, moneda:'ARS' },
-      { hab:'9',  nombre:'Cabaña 9',  capacidad:6, precio_base:637500, precio_alta:800000, precio_baja:500000, moneda:'ARS' },
-      { hab:'10', nombre:'Cabaña 10', capacidad:6, precio_base:637500, precio_alta:800000, precio_baja:500000, moneda:'ARS' },
-      { hab:'11', nombre:'Cabaña 11', capacidad:6, precio_base:637500, precio_alta:800000, precio_baja:500000, moneda:'ARS' },
-      { hab:'12', nombre:'Cabaña 12', capacidad:6, precio_base:637500, precio_alta:800000, precio_baja:500000, moneda:'ARS' },
+      { hab:'1',  nombre:'Cabaña 1',  tipo:'Monoambiente', mts2:38, capacidad:3, precio_base:510000, precio_alta:637500, precio_baja:400000, moneda:'ARS' },
+      { hab:'2',  nombre:'Cabaña 2',  tipo:'Monoambiente', mts2:38, capacidad:3, precio_base:510000, precio_alta:637500, precio_baja:400000, moneda:'ARS' },
+      { hab:'3',  nombre:'Cabaña 3',  tipo:'Monoambiente', mts2:38, capacidad:3, precio_base:510000, precio_alta:637500, precio_baja:400000, moneda:'ARS' },
+      { hab:'4',  nombre:'Cabaña 4',  tipo:'Monoambiente', mts2:38, capacidad:3, precio_base:510000, precio_alta:637500, precio_baja:400000, moneda:'ARS' },
+      { hab:'5',  nombre:'Cabaña 5',  tipo:'2 Ambientes',  mts2:38, capacidad:4, precio_base:510000, precio_alta:637500, precio_baja:400000, moneda:'ARS' },
+      { hab:'6',  nombre:'Cabaña 6',  tipo:'2 Ambientes',  mts2:38, capacidad:4, precio_base:510000, precio_alta:637500, precio_baja:400000, moneda:'ARS' },
+      { hab:'7',  nombre:'Cabaña 7',  tipo:'Loft',         mts2:60, capacidad:6, precio_base:510000, precio_alta:637500, precio_baja:400000, moneda:'ARS' },
+      { hab:'8',  nombre:'Cabaña 8',  tipo:'Loft',         mts2:60, capacidad:6, precio_base:510000, precio_alta:637500, precio_baja:400000, moneda:'ARS' },
+      { hab:'9',  nombre:'Cabaña 9',  tipo:'2 Ambientes',  mts2:38, capacidad:4, precio_base:637500, precio_alta:800000, precio_baja:500000, moneda:'ARS' },
+      { hab:'10', nombre:'Cabaña 10', tipo:'2 Ambientes',  mts2:38, capacidad:4, precio_base:637500, precio_alta:800000, precio_baja:500000, moneda:'ARS' },
+      { hab:'11', nombre:'Cabaña 11', tipo:'Loft',         mts2:60, capacidad:6, precio_base:637500, precio_alta:800000, precio_baja:500000, moneda:'ARS' },
+      { hab:'12', nombre:'Cabaña 12', tipo:'Loft',         mts2:60, capacidad:6, precio_base:637500, precio_alta:800000, precio_baja:500000, moneda:'ARS' },
     ],
     plataformas: [
       { plat:'directo', descuento:0, comision:0 },
@@ -5349,6 +5389,7 @@ function renderGrilla() {
   if (!grillaFechaInicio) grillaFechaInicio = today();
   const reservas = getReservas();
   const tod = today();
+  const habsCfg = (DB.get('precios', {}).habitaciones) || [];
 
   // Generar array de fechas a mostrar
   const fechas = [];
@@ -5390,7 +5431,13 @@ function renderGrilla() {
     // además una fila-cabecera 'grilla-hab-header' que, al haber 1 sola unidad, quedaba
     // pegada a la fila de datos y se veía como cabaña duplicada. Se eliminó.
     beds.forEach(b => {
-      html += `<tr><td class="cabaña-label">Cabaña ${b.label}</td>`;
+      const cfg = habsCfg.find(x => x.hab === hs) || {};
+      const meta = [
+        cfg.tipo,
+        (cfg.mts2 != null ? cfg.mts2 + ' m²' : ''),
+        (cfg.capacidad != null ? cfg.capacidad + ' Pax' : '')
+      ].filter(Boolean).join(' · ');
+      html += `<tr><td class="cabaña-label"><div class="cabaña-nombre">Cabaña ${b.label}</div>${meta ? `<div class="cabaña-config">${meta}</div>` : ''}</td>`;
 
       // Para cada fecha, ver si hay reserva
       fechas.forEach((f, fi) => {
