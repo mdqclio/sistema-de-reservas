@@ -2832,7 +2832,7 @@ function renderFechasImportantes() {
     <div style="display:flex;flex-direction:column;gap:8px;padding:4px 0;">
       ${eventos.map(e => {
         const waMsg = encodeURIComponent(`Hola ${e.nombre.split(' ')[0]}! Desde Cabañas Puerto Delfín te deseamos un ${e.tipo==='cumple'?'¡muy feliz cumpleaños! 🎂':''}${e.tipo==='especial'?'¡muy feliz fecha especial! ✨':''} Esperamos verte pronto 🌊`);
-        const waLink = e.tel ? `<a href="https://wa.me/${e.tel}?text=${waMsg}" target="_blank" class="btn btn-green btn-sm">📱 Escribir por WhatsApp</a>` : '';
+        const waLink = e.tel ? `<a href="https://wa.me/${encodeURIComponent(e.tel)}?text=${waMsg}" target="_blank" class="btn btn-green btn-sm">📱 Escribir por WhatsApp</a>` : '';
         return `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;background:var(--surface2);border-radius:var(--radius);">
           <div>
             <span style="font-weight:600;color:var(--text)">${escapeHtml(e.nombre)}</span>
@@ -4381,8 +4381,9 @@ function renderPresupuesto(c) {
             <span style="font-size:12px;color:var(--text3)">Real: <strong style="color:var(--text)">${fmtMoney(r.real)}</strong></span>
             <span style="font-size:12px;color:var(--text3)">Presup:
               <input type="number" value="${r.budg||''}" placeholder="0"
+                data-cat="${escapeHtml(r.cat.nombre)}" data-mes="${escapeHtml(r.mesKey)}"
                 style="width:90px;padding:3px 6px;background:var(--surface3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;"
-                onchange="savePresupuesto('${r.cat.nombre}','${r.mesKey}',this.value)">
+                onchange="savePresupuesto(this)">
             </span>
           </div>
         </div>
@@ -4395,7 +4396,10 @@ function renderPresupuesto(c) {
     </div>`;
 }
 
-async function savePresupuesto(cat, mes, monto) {
+async function savePresupuesto(el) {
+  // Recibe el <input> y lee cat/mes de data-attributes (no se interpola el nombre en el
+  // handler inline → sin riesgo de XSS por categorías con comillas).
+  const cat = el.dataset.cat, mes = el.dataset.mes, monto = el.value;
   await colPresupuestos.write({ id: presupuestoId(cat, mes), cat, mes, monto: Number(monto) }); // por hijo
   showNotif('✅ Presupuesto guardado');
 }
@@ -4409,11 +4413,11 @@ function renderRecurrentes(c) {
     ${recs.length ? `<div class="card"><table>
       <thead><tr><th>Concepto</th><th>Categoría</th><th>Monto</th><th>Día</th><th>Método</th><th>Aplicado hoy</th><th></th></tr></thead>
       <tbody>${recs.map(r=>`<tr>
-        <td>${r.concepto}</td>
-        <td><span class="badge red">${r.cat||'—'}</span></td>
+        <td>${escapeHtml(r.concepto)}</td>
+        <td><span class="badge red">${escapeHtml(r.cat||'—')}</span></td>
         <td style="color:#f87171">${fmtMoney(r.monto, r.moneda)}</td>
         <td>Día ${r.dia}</td>
-        <td>${r.metodo||'—'}</td>
+        <td>${escapeHtml(r.metodo||'—')}</td>
         <td style="text-align:center;">${r.ultimaAplicacion===today()?'✅':'—'}</td>
         <td>
           <button class="btn btn-ghost btn-sm" onclick="openRecurrenteModal('${r.id}')">✏️</button>
@@ -4519,10 +4523,10 @@ function renderAuditoria(c) {
           ? ultimos.map(e=>`<tr>
               <td style="font-family:'DM Mono';font-size:12px">${fmtFecha(e.fecha)}</td>
               <td style="font-size:12px;color:var(--text3)">${e.hora||''}</td>
-              <td style="font-size:12px">${e.usuario||'—'}</td>
-              <td><span class="badge blue" style="font-size:10px">${e.accion||'—'}</span></td>
-              <td style="font-size:12px">${e.entidad||'—'}</td>
-              <td style="font-size:12px;color:var(--text2)">${e.detalle||''}</td>
+              <td style="font-size:12px">${escapeHtml(e.usuario||'—')}</td>
+              <td><span class="badge blue" style="font-size:10px">${escapeHtml(e.accion||'—')}</span></td>
+              <td style="font-size:12px">${escapeHtml(e.entidad||'—')}</td>
+              <td style="font-size:12px;color:var(--text2)">${escapeHtml(e.detalle||'')}</td>
             </tr>`).join('')
           : '<tr><td colspan="6" style="text-align:center;color:var(--text3)">Sin registros de auditoría</td></tr>'
         }</tbody>

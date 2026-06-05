@@ -47,14 +47,16 @@ Los `${...}` restantes sin escapar son valores **computados** (números, fechas,
 strings fijos) o **IDs generados por la app** (`u<timestamp>`, `l<timestamp>`) dentro de
 `onclick='...("${id}")'` → no son texto de usuario, no son sink de XSS.
 
-### Residual conocido (1) — handlers inline con nombre interpolado
+### Residual de handler inline — ✅ CERRADO (2026-06-05)
 
-`onchange="savePresupuesto('${r.cat.nombre}', ...)"` (~línea 4385) interpola un nombre de
-categoría dentro de una cadena JS, dentro de un atributo HTML. Ahí `escapeHtml` **no
-alcanza** (el parser HTML decodifica `&#39;` de vuelta a `'` antes de que lo vea el JS). El
-dato es tipeado por admin (riesgo bajo), pero el arreglo correcto es el patrón handler-por-
-índice que ya usa el chat (`sendQuickReply(i)`): pasar un índice/id y resolver el dato
-adentro, sin interpolar strings en el atributo. **Pendiente — refactor menor.**
+`onchange="savePresupuesto('${r.cat.nombre}', ...)"` se refactorizó al patrón seguro:
+el `<input>` lleva `data-cat`/`data-mes` (escapados, contexto atributo) y el handler
+(`savePresupuesto(this)`) lee de `el.dataset`. Ya no se interpola ningún string de usuario
+dentro de un handler inline. Un grep confirma 0 handlers inline con strings de usuario.
+
+Escapes extra en la misma pasada: gastos recurrentes (`concepto`, `cat`, `metodo`),
+log de actividad (`usuario`, `accion`, `entidad`, `detalle`), y el teléfono del link de
+WhatsApp (`encodeURIComponent`).
 - **Autorización:** el escape y la limpieza de secretos **no** reemplazan las reglas de
   Firebase. Mientras la base se baje entera al cliente, el aislamiento real depende del
   punto #A/#F. El `.admin-only` sigue siendo solo cosmético hasta desplegar Tier 2.
