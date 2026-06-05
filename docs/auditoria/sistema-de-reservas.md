@@ -51,9 +51,11 @@ Firebase Auth + persistencia = base correcta. Pero:
 - **Contraseña en texto plano en RTDB**: al editar un usuario se escribía `u.pass = pass`
   (`index.html:4947`). El login usa Firebase Auth, no ese campo → el campo era un leak inútil.
   (Quitado — ver REMEDIACION.)
-- **XSS almacenado**: existe `escapeHtml()` pero se aplica inconsistente entre **78** sinks
-  `innerHTML`. Nombres de huésped/usuario/proveedor se interpolaban sin escapar.
-**Riesgo:** escalada de privilegios trivial sobre datos financieros y PII + XSS.
+- **XSS almacenado**: existe `escapeHtml()` pero se aplicaba inconsistente entre **78** sinks
+  `innerHTML`. (Pasada completa hecha el 2026-06-05: la superficie externa —conversaciones del
+  widget, leads, chat— ya estaba escapada; se cerraron los huecos de datos admin. Queda 1
+  residual de handler inline, ver `REMEDIACION.md`.)
+**Riesgo:** escalada de privilegios trivial sobre datos financieros y PII (XSS ya mitigado).
 
 ## 7. Rate limiting — 🔴 ROJO
 Ninguno. Groq desde cliente sin tope; webhooks sin tope.

@@ -30,12 +30,31 @@ Fecha: 2026-06-05. ✅ hecho en código · 📄 entregado como archivo a despleg
 | I | Monitoreo de errores + alertas de gasto (Groq/Firebase) + falla de sync Beds24 | 10 | 🔴 |
 | J | Paginación / no bajar `/cabanas/` entero por login (escala) | 8,9 | 🟡 |
 
-## Limitaciones de lo arreglado en código
+## Pasada XSS completa (2026-06-05) — resultado
 
-- **XSS:** se cubrieron los sinks de datos de usuario más claros (tablas de usuarios,
-  proveedores, categorías, precios). Quedan ~78 usos de `innerHTML` en total; conviene una
-  pasada completa dedicada para auditar los restantes (mensajes de chat, pipeline de leads,
-  detalle de huésped ya usaban `escapeHtml`).
+Se auditaron los 78 sinks `innerHTML`. **El superficie de ataque real (datos controlados
+por externos) ya está escapada:**
+
+- ✅ Panel de conversaciones (mensajes del widget): `nombre`, `texto`, `preview`, `autor`,
+  `canal`, `etapa` — todos con `escapeHtml` (`renderConversaciones`/`renderConvHeader`/`renderHilo`).
+- ✅ Pipeline de leads (`l.nombre`), chat (burbujas user/bot), lista negra (`nombre`,
+  `apellido`, `obs`), reservas (nombre de huésped), caja (`concepto`), detalle de huésped
+  (`nombre`, `dni`) — ya usaban `escapeHtml`.
+- ✅ Sinks de datos tipeados por admin que faltaban (usuarios, proveedores, categorías,
+  precios) — escapados en este trabajo.
+
+Los `${...}` restantes sin escapar son valores **computados** (números, fechas, badges,
+strings fijos) o **IDs generados por la app** (`u<timestamp>`, `l<timestamp>`) dentro de
+`onclick='...("${id}")'` → no son texto de usuario, no son sink de XSS.
+
+### Residual conocido (1) — handlers inline con nombre interpolado
+
+`onchange="savePresupuesto('${r.cat.nombre}', ...)"` (~línea 4385) interpola un nombre de
+categoría dentro de una cadena JS, dentro de un atributo HTML. Ahí `escapeHtml` **no
+alcanza** (el parser HTML decodifica `&#39;` de vuelta a `'` antes de que lo vea el JS). El
+dato es tipeado por admin (riesgo bajo), pero el arreglo correcto es el patrón handler-por-
+índice que ya usa el chat (`sendQuickReply(i)`): pasar un índice/id y resolver el dato
+adentro, sin interpolar strings en el atributo. **Pendiente — refactor menor.**
 - **Autorización:** el escape y la limpieza de secretos **no** reemplazan las reglas de
   Firebase. Mientras la base se baje entera al cliente, el aislamiento real depende del
   punto #A/#F. El `.admin-only` sigue siendo solo cosmético hasta desplegar Tier 2.
