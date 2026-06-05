@@ -2575,6 +2575,14 @@ async function enterSession(email) {
     const rol = roles.find(r=>r.id===u.rol);
     const rolKey = rolToKey(u.rol);
     currentUser = { id: u.id, name: u.nombre, email: u.email, rol: u.rol, rolKey };
+    // SEGURIDAD: publicar el rol del usuario en /cabanas/acl/{uid} para que las reglas
+    // RTDB por rol (Tier 2, ver /security) puedan leerlo. Aditivo y a prueba de fallos:
+    // si falla, no bloquea el login.
+    try {
+      if (auth.currentUser) {
+        await set(ref(db, 'cabanas/acl/' + auth.currentUser.uid), { rol: u.rol, rolKey, email: u.email });
+      }
+    } catch (e) { console.warn('No se pudo escribir acl:', e); }
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('app').style.display = 'flex';
     document.getElementById('sidebarUserName').textContent = u.nombre;
@@ -3924,7 +3932,7 @@ function renderPrecios(tab) {
 
   } else if(tab==='habitacion') {
     const rows = (precios.habitaciones||[]).map(h=>`<tr>
-      <td><strong style="color:var(--text)">Cabaña ${h.hab}</strong> <span style="font-size:11px;color:var(--text3)">${h.nombre||''}</span></td>
+      <td><strong style="color:var(--text)">Cabaña ${escapeHtml(h.hab)}</strong> <span style="font-size:11px;color:var(--text3)">${escapeHtml(h.nombre||'')}</span></td>
       <td><input type="number" ${INP} style="width:120px" value="${h.precio_base||0}" onchange="updateHabPrecio('${h.hab}','precio_base',this.value)"></td>
       <td><input type="number" ${INP} style="width:120px" value="${h.precio_alta||0}" onchange="updateHabPrecio('${h.hab}','precio_alta',this.value)"></td>
       <td><input type="number" ${INP} style="width:120px" value="${h.precio_baja||0}" onchange="updateHabPrecio('${h.hab}','precio_baja',this.value)"></td>
@@ -4162,7 +4170,7 @@ function populateProvSelect(selId) {
   if (!sel) return;
   const provs = colProveedores.list();
   sel.innerHTML = '<option value="">— Sin proveedor —</option>' +
-    provs.map(p => `<option value="${p.id}">${p.nombre}</option>`).join('');
+    provs.map(p => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.nombre)}</option>`).join('');
 }
 
 function onMovTipoChange() {
@@ -4368,7 +4376,7 @@ function renderPresupuesto(c) {
     ${rows.map(r => `
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-          <span style="font-size:13px;font-weight:500;">${r.cat.nombre}</span>
+          <span style="font-size:13px;font-weight:500;">${escapeHtml(r.cat.nombre)}</span>
           <div style="display:flex;align-items:center;gap:10px;">
             <span style="font-size:12px;color:var(--text3)">Real: <strong style="color:var(--text)">${fmtMoney(r.real)}</strong></span>
             <span style="font-size:12px;color:var(--text3)">Presup:
@@ -4544,7 +4552,7 @@ function renderListaCategorias() {
   if (!lista) return;
   lista.innerHTML = cats.map((c,i) => `
     <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:var(--surface3);border-radius:var(--radius);">
-      <span style="font-size:13px;">${c.nombre}</span>
+      <span style="font-size:13px;">${escapeHtml(c.nombre)}</span>
       <div style="display:flex;gap:6px;align-items:center;">
         <span style="font-size:10px;color:var(--text3);">${c.tipo}</span>
         ${c.id?.startsWith('c') && Number(c.id.slice(1)) <= 10 ? '' :
@@ -4599,11 +4607,11 @@ function renderProveedores() {
     ${provs.length ? `<div class="card"><table>
       <thead><tr><th>Nombre</th><th>CUIT</th><th>Rubro</th><th>Contacto</th><th>Notas</th><th></th></tr></thead>
       <tbody>${provs.map((p,i)=>`<tr>
-        <td style="font-weight:500">${p.nombre}</td>
-        <td style="font-family:'DM Mono';font-size:12px">${p.cuit||'—'}</td>
-        <td><span class="badge blue">${p.rubro||'—'}</span></td>
-        <td style="font-size:12px">${p.contacto||'—'}</td>
-        <td style="font-size:12px;color:var(--text3)">${(p.notas||'').slice(0,40)}${(p.notas||'').length>40?'…':''}</td>
+        <td style="font-weight:500">${escapeHtml(p.nombre)}</td>
+        <td style="font-family:'DM Mono';font-size:12px">${escapeHtml(p.cuit||'—')}</td>
+        <td><span class="badge blue">${escapeHtml(p.rubro||'—')}</span></td>
+        <td style="font-size:12px">${escapeHtml(p.contacto||'—')}</td>
+        <td style="font-size:12px;color:var(--text3)">${escapeHtml((p.notas||'').slice(0,40))}${(p.notas||'').length>40?'…':''}</td>
         <td>
           <button class="btn btn-ghost btn-sm" onclick="openProveedorModal(${i})">✏️</button>
           <button class="btn btn-red btn-sm" onclick="deleteProveedor(${i})">✕</button>
@@ -4867,8 +4875,8 @@ function renderUsuarios() {
         const lastAccess = u.ultimoAcceso ? new Date(u.ultimoAcceso).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
         const isSelf = currentUser && currentUser.id === u.id;
         return `<tr>
-          <td><strong style="color:var(--text)">${u.nombre}</strong>${isSelf?' <span class="badge blue" style="font-size:10px">Vos</span>':''}</td>
-          <td style="font-family:'DM Mono';font-size:12px">${u.email}</td>
+          <td><strong style="color:var(--text)">${escapeHtml(u.nombre)}</strong>${isSelf?' <span class="badge blue" style="font-size:10px">Vos</span>':''}</td>
+          <td style="font-family:'DM Mono';font-size:12px">${escapeHtml(u.email)}</td>
           <td>${rol?`<span class="badge blue">${escapeHtml(rol.nombre)}</span>`:'—'}</td>
           <td><span class="badge ${u.estado==='activo'?'green':'gray'}">${u.estado}</span></td>
           <td style="font-size:12px;color:var(--text3)">${lastAccess}</td>
@@ -4944,7 +4952,10 @@ async function saveUsuario() {
     if(pass) {
       if(pass.length<6) { showNotif('La contraseña debe tener al menos 6 caracteres','error'); return; }
       if(pass!==pass2) { showNotif('Las contraseñas no coinciden','error'); return; }
-      u.pass = pass;
+      // SEGURIDAD: NO guardar la contraseña en texto plano en RTDB. El login usa Firebase
+      // Auth (signInWithEmailAndPassword), nunca este campo. La credencial real se actualiza
+      // abajo con updatePassword(). Limpiamos cualquier pass histórica que haya quedado.
+      delete u.pass;
       // Actualizar contraseña en Firebase Auth si es el usuario actual
       if(auth.currentUser && auth.currentUser.email.toLowerCase()===email.toLowerCase()) {
         try { await updatePassword(auth.currentUser, pass); } catch(e) { console.warn('No se pudo actualizar pass en Auth:', e); }
@@ -5885,9 +5896,11 @@ function saveApiKey() {
   if (!key) { showNotif('Ingresá la API key', 'error'); return; }
   chatApiKey = key;
   localStorage.setItem('cabanas_groq_key', key);
-  DB.set('config_groq_key', key); // guardar en Firebase para todos los usuarios
+  // SEGURIDAD: la key NO se guarda en Firebase (era un secreto compartido a todos los
+  // usuarios, legible desde DevTools). Queda solo en este navegador. Lo correcto es mover
+  // la llamada a Groq a un backend (n8n) con la key fuera del cliente.
   document.getElementById('chatApiWarning').style.display = 'none';
-  showNotif('✅ API key guardada en Firebase');
+  showNotif('✅ API key guardada en este navegador');
 }
 
 function addUserMessage(text) {

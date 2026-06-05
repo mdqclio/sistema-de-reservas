@@ -1,0 +1,13 @@
+# Secretos / credenciales — nunca commitear
+.env
+.env.*
+*.key
+*-service-account*.json
+serviceAccountKey.json
+firebase-debug.log
+.firebase/
+
+# Sistema
+.DS_Store
+node_modules/
+*.log

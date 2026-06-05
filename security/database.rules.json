@@ -1,0 +1,20 @@
+{
+  "//": "Reglas RTDB — TIER 1 (desplegable YA, sin cambios de app).",
+  "//1": "Cierra el acceso anonimo/mundial: TODO requiere usuario autenticado.",
+  "//2": "Esto solo NO da aislamiento por rol (ver database.rules.per-rol.template.json),",
+  "//3": "pero elimina el riesgo catastrofico de base abierta al mundo / reglas test expiradas.",
+  "//4": "Como desplegar: Firebase Console -> Realtime Database -> Reglas -> pegar -> Publicar.",
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "cabanas": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "acl": {
+        "$uid": {
+          ".write": "auth != null && auth.uid === $uid"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "//": "Reglas RTDB — TIER 2 (PLANTILLA por rol). NO desplegar sin probar en proyecto staging.",
+  "//modelo": "Lee el rol del usuario desde /cabanas/acl/{uid}.rolKey, que la app escribe en login (enterSession).",
+  "//bootstrap": "Antes de desplegar: cada usuario debe haber logueado >=1 vez con la app nueva (para poblar /cabanas/acl), o el admin crea a mano /cabanas/acl/{su-uid} = {rolKey:'admin'} en la consola.",
+  "//IMPORTANTE": "El nodo acl NO debe ser auto-editable a 'admin' por el propio usuario. La app lo escribe desde el registro usuarios (fuente de verdad que solo admin edita). Revisar este punto antes de produccion.",
+  "//modulos-admin": "contabilidad, caja, listanegra, usuarios, roles, log, config_groq_key, knowledge",
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "cabanas": {
+      ".read": "auth != null",
+
+      "acl": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          ".write": "root.child('cabanas/acl/'+auth.uid+'/rolKey').val() === 'admin'"
+        }
+      },
+
+      "contabilidad": { ".write": "root.child('cabanas/acl/'+auth.uid+'/rolKey').val() === 'admin'" },
+      "caja":         { ".write": "root.child('cabanas/acl/'+auth.uid+'/rolKey').val() === 'admin'" },
+      "listanegra":   { ".write": "root.child('cabanas/acl/'+auth.uid+'/rolKey').val() === 'admin'" },
+      "usuarios":     { ".write": "root.child('cabanas/acl/'+auth.uid+'/rolKey').val() === 'admin'" },
+      "roles":        { ".write": "root.child('cabanas/acl/'+auth.uid+'/rolKey').val() === 'admin'" },
+      "log":          { ".write": "auth != null" },
+      "config_groq_key": { ".read": false, ".write": false },
+
+      "$resto": {
+        ".write": "auth != null"
+      }
+    }
+  }
+}
