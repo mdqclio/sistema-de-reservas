@@ -1,0 +1,8 @@
+{
+  "database": {
+    "rules": "security/database.rules.json"
+  },
+  "storage": {
+    "rules": "security/storage.rules"
+  }
+}
