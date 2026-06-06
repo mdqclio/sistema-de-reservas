@@ -4,6 +4,12 @@
 *.key
 *-service-account*.json
 serviceAccountKey.json
+# service account / claves sueltas (cualquier nombre)
+sa.json
+sa.*
+security/sa*
+*serviceaccount*.json
+*-adminsdk-*.json
 firebase-debug.log
 .firebase/
 
