@@ -88,6 +88,10 @@
   `pendientes` escribible por cualquiera (con límite de tamaño/tipo); `reservas`,
   `huespedes`, etc. solo staff. *Prerrequisito de salir a producción y de exponer
   cualquier webhook. Revisar la fecha de expiración de las reglas actuales.*
+  > **Estado real:** Tier 1 + carve-outs de staging PUBLICADOS 2026-07-10 (base
+  > cerrada a anónimos salvo `pendientes` create-only y `checkin_tokens` puntual;
+  > Anonymous habilitado). Pendiente: Tier 2 por rol (plantilla en `security/`,
+  > requiere bootstrap del nodo `acl`).
 - [x] 🔴 **Saldo del check-in a la caja. (HECHO)** `confirmCheckin` cobraba el ingreso
   solo si `pagado === 0`; con seña previa (30% + saldo) el 70% nunca entraba a
   `movimientos`. Ahora registra `saldoPendiente = total − pagado` al hacer check-in.

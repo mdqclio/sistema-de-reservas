@@ -5,6 +5,7 @@
   "//3": "ORDEN DE DEPLOY MANUAL: 1º publicar ESTAS reglas, 2º habilitar el proveedor Anonymous.",
   "//4": "NUNCA al revés: con las reglas viejas (auth != null) un anónimo tendría acceso total.",
   "//5": "Como desplegar: Firebase Console -> Realtime Database -> Reglas -> pegar -> Publicar.",
+  "//publicado": "2026-07-10 en consola, con estos fixes",
   "rules": {
     ".read": false,
     ".write": false,
@@ -23,8 +24,9 @@
           "estado":  { ".validate": "newData.isString() && newData.val().length < 1000" },
           "creado":  { ".validate": "newData.isNumber()" },
           "datos": {
-            "$campo": { ".validate": "!newData.isString() || newData.val().length < 1000" }
-          }
+            "$campo": { ".validate": "newData.isString() && newData.val().length < 1000" }
+          },
+          "$other": { ".validate": false }
         }
       },
       "checkin_tokens": {
@@ -36,7 +38,7 @@
       },
       "acl": {
         "$uid": {
-          ".write": "auth != null && auth.uid === $uid"
+          ".write": "auth != null && auth.uid === $uid && auth.provider !== 'anonymous'"
         }
       }
     }
