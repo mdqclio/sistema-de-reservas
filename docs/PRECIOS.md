@@ -10,17 +10,35 @@ Contabilidad, y solo sobre lo efectivamente facturado — ver más abajo).
 
 ## Los factores, en orden de aplicación
 
-El precio por noche se arma **multiplicativo encadenado**. Cada factor se aplica sobre
-el resultado del anterior:
+El precio se calcula **noche por noche** y el total es la **suma de las noches** (una
+estadía que cruza un finde o un cambio de temporada cobra bien cada noche — ver Ejemplo 2).
+Cada noche se arma multiplicativo:
 
 ```
-noche = base                         // temporada  ó  fecha_especial (override absoluto)
-noche *= (1 + dinámico%)             // ocupación + último momento   (si precios.dinamicos.activo)
-noche *= (1 + finde%)                // recargo si la fecha cae en un finde/feriado configurado
-noche *= (1 - promo%)                // descuento si la fecha cae en una promo vigente
+noche = base                         // temporada(fecha)
+                                     //   ó fecha_especial → override ABSOLUTO que PISA
+                                     //     base Y finde (es EL precio de esa noche)
+noche *= (1 + finde%)                // recargo si la fecha cae en un finde/feriado
+                                     //   configurado — SALVO que sea fecha_especial
+── ajuste EXCLUSIVO (a lo sumo UNO), prioridad promo > último momento > ocupación ──
+  · promo elegida y vigente esa noche → noche *= (1 - promo%)
+  · si NO hay promo elegida y dinamicos.activo:
+      último momento (ventana de días hasta la entrada) → noche *= (1 + ajuste%)
+      si no aplica último momento, ocupación del día      → noche *= (1 + ajuste%)
+
 noche  = round(noche)
-total  = noche × noches  +  Σ cargos_únicos
+total  = Σ noches  +  Σ cargos_únicos
 ```
+
+Reglas duras:
+
+- **La promo la elige el staff** (dropdown en el form → `r.promo`). NO se auto-aplica por
+  fecha. Sin promo elegida, no hay descuento.
+- **Los tres ajustes son mutuamente excluyentes.** A lo sumo uno modifica la noche.
+  Si hay promo elegida, los dinámicos **no corren**. Sin promo, primero se prueba último
+  momento; solo si no aplica se prueba ocupación.
+- **`fecha_especial` es un override absoluto.** Reemplaza temporada **y** finde de esa
+  noche; encima solo puede caer el ajuste exclusivo (promo o dinámico).
 
 Con `dinamicos`, `fines_semana_largos`, `promociones` y `fechas_especiales` **vacíos**
 (estado por defecto del sistema), el resultado es idéntico a `precioDefaultCabana` → la
@@ -33,40 +51,37 @@ cargan en **Configuración → Precios**.
   (`precio_alta` / `precio_baja` / `precio_base` según en qué temporada cae la fecha).
 - Si existe una entrada en `precios.fechas_especiales` cuya `fecha` coincide **exacto**
   con la noche, su `precio` es un **override absoluto**: reemplaza por completo el precio
-  de temporada de esa noche. Finde / promo / dinámicos **siguen encadenando por encima**
-  de ese valor.
+  de temporada de esa noche **y no recibe el recargo de finde**. Es EL precio de esa noche.
+  Encima solo puede caer el ajuste exclusivo (promo o dinámico) del paso 3.
 
-### 2. Dinámico — ocupación + último momento
-
-Solo si `precios.dinamicos.activo === true`. El ajuste total es la **suma** de dos tramos:
-
-- **Ocupación** (`dinamicos.ocupacion[]`, cada tramo `{desde_pct, ajuste_pct}`): mide el %
-  de cabañas ocupadas ese día (reservas `confirmada`/`checkin` que cubren la fecha).
-  Se elige **el tramo de mayor `desde_pct`** que la ocupación alcanza.
-- **Último momento** (`dinamicos.last_minute[]`, cada tramo `{dias, ajuste_pct}`): mide los
-  días entre hoy y la fecha de entrada. Se elige **el tramo de menor `dias`** que la ventana
-  cumple (`días_restantes <= dias`). El `ajuste_pct` suele ser negativo (descuento).
-
-```
-dinámico% = ajuste_ocupación + ajuste_últimoMomento
-```
-
-> **Prioridad** — la frase “promo > último momento > ocupación” describe el **orden de la
-> cascada**, no una exclusión: los tres factores conviven. Ocupación y último momento se
-> suman dentro del paso dinámico; la promo se aplica al final (multiplicativo) sobre todo lo
-> anterior.
-
-### 3. Finde / feriado
+### 2. Finde / feriado
 
 `precios.fines_semana_largos[]` (`{fecha_inicio, fecha_fin, recargo_pct}`). Si la noche cae
-dentro de un rango, se aplica `× (1 + recargo_pct/100)`.
+dentro de un rango, se aplica `× (1 + recargo_pct/100)` **sobre la base de temporada**.
+No se aplica si la noche es una `fecha_especial` (el override ya la fijó).
 
-### 4. Promo
+### 3. Ajuste exclusivo — promo · último momento · ocupación
 
-`precios.promociones[]` (`{tipo:'descuento_pct', fecha_inicio, fecha_fin, valor}`). Si la
-noche cae dentro de una promo vigente, se aplica `× (1 - valor/100)`.
+**A lo sumo UNO** de estos tres modifica la noche. Prioridad **promo > último momento >
+ocupación**:
 
-### 5. Cargos únicos (fijos por reserva)
+- **Promo** (`precios.promociones[]`, `{tipo:'descuento_pct', fecha_inicio, fecha_fin, valor}`):
+  se aplica **solo si el staff la eligió** en el form (`r.promo`) **y** la noche cae dentro
+  de su rango → `× (1 - valor/100)`. **Elegir una promo apaga los dinámicos** para toda la
+  reserva (las noches fuera del rango de la promo quedan sin ajuste).
+- **Último momento** (`dinamicos.last_minute[]`, `{dias, ajuste_pct}`): solo si NO hay promo
+  elegida y `dinamicos.activo`. Mide los días entre hoy y la **fecha de entrada** (proximidad
+  al check-in, igual para toda la estadía). Se elige el tramo de **menor `dias`** que la
+  ventana cumple (`días_hasta_entrada <= dias`). Suele ser descuento (`ajuste_pct` negativo).
+- **Ocupación** (`dinamicos.ocupacion[]`, `{desde_pct, ajuste_pct}`): solo si NO hay promo
+  elegida, `dinamicos.activo` y **ningún tramo de último momento aplicó**. Mide el % de
+  cabañas ocupadas esa noche (reservas `confirmada`/`checkin` que la cubren). Se elige el
+  tramo de **mayor `desde_pct`** que la ocupación alcanza.
+
+> Último momento y ocupación **ya no se suman** — son excluyentes. Si la ventana de último
+> momento aplica, la ocupación se ignora esa reserva.
+
+### 4. Cargos únicos (fijos por reserva)
 
 `precios.cargos_unicos[]` (`{id, nombre, monto}`). NO son por noche: son montos **fijos por
 reserva** (limpieza, ropa blanca, mascota, etc.). El staff los tilda en el selector del modal
@@ -75,16 +90,20 @@ sus `monto`. Se agregan al final, **fuera** de la multiplicación por noches.
 
 ## Notas de implementación
 
-- **Precio por noche = fecha de entrada.** `calcularPrecioReserva` calcula la cascada UNA vez,
-  para la fecha de `entrada`, y multiplica por la cantidad de noches. No recalcula noche por
-  noche. (Simplificación consciente: una estadía que cruza cambio de temporada/finde usa el
-  precio del día de entrada para toda la estadía.)
+- **Noche por noche.** `calcularPrecioReserva` recorre cada noche `[entrada, salida)`,
+  calcula su cascada y suma. Devuelve `preciosNoche[]` (una entrada por noche) + `subtotal`.
+  El “precio por noche” representativo (`precioNoche`, para display y `r.precio`) es el de la
+  **primera** noche.
+- **Último momento se mide desde la entrada**, no desde cada noche: la ventana de proximidad
+  al check-in es la misma para toda la estadía. Ocupación sí es por-noche.
 - **Override manual.** Si el staff fija un `precio/noche` manual en el modal (`precioOverride`
-  > 0), ese valor **reemplaza** toda la cascada del paso “por noche”; los cargos únicos igual
+  > 0), ese valor fijo **reemplaza** la cascada de todas las noches; los cargos únicos igual
   se suman.
+- **Promo persistida.** La promo elegida se guarda en `r.promo` (id) y se re-pasa a la
+  cascada al recalcular.
 - **Total autoritativo.** `totalReserva(r)` devuelve `r.total` guardado (calculado con la
   cascada al guardar) o, para reservas viejas sin `total`, lo recalcula respetando
-  `r.precio` guardado y `r.cargos`.
+  `r.precio`, `r.cargos` y `r.promo` guardados.
 
 ## Ejemplos numéricos
 
@@ -103,48 +122,50 @@ Cabaña en temporada base, todos los factores vacíos, 3 noches, sin cargos.
 | Cargos            | —                    | $0           |
 | **TOTAL**         |                      | **$1.500.000** |
 
-### Ejemplo 2 — cascada completa (dinámico + finde + promo + cargo)
+### Ejemplo 2 — noche por noche: estadía que cruza un finde + promo elegida
 
-Temporada alta, dinámicos activos, la fecha cae en finde largo y en una promo, 2 noches,
-+ cargo de limpieza.
+3 noches (10→13 ene). Finde configurado 10–11/01 `recargo_pct: 20`. Staff **elige** la promo
+“Enero −10%” (vigente todo enero). Base temporada $500.000.
 
-- Ocupación del día: 85% → tramo `desde_pct: 80` → **+15%**
-- Reserva a 5 días vista → tramo `dias: 7` → **−10%**  ⇒ dinámico% = 15 − 10 = **+5%**
-- Finde largo: `recargo_pct: 20`
-- Promo vigente: `valor: 10` (descuento)
-- Cargo único “Limpieza”: $30.000
+- Promo elegida ⇒ **dinámicos apagados**.
+- Finde es independiente del ajuste exclusivo: se aplica sobre la base y **además** la promo.
+- Cada noche se calcula sola; el total es la suma:
 
-| Paso              | Cálculo                   | Resultado    |
-|-------------------|---------------------------|--------------|
-| Base temp. alta   | —                         | $600.000     |
-| Dinámico +5%      | 600.000 × 1.05            | $630.000     |
-| Finde +20%        | 630.000 × 1.20            | $756.000     |
-| Promo −10%        | 756.000 × 0.90            | $680.400     |
-| **Noche**         | round                     | **$680.400** |
-| Subtotal          | 680.400 × 2 noches        | $1.360.800   |
-| Cargos            | Limpieza                  | $30.000      |
-| **TOTAL**         |                           | **$1.390.800** |
+| Noche | Base    | Finde        | Promo −10%   | **Noche (round)** |
+|-------|---------|--------------|--------------|-------------------|
+| 10/01 | 500.000 | ×1.20 → 600.000 | ×0.90 → 540.000 | **$540.000** |
+| 11/01 | 500.000 | ×1.20 → 600.000 | ×0.90 → 540.000 | **$540.000** |
+| 12/01 | 500.000 | — (no finde)    | ×0.90 → 450.000 | **$450.000** |
 
-### Ejemplo 3 — fecha especial (override absoluto) + finde + cargo
+- Subtotal = 540.000 + 540.000 + 450.000 = **$1.530.000**
+- Cargos: ninguno ⇒ **TOTAL = $1.530.000**
 
-Noche 31/12 con precio especial de Año Nuevo que reemplaza la temporada; encima cae un
-recargo de finde; 1 noche + cargo de desayuno extra.
+> Con el motor viejo (todo al precio del día de entrada) las 3 noches costaban 540.000 c/u
+> = $1.620.000: **sobrecobraba** la noche del 12 que ya no es finde. Ese es el bug que
+> corrige el cálculo noche por noche.
 
-- `fechas_especiales`: `{ fecha: '2026-12-31', precio: 1.000.000 }` → **override**, ignora temporada
-- Finde largo `recargo_pct: 20`
-- Dinámicos off, sin promo
+### Ejemplo 3 — fecha especial (pisa el finde) + último momento + cargo
+
+Noche 31/12 con precio especial de Año Nuevo. Ese día también hay un finde configurado
+(`recargo_pct: 20`) → se **ignora** (el override manda). Sin promo elegida, con dinámicos
+activos y la reserva cargada a 2 días de la entrada (último momento −10%). 1 noche + cargo.
+
+- `fechas_especiales`: `{ fecha: '2026-12-31', precio: 1.000.000 }` → **override absoluto**
+- Finde `recargo_pct: 20` sobre el 31/12 → **no aplica** (es fecha especial)
+- Sin promo → corre el ajuste dinámico exclusivo: último momento `−10%`
 - Cargo único “Desayuno extra”: $20.000
 
-| Paso                 | Cálculo               | Resultado      |
-|----------------------|-----------------------|----------------|
-| Base = fecha especial| override absoluto      | $1.000.000     |
-| Dinámico (off)       | ×1                    | $1.000.000     |
-| Finde +20%           | 1.000.000 × 1.20      | $1.200.000     |
-| Promo (ninguna)      | ×1                    | $1.200.000     |
-| **Noche**            | round                 | **$1.200.000** |
-| Subtotal             | 1.200.000 × 1 noche   | $1.200.000     |
-| Cargos               | Desayuno extra        | $20.000        |
-| **TOTAL**            |                       | **$1.220.000** |
+| Paso                    | Cálculo             | Resultado      |
+|-------------------------|---------------------|----------------|
+| Base = fecha especial   | override absoluto   | $1.000.000     |
+| Finde                   | **ignorado**        | $1.000.000     |
+| Último momento −10%      | 1.000.000 × 0.90    | $900.000       |
+| **Noche**               | round               | **$900.000**   |
+| Subtotal                | 900.000 × 1 noche   | $900.000       |
+| Cargos                  | Desayuno extra      | $20.000        |
+| **TOTAL**               |                     | **$920.000**   |
+
+> Ocupación no entra: al aplicar último momento, la ocupación se ignora (exclusividad).
 
 ## Facturación e IVA (Contabilidad)
 
@@ -164,12 +185,27 @@ IVA = facturado / 1.21 * 0.21          // 21%, monto ya con IVA
 
 ## Dónde vive cada cosa (index.html)
 
-| Función                       | Rol                                                        |
-|-------------------------------|------------------------------------------------------------|
-| `precioDefaultCabana(hab,f)`  | Precio de temporada (alta/baja/base) — paso 1 base         |
-| `ajusteDinamicoPct(fecha,din)`| Suma ocupación + último momento → % dinámico               |
-| `precioNocheCascada(hab,fecha)`| Precio por noche con toda la cascada aplicada             |
-| `cargosReservaTotal(ids)`     | Suma de cargos únicos por lista de ids                     |
-| `calcularPrecioReserva(...)`  | Punto único: `{noches, precioNoche, subtotal, cargosTotal, total}` |
-| `totalReserva(r)`             | Total autoritativo (guardado o recalculado)                |
-| `resumenFacturacionReserva(rid)`| `{cobrado, facturado, sinFacturar}` desde movimientos    |
+| Función                              | Rol                                                        |
+|--------------------------------------|------------------------------------------------------------|
+| `precioDefaultCabana(hab,f)`         | Precio de temporada (alta/baja/base) — paso 1 base         |
+| `promoVigente(promo,fecha)`          | ¿La promo cubre esa noche? (rango de fechas)               |
+| `promosVigentesRango(entrada,salida)`| Promos elegibles para la estadía → alimenta el dropdown    |
+| `tramoUltimoMomento(entrada,din)`    | Tramo de último momento por días hasta la entrada          |
+| `tramoOcupacion(fecha,din)`          | Tramo de ocupación por % de cabañas ocupadas esa noche     |
+| `precioNocheCascada(hab,fecha,opts)` | Precio de UNA noche con toda la cascada (`opts.entrada`, `opts.promoId`) |
+| `cargosReservaTotal(ids)`            | Suma de cargos únicos por lista de ids                     |
+| `calcularPrecioReserva(...)`         | Punto único, noche por noche: `{noches, precioNoche, preciosNoche, subtotal, cargosTotal, total}` |
+| `totalReserva(r)`                    | Total autoritativo (guardado o recalculado con `r.promo`)  |
+| `resumenFacturacionReserva(rid)`     | `{cobrado, facturado, sinFacturar}` desde movimientos      |
+| `renderResPromos(id)`                | Puebla el dropdown de promo del form; conserva selección   |
+
+## Tests
+
+`tests/precios.test.mjs` extrae las funciones puras de `index.html` (regex + `new Function`,
+sin DOM) y las corre con mocks. Cubre los tres desvíos corregidos: fecha especial pisa finde,
+precio noche por noche (cruce de finde), promo manual y exclusividad promo > último momento >
+ocupación.
+
+```
+node tests/precios.test.mjs      # 13 casos
+```

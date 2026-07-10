@@ -72,13 +72,13 @@ colRoles.nuevoId();     // push key de Firebase
   precios: {                    ← configuración de precios y catálogo de cabañas
     temporadas:        [{ id, nombre, fecha_inicio, fecha_fin, tipo, anual }]
     fines_semana_largos: [{ id, nombre, fecha_inicio, fecha_fin, recargo_pct }]
-    promociones:       [{ id, nombre, fecha_inicio, fecha_fin, tipo:'descuento_pct', valor, condicion }]
+    promociones:       [{ id, nombre, fecha_inicio, fecha_fin, tipo:'descuento_pct', valor, condicion }]  // el staff la ELIGE en el form (r.promo), no se auto-aplica
     dinamicos: {                ← precios dinámicos (objeto único, no colección)
       activo,                   //   master on/off; si false, no se aplica ningún ajuste dinámico
       ocupacion:   [{ id, desde_pct, ajuste_pct }],   // recargo según % ocupación del día
       last_minute: [{ id, dias, ajuste_pct }]         // ajuste según días hasta la entrada (suele ser dto.)
     }
-    fechas_especiales: [{ id, nombre, fecha, precio }]  // precio ABSOLUTO que reemplaza la temporada de esa noche
+    fechas_especiales: [{ id, nombre, fecha, precio }]  // precio ABSOLUTO: pisa temporada Y finde de esa noche
     cargos_unicos:     [{ id, nombre, monto }]          // cargos FIJOS por reserva (limpieza, ropa, mascota…)
     habitaciones:      [{ hab, nombre, tipo, mts2, capacidad, precio_base, precio_alta, precio_baja, moneda }]
     plataformas:       [{ plat, descuento, comision }]   // directo 0% / booking 15% / airbnb 12%
@@ -86,13 +86,14 @@ colRoles.nuevoId();     // push key de Firebase
   // Cascada de precios completa: ver docs/PRECIOS.md
 
   reservas: [ { id, huespedId, guestName, hab, cabaña, entrada, salida,
-                precio, total, cargos, pagado, estado, plataforma, notas,
+                precio, total, cargos, promo, pagado, estado, plataforma, notas,
                 comisionRegistrada,
                 checkinToken, guestDniPhoto,
                 guestScore, guestScoreAvg, guestScoreComment } ]
-  //   precio  = precio/noche (override manual del staff; vacío = usa cascada)
-  //   total   = total autoritativo calculado por la cascada al guardar (ver PRECIOS.md)
+  //   precio  = precio/noche representativo (override manual del staff, o 1ª noche de la cascada)
+  //   total   = total autoritativo, cascada NOCHE POR NOCHE al guardar (ver PRECIOS.md)
   //   cargos  = [id,…] de precios.cargos_unicos tildados en el modal (cargos fijos)
+  //   promo   = id de la promo elegida por el staff en el form ('' = ninguna; NO se auto-aplica)
   //   comisionRegistrada = flag: la comisión de plataforma ya se asentó como egreso (una sola vez)
 
   huespedes: [ { id, nombre, apellido, dni, nac, ciudad, tel, email, foto, estadias } ]
@@ -200,8 +201,9 @@ con filtro por entidad (`setAuditFiltro` / `currentAuditFiltro`).
 |`renderGrilla()`                                                         |Grilla calendario; cada reserva = UNA barra (`colspan`) con nombre+apellido centrado y "debe $X" en rojo; celdas libres muestran precio/noche y abren el modal con selección por 2 clicks |
 |`fmtPrecioCorto(n)`                                                      |Precio abreviado en miles (`$510k`, `$637,5k`)         |
 |`precioDefaultCabana(hab, fecha)`                                        |Precio por noche según temporada (alta/baja/base) desde `precios.habitaciones` |
-|`calcularPrecioReserva(hab, entrada, salida, opts)`                      |**Punto único** de cálculo de precio. Cascada multiplicativa encadenada (temporada/fecha especial → dinámico → finde → promo) + cargos únicos. Respeta `opts.precioOverride`. Devuelve `{noches, precioNoche, subtotal, cargosTotal, total}`. Ver **docs/PRECIOS.md** |
-|`precioNocheCascada(hab, fecha)` / `ajusteDinamicoPct(fecha, din)`       |Precio por noche con toda la cascada; ajuste dinámico % (ocupación + último momento) |
+|`calcularPrecioReserva(hab, entrada, salida, opts)`                      |**Punto único** de cálculo de precio, **noche por noche** (subtotal = Σ noches). Por noche: base/fecha especial → finde → ajuste EXCLUSIVO (promo > último momento > ocupación) + cargos únicos. Respeta `opts.precioOverride` y `opts.promo`. Devuelve `{noches, precioNoche, preciosNoche, subtotal, cargosTotal, total}`. Ver **docs/PRECIOS.md** |
+|`precioNocheCascada(hab, fecha, opts)`                                   |Precio de UNA noche con toda la cascada (`opts.entrada`, `opts.promoId`) |
+|`promosVigentesRango(...)` / `renderResPromos(id)`                       |Promos elegibles para la estadía + dropdown de promo (manual) en el form |
 |`totalReserva(r)` / `cargosReservaTotal(ids)`                            |Total autoritativo de una reserva (guardado o recalculado); suma de cargos únicos |
 |`resumenFacturacionReserva(rid)`                                         |`{cobrado, facturado, sinFacturar}` de una reserva desde sus movimientos (`reservaId`); IVA solo sobre `facturado` |
 |`doCheckin()` / `confirmCheckin()` / `doCheckout()`                      |Check-in/out                                           |
