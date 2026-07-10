@@ -803,6 +803,9 @@ td.acciones .btn:last-child { margin-right: 0; }
         <div class="tab" onclick="switchPricingTab('habitacion',this)">🏕 Por Cabaña</div>
         <div class="tab" onclick="switchPricingTab('finde',this)">📅 Fines de semana largos</div>
         <div class="tab" onclick="switchPricingTab('promo',this)">🎯 Promociones</div>
+        <div class="tab" onclick="switchPricingTab('dinamicos',this)">📈 Precios dinámicos</div>
+        <div class="tab" onclick="switchPricingTab('fechas',this)">⭐ Fechas especiales</div>
+        <div class="tab" onclick="switchPricingTab('cargos',this)">🧾 Cargos únicos</div>
         <div class="tab" onclick="switchPricingTab('plataforma',this)">📱 Plataformas</div>
       </div>
       <div id="pricingContent"></div>
@@ -4125,6 +4128,93 @@ function renderPrecios(tab) {
         </table>
       </div>`;
 
+  } else if(tab==='dinamicos') {
+    const din = precios.dinamicos || {};
+    const ocup = din.ocupacion || [];
+    const lastm = din.last_minute || [];
+    const rowsOcup = ocup.map(t=>`<tr>
+      <td><div style="display:flex;align-items:center;gap:6px;"><input type="number" ${INP} style="width:90px" value="${t.desde_pct||0}" onchange="updateDinOcup('${t.id}','desde_pct',this.value)"><span style="color:var(--text3);font-size:12px">% ocupación</span></div></td>
+      <td><div style="display:flex;align-items:center;gap:6px;"><input type="number" ${INP} style="width:90px" value="${t.ajuste_pct||0}" onchange="updateDinOcup('${t.id}','ajuste_pct',this.value)"><span style="color:var(--text3);font-size:12px">% ajuste</span></div></td>
+      <td><button class="btn btn-red btn-sm" onclick="deleteDinOcup('${t.id}')">🗑</button></td>
+    </tr>`).join('');
+    const rowsLast = lastm.map(t=>`<tr>
+      <td><div style="display:flex;align-items:center;gap:6px;"><span style="color:var(--text3);font-size:12px">hasta</span><input type="number" ${INP} style="width:80px" value="${t.dias||0}" onchange="updateDinLast('${t.id}','dias',this.value)"><span style="color:var(--text3);font-size:12px">días de la entrada</span></div></td>
+      <td><div style="display:flex;align-items:center;gap:6px;"><input type="number" ${INP} style="width:90px" value="${t.ajuste_pct||0}" onchange="updateDinLast('${t.id}','ajuste_pct',this.value)"><span style="color:var(--text3);font-size:12px">% ajuste</span></div></td>
+      <td><button class="btn btn-red btn-sm" onclick="deleteDinLast('${t.id}')">🗑</button></td>
+    </tr>`).join('');
+    c.innerHTML = `
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h3>Precios dinámicos</h3>
+            <p style="font-size:12px;color:var(--text3);margin-top:4px">Ajustes automáticos sobre el precio de la cabaña. Los porcentajes se aplican encadenados (multiplicativos). Ajuste positivo = recargo, negativo = descuento.</p>
+          </div>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <input type="checkbox" ${din.activo?'checked':''} onchange="toggleDinamicos(this.checked)" style="width:16px;height:16px;cursor:pointer;">
+            <span style="font-size:13px;color:var(--text2)">${din.activo?'Activos':'Desactivados'}</span>
+          </label>
+        </div>
+        <h4 style="margin:8px 0;font-size:13px;color:var(--text2)">Por ocupación</h4>
+        <p style="font-size:11px;color:var(--text3);margin-bottom:6px">Cuando la ocupación del día alcanza el umbral, se aplica el ajuste (se toma el tramo de umbral más alto que cumpla).</p>
+        <table class="pricing-table">
+          <thead><tr><th>Umbral de ocupación</th><th>Ajuste</th><th></th></tr></thead>
+          <tbody>${rowsOcup || '<tr><td colspan="3" style="color:var(--text3)">Sin tramos.</td></tr>'}</tbody>
+        </table>
+        <button class="btn btn-blue btn-sm" style="margin-top:8px" onclick="addDinOcup()">+ Tramo por ocupación</button>
+        <h4 style="margin:18px 0 8px;font-size:13px;color:var(--text2)">Last-minute</h4>
+        <p style="font-size:11px;color:var(--text3);margin-bottom:6px">Cuando faltan pocos días para la entrada, se aplica el ajuste (tramo de menos días que cumpla). Sirve para descuentos de último momento.</p>
+        <table class="pricing-table">
+          <thead><tr><th>Ventana</th><th>Ajuste</th><th></th></tr></thead>
+          <tbody>${rowsLast || '<tr><td colspan="3" style="color:var(--text3)">Sin tramos.</td></tr>'}</tbody>
+        </table>
+        <button class="btn btn-blue btn-sm" style="margin-top:8px" onclick="addDinLast()">+ Tramo last-minute</button>
+      </div>`;
+
+  } else if(tab==='fechas') {
+    const fechas = precios.fechas_especiales || [];
+    const rows = fechas.map(f=>`<tr>
+      <td><input ${INP} style="width:180px" value="${escapeHtml(f.nombre||'')}" onchange="updateFechaEsp('${f.id}','nombre',this.value)"></td>
+      <td><input type="date" ${INP} style="width:145px" value="${f.fecha||''}" onchange="updateFechaEsp('${f.id}','fecha',this.value)"></td>
+      <td><div style="display:flex;align-items:center;gap:6px;"><span style="color:var(--text3);font-size:12px">$</span><input type="number" ${INP} style="width:120px" value="${f.precio||0}" onchange="updateFechaEsp('${f.id}','precio',this.value)"><span style="color:var(--text3);font-size:11px">/noche</span></div></td>
+      <td><button class="btn btn-red btn-sm" onclick="deleteFechaEsp('${f.id}')">🗑</button></td>
+    </tr>`).join('');
+    c.innerHTML = `
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h3>Fechas especiales</h3>
+            <p style="font-size:12px;color:var(--text3);margin-top:4px">Precio por noche <strong>absoluto</strong> para una fecha puntual (Año Nuevo, evento local, etc.). Reemplaza el precio de temporada de esa noche; finde/promo/dinámicos siguen encadenando por encima.</p>
+          </div>
+          <button class="btn btn-blue btn-sm" onclick="addFechaEsp()">+ Agregar</button>
+        </div>
+        <table class="pricing-table">
+          <thead><tr><th>Nombre</th><th>Fecha</th><th>Precio/noche</th><th></th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="4" style="color:var(--text3)">Sin fechas especiales.</td></tr>'}</tbody>
+        </table>
+      </div>`;
+
+  } else if(tab==='cargos') {
+    const cargos = precios.cargos_unicos || [];
+    const rows = cargos.map(c2=>`<tr>
+      <td><input ${INP} style="width:200px" value="${escapeHtml(c2.nombre||'')}" onchange="updateCargo('${c2.id}','nombre',this.value)"></td>
+      <td><div style="display:flex;align-items:center;gap:6px;"><span style="color:var(--text3);font-size:12px">$</span><input type="number" ${INP} style="width:120px" value="${c2.monto||0}" onchange="updateCargo('${c2.id}','monto',this.value)"></div></td>
+      <td><button class="btn btn-red btn-sm" onclick="deleteCargo('${c2.id}')">🗑</button></td>
+    </tr>`).join('');
+    c.innerHTML = `
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h3>Cargos únicos</h3>
+            <p style="font-size:12px;color:var(--text3);margin-top:4px">Cargos fijos por reserva (limpieza, mascota, etc.). Se suman una sola vez al total, sin importar la cantidad de noches. Acá se definen; la selección por reserva se hace en el formulario de reserva.</p>
+          </div>
+          <button class="btn btn-blue btn-sm" onclick="addCargo()">+ Agregar</button>
+        </div>
+        <table class="pricing-table">
+          <thead><tr><th>Nombre</th><th>Monto (ARS)</th><th></th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="3" style="color:var(--text3)">Sin cargos.</td></tr>'}</tbody>
+        </table>
+      </div>`;
+
   } else {
     c.innerHTML = `
       <div class="card">
@@ -4164,7 +4254,7 @@ function deleteTemporada(id) {
 function addTemporada() {
   const p = DB.get('precios',{});
   if(!p.temporadas) p.temporadas=[];
-  const nueva = { id:'t'+Date.now(), nombre:'Nueva temporada', fecha_inicio:'', fecha_fin:'', tipo:'media', anual:true };
+  const nueva = { id: nuevoPrecioId(), nombre:'Nueva temporada', fecha_inicio:'', fecha_fin:'', tipo:'media', anual:true };
   p.temporadas.push(nueva);
   DB.set('precios', p);
   auditLog('crear', 'Precios', `Temporada ${nueva.nombre}`);
@@ -4188,7 +4278,7 @@ function updatePlatPrecio(plat, field, val) {
 function addFinde() {
   const p = DB.get('precios',{});
   if(!p.fines_semana_largos) p.fines_semana_largos=[];
-  p.fines_semana_largos.push({ id:'f'+Date.now(), nombre:'Feriado puente', fecha_inicio:'', fecha_fin:'', recargo_pct:20 });
+  p.fines_semana_largos.push({ id: nuevoPrecioId(), nombre:'Feriado puente', fecha_inicio:'', fecha_fin:'', recargo_pct:20 });
   DB.set('precios', p);
   renderPrecios('finde');
 }
@@ -4209,7 +4299,7 @@ function deleteFinde(id) {
 function addPromo() {
   const p = DB.get('precios',{});
   if(!p.promociones) p.promociones=[];
-  p.promociones.push({ id:'pr'+Date.now(), nombre:'Promo', fecha_inicio:'', fecha_fin:'', tipo:'descuento_pct', valor:10, condicion:'' });
+  p.promociones.push({ id: nuevoPrecioId(), nombre:'Promo', fecha_inicio:'', fecha_fin:'', tipo:'descuento_pct', valor:10, condicion:'' });
   DB.set('precios', p);
   auditLog('crear', 'Precios', `Promo`);
   renderPrecios('promo');
@@ -4227,6 +4317,109 @@ function deletePromo(id) {
   p.promociones = (p.promociones||[]).filter(x=>x.id!==id);
   DB.set('precios', p);
   renderPrecios('promo');
+}
+
+// ID robusto para ítems dentro del objeto `precios` (que se escribe entero con
+// DB.set, no es una colección por-hijo). Push key de Firebase en vez de
+// prefijo+Date.now() para evitar colisiones entre dos usuarios en el mismo ms.
+function nuevoPrecioId() {
+  return push(ref(db, 'cabanas/precios')).key;
+}
+
+// ── Precios dinámicos (objeto {activo, ocupacion[], last_minute[]}) ──────────
+function toggleDinamicos(activo) {
+  const p = DB.get('precios',{});
+  if(!p.dinamicos) p.dinamicos = { activo:false, ocupacion:[], last_minute:[] };
+  p.dinamicos.activo = !!activo;
+  DB.set('precios', p);
+  auditLog('editar', 'Precios', `Dinámicos ${activo?'activados':'desactivados'}`);
+  renderPrecios('dinamicos');
+}
+function addDinOcup() {
+  const p = DB.get('precios',{});
+  if(!p.dinamicos) p.dinamicos = { activo:false, ocupacion:[], last_minute:[] };
+  if(!p.dinamicos.ocupacion) p.dinamicos.ocupacion = [];
+  p.dinamicos.ocupacion.push({ id: nuevoPrecioId(), desde_pct:80, ajuste_pct:15 });
+  DB.set('precios', p);
+  renderPrecios('dinamicos');
+}
+function updateDinOcup(id, field, val) {
+  const p = DB.get('precios',{});
+  const t = (p.dinamicos?.ocupacion||[]).find(x=>x.id===id);
+  if(t) t[field] = Number(val);
+  DB.set('precios', p);
+}
+function deleteDinOcup(id) {
+  const p = DB.get('precios',{});
+  if(p.dinamicos) p.dinamicos.ocupacion = (p.dinamicos.ocupacion||[]).filter(x=>x.id!==id);
+  DB.set('precios', p);
+  renderPrecios('dinamicos');
+}
+function addDinLast() {
+  const p = DB.get('precios',{});
+  if(!p.dinamicos) p.dinamicos = { activo:false, ocupacion:[], last_minute:[] };
+  if(!p.dinamicos.last_minute) p.dinamicos.last_minute = [];
+  p.dinamicos.last_minute.push({ id: nuevoPrecioId(), dias:7, ajuste_pct:-10 });
+  DB.set('precios', p);
+  renderPrecios('dinamicos');
+}
+function updateDinLast(id, field, val) {
+  const p = DB.get('precios',{});
+  const t = (p.dinamicos?.last_minute||[]).find(x=>x.id===id);
+  if(t) t[field] = Number(val);
+  DB.set('precios', p);
+}
+function deleteDinLast(id) {
+  const p = DB.get('precios',{});
+  if(p.dinamicos) p.dinamicos.last_minute = (p.dinamicos.last_minute||[]).filter(x=>x.id!==id);
+  DB.set('precios', p);
+  renderPrecios('dinamicos');
+}
+
+// ── Fechas especiales (array de {id, nombre, fecha, precio}) ─────────────────
+function addFechaEsp() {
+  const p = DB.get('precios',{});
+  if(!p.fechas_especiales) p.fechas_especiales = [];
+  p.fechas_especiales.push({ id: nuevoPrecioId(), nombre:'Fecha especial', fecha:'', precio:0 });
+  DB.set('precios', p);
+  auditLog('crear', 'Precios', 'Fecha especial');
+  renderPrecios('fechas');
+}
+function updateFechaEsp(id, field, val) {
+  const p = DB.get('precios',{});
+  const f = (p.fechas_especiales||[]).find(x=>x.id===id);
+  if(f) f[field] = field==='precio' ? Number(val) : val;
+  DB.set('precios', p);
+}
+function deleteFechaEsp(id) {
+  const p = DB.get('precios',{});
+  p.fechas_especiales = (p.fechas_especiales||[]).filter(x=>x.id!==id);
+  DB.set('precios', p);
+  auditLog('borrar', 'Precios', `Fecha especial ${id}`);
+  renderPrecios('fechas');
+}
+
+// ── Cargos únicos (array de {id, nombre, monto}) ────────────────────────────
+function addCargo() {
+  const p = DB.get('precios',{});
+  if(!p.cargos_unicos) p.cargos_unicos = [];
+  p.cargos_unicos.push({ id: nuevoPrecioId(), nombre:'Nuevo cargo', monto:0 });
+  DB.set('precios', p);
+  auditLog('crear', 'Precios', 'Cargo único');
+  renderPrecios('cargos');
+}
+function updateCargo(id, field, val) {
+  const p = DB.get('precios',{});
+  const c = (p.cargos_unicos||[]).find(x=>x.id===id);
+  if(c) c[field] = field==='monto' ? Number(val) : val;
+  DB.set('precios', p);
+}
+function deleteCargo(id) {
+  const p = DB.get('precios',{});
+  p.cargos_unicos = (p.cargos_unicos||[]).filter(x=>x.id!==id);
+  DB.set('precios', p);
+  auditLog('borrar', 'Precios', `Cargo ${id}`);
+  renderPrecios('cargos');
 }
 
 // ===================== CONTABILIDAD =====================
@@ -6893,6 +7086,9 @@ Object.assign(window, {
   addTemporada, deleteTemporada, updateTemporada, updateHabPrecio, updatePlatPrecio,
   addFinde, updateFinde, deleteFinde,
   addPromo, updatePromo, deletePromo,
+  toggleDinamicos, addDinOcup, updateDinOcup, deleteDinOcup, addDinLast, updateDinLast, deleteDinLast,
+  addFechaEsp, updateFechaEsp, deleteFechaEsp,
+  addCargo, updateCargo, deleteCargo,
   togglePerm, deleteRol, toggleUsuarioEstado,
   grillaCellClick, setHuespedMode, filtrarHuespedes, seleccionarHuesped, openReservaDesdeGrilla,
   renderConversaciones, abrirConversacion, togglePausaBot, enviarMensajeConv, convInputKey,

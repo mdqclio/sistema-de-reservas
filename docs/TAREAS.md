@@ -8,6 +8,26 @@
 
 -----
 
+## ✅ Hecho esta sesión (v1.2 — precios + check-in)
+
+- 🔴 **Fix del saldo de check-in** (Bloque 0 #4): `confirmCheckin` ahora cobra el
+  saldo pendiente y registra la comisión una sola vez (guard `comisionRegistrada`).
+- ✨ **Flags de facturación** en movimientos: `facturado` + `nroComprobante`
+  (default en `writeMovimiento`, checkbox + input en el modal de caja).
+- ✨ **Cascada de precios unificada** (`calcularPrecioReserva` / `precioNocheCascada`):
+  temporada → dinámicos → finde → promo → fechas especiales, + cargos únicos.
+  Reemplaza el `precio × noches` disperso en saveReserva/confirmCheckin/openPago/grilla.
+  La reserva guarda `total` autoritativo. Con los nodos nuevos vacíos, da exactamente
+  `precio × noches` (cero cambio en la operación viva). Verificado con tests aislados.
+- ✨ **Config de precios**: 3 pestañas nuevas — Precios dinámicos (ocupación +
+  last-minute), Fechas especiales (precio absoluto por noche) y Cargos únicos.
+- 🟠 **IDs de precios a push key** (`nuevoPrecioId`) en temporadas/findes/promos y los
+  nodos nuevos.
+
+> Pendiente de esta línea: selector de cargos únicos **por reserva** en el formulario
+> (el motor ya los soporta vía `opts.cargos`, pero la UI de reserva todavía manda `[]`);
+> vista de "facturado vs sin facturar" en Contabilidad usando los flags nuevos.
+
 ## ✅ Hecho esta sesión (v1.1)
 
 - **Concurrencia** en todos los nodos-colección (Bloque 0 #1) — `makeLiveCollection` + `liveRerender`.
@@ -46,9 +66,12 @@
   `pendientes` escribible por cualquiera (con límite de tamaño/tipo); `reservas`,
   `huespedes`, etc. solo staff. *Prerrequisito de salir a producción y de exponer
   cualquier webhook. Revisar la fecha de expiración de las reglas actuales.*
-- [ ] 🔴 **Saldo del check-in a la caja.** En `doCheckin`, el ingreso solo se registra
-  si `pagado === 0`. Con seña previa (flujo normal: 30% + saldo), el 70% nunca entra
-  a `movimientos`. Registrar el saldo al hacer check-in.
+- [x] 🔴 **Saldo del check-in a la caja. (HECHO)** `confirmCheckin` cobraba el ingreso
+  solo si `pagado === 0`; con seña previa (30% + saldo) el 70% nunca entraba a
+  `movimientos`. Ahora registra `saldoPendiente = total − pagado` al hacer check-in.
+  Además la comisión de plataforma vivía dentro del mismo branch, así que las reservas
+  con seña tampoco registraban comisión: se sacó a un bloque propio con guard
+  `comisionRegistrada` (una sola vez, sobre el total).
 
 ## 🎨 Bloque 1 — UI/UX y pestaña de Configuración
 
@@ -65,14 +88,16 @@
   - [ ] Definición de precios consolidada acá: temporadas, precio por cabaña
     (alta/base/baja), promos, finde largos, plataformas.
 - [ ] 🟠 **Saneamiento de datos** (bugs detectados en la revisión):
-  - [ ] Precio: dejar de defaultear a `510000` en silencio. Exigirlo u obtenerlo
-    de `precios` según la cabaña (hoy subcobra las de $637.500).
+  - [x] Precio: **(HECHO)** ya no defaultea a `510000`. El prefill y la grilla salen de
+    `precioNocheCascada` (temporada por cabaña + cascada); el placeholder engañoso
+    "510000" pasó a "auto según cabaña/temporada".
   - [ ] Escapar HTML de todo dato de usuario antes de meterlo en `innerHTML` (XSS).
   - [ ] IDs robustos (push de Firebase o UUID) en vez de `Date.now()` (colisiones).
-    *Parcial: reservas, auditoría, cierres y tipo_cambio ya usan push keys de Firebase.
-    Faltan roles/usuarios/categorías/proveedores/pipeline/recurrentes (siguen con
-    `prefijo+Date.now()`, que igual funciona como clave de hijo; el riesgo de colisión
-    es bajo pero conviene unificar a push key).*
+    *Parcial: reservas, auditoría, cierres, tipo_cambio y ahora también los ítems de
+    `precios` (temporadas/findes/promos/fechas_especiales/cargos_unicos, vía
+    `nuevoPrecioId()`) usan push keys. Faltan roles/usuarios/categorías/proveedores/
+    pipeline/recurrentes (siguen con `prefijo+Date.now()`, que igual funciona como
+    clave de hijo; conviene unificar a push key).*
 
 ## 🔗 Bloque 2 — Beds24 (channel manager: Booking + Airbnb)
 
