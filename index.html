@@ -1281,6 +1281,16 @@ td.acciones .btn:last-child { margin-right: 0; }
       </div>
     </div>
     <div class="form-group"><label>Observaciones</label><input type="text" id="ci-obs" placeholder="Opcional"></div>
+    <div class="form-row">
+      <div class="form-group" style="display:flex;align-items:center;gap:8px;padding-top:18px;">
+        <input type="checkbox" id="ci-facturado" style="accent-color:var(--accent);width:16px;height:16px;" onchange="onCiFacturadoChange()">
+        <label style="margin:0;text-transform:none;font-size:13px;color:var(--text2);">Facturar el saldo cobrado</label>
+      </div>
+      <div class="form-group" id="ci-comprobante-group" style="display:none;">
+        <label>N° comprobante</label>
+        <input type="text" id="ci-comprobante" placeholder="Ej: 0001-00001234">
+      </div>
+    </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modalCheckin')">Cancelar</button>
       <button class="btn btn-green" onclick="confirmCheckin()">✅ Confirmar Check-in</button>
@@ -3164,7 +3174,11 @@ function renderReservas() {
   }
   tbody.innerHTML = filtered.map(r => {
     const nights = nightsBetween(r.entrada, r.salida);
-    const total = fmtMoney(r.precio * nights, r.moneda);
+    const totalNum = totalReserva(r);
+    const fact = resumenFacturacionReserva(r.id);
+    const total = `${fmtMoney(totalNum, r.moneda)}`
+      + `<div style="font-size:10px;color:#34d399;line-height:1.4">✓ fact ${fmtMoney(fact.facturado, r.moneda)}</div>`
+      + `<div style="font-size:10px;color:var(--text3);line-height:1.4">s/fact ${fmtMoney(fact.sinFacturar, r.moneda)}</div>`;
     const canCheckin = r.estado==='confirmada';
     const canCheckout = r.estado==='checkin';
     const hasSaldo = Number(r.saldo||0) > 0;
@@ -3306,6 +3320,21 @@ function calcularPrecioReserva(hab, entrada, salida, opts = {}) {
   const cargosTotal = cargosReservaTotal(opts.cargos);
   const subtotal = precioNoche * noches;
   return { noches, precioNoche, subtotal, cargosTotal, total: subtotal + cargosTotal };
+}
+
+// Total autoritativo de una reserva: el guardado (cascada) o, para reservas viejas
+// sin `total`, recalculado con la cascada respetando el precio/noche guardado.
+function totalReserva(r) {
+  return Number(r.total) || calcularPrecioReserva(r.hab, r.entrada, r.salida, { precioOverride: r.precio, cargos: r.cargos }).total;
+}
+
+// Resumen de facturación de una reserva a partir de sus movimientos de ingreso
+// (linkeados por reservaId): cuánto se cobró, cuánto de eso se facturó y cuánto no.
+function resumenFacturacionReserva(rid) {
+  const ingresos = getMovimientos().filter(m => m.reservaId === rid && m.tipo === 'ingreso');
+  const cobrado = ingresos.reduce((s, m) => s + (Number(m.monto) || 0), 0);
+  const facturado = ingresos.filter(m => m.facturado).reduce((s, m) => s + (Number(m.monto) || 0), 0);
+  return { cobrado, facturado, sinFacturar: cobrado - facturado };
 }
 
 // Precio abreviado en miles para la grilla. 510000 → "$510k"; 637500 → "$637,5k"; <1000 → "$n".
@@ -3519,7 +3548,7 @@ async function saveReserva() {
   }
   await writeReserva(reg); // escritura por hijo: no pisa otras reservas
   if(pagado > 0) {
-    await writeMovimiento({ id:nuevoMovimientoId(), tipo:'ingreso', cat:'reserva', moneda, monto:pagado, metodo:newData.pago, fecha:today(), concepto:`${estadoPago==='senia'?'Seña':'Pago'} reserva ${getHuespedNombre(h)} - Cabaña ${newData.hab}` }); // escritura por hijo
+    await writeMovimiento({ id:nuevoMovimientoId(), tipo:'ingreso', cat:'reserva', moneda, monto:pagado, metodo:newData.pago, fecha:today(), concepto:`${estadoPago==='senia'?'Seña':'Pago'} reserva ${getHuespedNombre(h)} - Cabaña ${newData.hab}`, reservaId:reg.id }); // escritura por hijo
   }
   savingReserva = false;
   if(btnGuardar) { btnGuardar.disabled = false; btnGuardar.textContent = 'Guardar Reserva'; }
@@ -3545,6 +3574,9 @@ function doCheckin(rid) {
   document.getElementById('ci-hora').value = now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
   document.getElementById('ci-llave').value = r.llave || '';
   document.getElementById('ci-obs').value = '';
+  document.getElementById('ci-facturado').checked = false;
+  document.getElementById('ci-comprobante').value = '';
+  document.getElementById('ci-comprobante-group').style.display = 'none';
   document.getElementById('ci-resumen').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
       <div><span style="color:var(--text3);display:block;font-size:11px">Huésped</span><strong>${escapeHtml(getHuespedNombre(r.huespedId))}</strong></div>
@@ -3559,6 +3591,8 @@ async function confirmCheckin() {
   const llave = document.getElementById('ci-llave').value.trim();
   const hora = document.getElementById('ci-hora').value;
   const obs = document.getElementById('ci-obs').value;
+  const ciFacturado = document.getElementById('ci-facturado').checked;
+  const ciComprobante = ciFacturado ? (document.getElementById('ci-comprobante').value.trim() || '') : '';
   const reservas = getReservas();
   const r = reservas.find(x=>x.id===rid);
   if(!r) return;
@@ -3575,7 +3609,7 @@ async function confirmCheckin() {
   const yaPagado = Number(r.pagado) || 0;
   const saldoPendiente = Math.max(montoTotal - yaPagado, 0);
   if (saldoPendiente > 0) {
-    await writeMovimiento({ id:nuevoMovimientoId(), tipo:'ingreso', cat:'Reserva / Check-in', moneda:r.moneda, monto:saldoPendiente, metodo:r.pago, fecha:today(), concepto:`${yaPagado>0?'Saldo':'Pago'} check-in ${getHuespedNombre(r.huespedId)} - Cab.${r.hab}` }); // escritura por hijo
+    await writeMovimiento({ id:nuevoMovimientoId(), tipo:'ingreso', cat:'Reserva / Check-in', moneda:r.moneda, monto:saldoPendiente, metodo:r.pago, fecha:today(), concepto:`${yaPagado>0?'Saldo':'Pago'} check-in ${getHuespedNombre(r.huespedId)} - Cab.${r.hab}`, reservaId:r.id, facturado:ciFacturado, nroComprobante:ciComprobante }); // escritura por hijo
     r.pagado = montoTotal;
     r.saldo = 0;
     r.estadoPago = 'total';
@@ -3588,7 +3622,7 @@ async function confirmCheckin() {
     const platData = (precios.plataformas||[]).find(p => p.plat === (r.plataforma||'directo'));
     if (platData && platData.comision > 0) {
       const comision = Math.round(montoTotal * platData.comision / 100);
-      await writeMovimiento({ id:nuevoMovimientoId(), tipo:'egreso', cat:'Comisión plataforma', moneda:r.moneda, monto:comision, metodo:'transferencia', fecha:today(), concepto:`Comisión ${r.plataforma} ${platData.comision}% - Cab.${r.hab}` }); // escritura por hijo
+      await writeMovimiento({ id:nuevoMovimientoId(), tipo:'egreso', cat:'Comisión plataforma', moneda:r.moneda, monto:comision, metodo:'transferencia', fecha:today(), concepto:`Comisión ${r.plataforma} ${platData.comision}% - Cab.${r.hab}`, reservaId:r.id }); // escritura por hijo
     }
     r.comisionRegistrada = true;
   }
@@ -3633,7 +3667,7 @@ function savePago() {
   r.saldo = Math.max((Number(r.saldo)||0) - monto, 0);
   r.estadoPago = r.saldo <= 0 ? 'total' : 'senia';
   writeReserva(r); // escritura por hijo
-  writeMovimiento({ id:nuevoMovimientoId(), tipo:'ingreso', cat:'reserva', moneda:r.moneda, monto, metodo, fecha:today(), concepto }); // escritura por hijo
+  writeMovimiento({ id:nuevoMovimientoId(), tipo:'ingreso', cat:'reserva', moneda:r.moneda, monto, metodo, fecha:today(), concepto, reservaId:rid }); // escritura por hijo
   closeModal('modalPago');
   renderReservas();
   showNotif('💰 Pago registrado: '+fmtMoney(monto, r.moneda));
@@ -4504,6 +4538,12 @@ function onMovFacturadoChange() {
   if (group) group.style.display = checked ? '' : 'none';
 }
 
+function onCiFacturadoChange() {
+  const checked = document.getElementById('ci-facturado')?.checked;
+  const group = document.getElementById('ci-comprobante-group');
+  if (group) group.style.display = checked ? '' : 'none';
+}
+
 function openMovimientoModal() {
   populateMovCats();
   populateProvSelect('mov-proveedor');
@@ -4553,6 +4593,12 @@ function renderAcct(tab) {
     const ingUSD = movsmes.filter(m=>m.tipo==='ingreso'&&m.moneda==='USD').reduce((a,b)=>a+Number(b.monto),0);
     const egARS = movsmes.filter(m=>(m.tipo==='egreso'||m.tipo==='devolucion')&&m.moneda==='ARS').reduce((a,b)=>a+Number(b.monto),0);
     const bal = ingARS - egARS;
+    // Facturación (ARS): cobrado = ingresos; facturado = ingresos con facturado:true.
+    // IVA calculado SOLO sobre lo facturado (monto IVA incluido → monto/1.21*0.21).
+    const cobradoARS = ingARS;
+    const facturadoARS = movsmes.filter(m=>m.tipo==='ingreso'&&m.moneda==='ARS'&&m.facturado).reduce((a,b)=>a+Number(b.monto),0);
+    const sinFacturarARS = cobradoARS - facturadoARS;
+    const ivaFacturado = facturadoARS / 1.21 * 0.21;
     // Resumen por categoría
     const porCat = {};
     movsmes.forEach(m => {
@@ -4568,6 +4614,12 @@ function renderAcct(tab) {
         <div class="stat-card red"><div class="label">Egresos ARS (mes)</div><div class="value">${fmtMoney(egARS)}</div></div>
         <div class="stat-card ${bal>=0?'blue':'red'}"><div class="label">Balance neto</div><div class="value">${fmtMoney(bal)}</div></div>
         <div class="stat-card amber"><div class="label">Transacciones</div><div class="value">${movsmes.length}</div></div>
+      </div>
+      <div class="acct-grid" style="margin-bottom:16px;">
+        <div class="stat-card green"><div class="label">Cobrado ARS (mes)</div><div class="value">${fmtMoney(cobradoARS)}</div></div>
+        <div class="stat-card blue"><div class="label">Facturado ARS (mes)</div><div class="value">${fmtMoney(facturadoARS)}</div></div>
+        <div class="stat-card amber"><div class="label">Sin facturar ARS (mes)</div><div class="value">${fmtMoney(sinFacturarARS)}</div></div>
+        <div class="stat-card blue"><div class="label">IVA (21% s/ facturado)</div><div class="value">${fmtMoney(ivaFacturado)}</div></div>
       </div>
       <div class="card"><table>
         <thead><tr><th>Categoría</th><th>Ingresos</th><th>Egresos</th><th>Neto</th></tr></thead>
@@ -4624,11 +4676,11 @@ function renderCuentasPorCobrar(c) {
   const reservas = getReservas();
   const huespedes = getHuespedes();
   const pendientes = reservas.filter(r => {
-    const total = r.precio * nightsBetween(r.entrada, r.salida);
+    const total = totalReserva(r);
     const pagado = Number(r.pagado || 0);
     return pagado < total && r.estado !== 'cancelada';
   }).map(r => {
-    const total = r.precio * nightsBetween(r.entrada, r.salida);
+    const total = totalReserva(r);
     const pagado = Number(r.pagado || 0);
     const h = huespedes.find(h => h.id === r.huespedId);
     return { ...r, total, pagado, pendiente: total - pagado, hNombre: h ? h.nombre : '—' };
@@ -7072,7 +7124,7 @@ Object.assign(window, {
   saveProveedor, deleteProveedor, openProveedorModal, renderProveedores,
   saveRecurrente, deleteRecurrente, openRecurrenteModal, aplicarRecurrentes,
   savePresupuesto, exportarCSV, calcArqueo,
-  openMovimientoModal, onMovTipoChange, onMovMonedaChange, onMovImpuestoChange, onMovFacturadoChange,
+  openMovimientoModal, onMovTipoChange, onMovMonedaChange, onMovImpuestoChange, onMovFacturadoChange, onCiFacturadoChange,
   renderCuentasPorCobrar, renderPresupuesto, renderRecurrentes, renderAuditoria, setAuditFiltro, renderProveedores,
   editReserva,
   openEditHuesped, saveEditHuesped, confirmDelete, deleteHuesped, deleteReserva,

@@ -23,10 +23,18 @@
   last-minute), Fechas especiales (precio absoluto por noche) y Cargos únicos.
 - 🟠 **IDs de precios a push key** (`nuevoPrecioId`) en temporadas/findes/promos y los
   nodos nuevos.
+- ✨ **Facturación completa** (resto de la sección C):
+  - Checkbox "Facturar el saldo cobrado" + N° comprobante en el modal de check-in
+    (el movimiento del saldo nace con el flag correcto, no siempre `false`).
+  - `reservaId` en los movimientos de reserva (seña, saldo, comisión, pago parcial)
+    para poder cruzar movimientos ↔ reserva.
+  - Totales en Contabilidad → Resumen: Cobrado, Facturado, Sin facturar e **IVA
+    calculado solo sobre `facturado:true`** (`facturado/1.21*0.21`).
+  - Resumen por reserva en la lista: total / facturado / sin facturar
+    (`resumenFacturacionReserva`).
 
 > Pendiente de esta línea: selector de cargos únicos **por reserva** en el formulario
-> (el motor ya los soporta vía `opts.cargos`, pero la UI de reserva todavía manda `[]`);
-> vista de "facturado vs sin facturar" en Contabilidad usando los flags nuevos.
+> (el motor ya los soporta vía `opts.cargos`, pero la UI de reserva todavía manda `[]`).
 
 ## ✅ Hecho esta sesión (v1.1)
 
