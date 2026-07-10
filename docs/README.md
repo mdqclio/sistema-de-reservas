@@ -39,13 +39,16 @@ Deployado en GitHub Pages. Un solo archivo `index.html` (~6.100 líneas, vanilla
 ## Archivos en el repo
 
 ```
-index.html          ← sistema completo (v1.0)
-checkin.html        ← pre check-in público (link único por reserva)
-guest-register.html ← autocarga de datos de huéspedes
+index.html               ← sistema completo (v1.1)
+docs/checkin.html        ← pre check-in público (link único por reserva)
+docs/guest-register.html ← autocarga de datos de huéspedes
 ```
 
+> Los dos formularios públicos viven en **`/docs/`**, no en la raíz.
 > `kb_import.html` ya **no está en el repo** (era de uso único, se removió).
 > `web-puertodelfin.html` (web pública nueva) todavía **no se subió**.
+> ⚠️ `checkin.html` y `guest-register.html` siguen escribiendo en **Firestore**
+> (`reservations`/`guests`); el admin lee de RTDB. Unificar es tarea abierta (Bloque 0 #2).
 
 ## Módulos del sistema (por grupo del nav)
 
@@ -59,6 +62,12 @@ queda deprecado/fallback — el bot se mueve a `mibot247`.)*
 
 ## Pendientes
 
+- [ ] **Facturación electrónica real (ARCA WSFEv1)**: Factura B/A con desglose de IVA,
+  adaptación del skill `afip-facturacion`, corre en Hetzner vía n8n. (Hoy la app solo
+  marca `facturado` + `nroComprobante` a mano; no emite comprobantes.) Ver TAREAS.md.
+- [ ] **Flujo de staging/validación**: los formularios públicos escriben en un nodo
+  `/cabanas/pendientes` (RTDB) en vez de Firestore + bandeja de "Pendientes" en el admin.
+- [ ] **Reglas de seguridad de Firebase** (RTDB + Storage) por rol — antes de producción.
 - [ ] **Reactivar el chatbot** (hoy está comentado en la UI y en `loadAllData`)
 - [ ] Conectar bot a WhatsApp (Twilio, número nuevo)
 - [ ] Conectar bot a Telegram (BotFather, gratis)
@@ -69,6 +78,24 @@ queda deprecado/fallback — el bot se mueve a `mibot247`.)*
 - [ ] Software predictivo de trading (libro pendiente de subir)
 
 ## Hecho recientemente
+
+### Precios + facturación (v1.1)
+
+- [x] **Rediseño del motor de precios** — cascada **noche por noche** (subtotal = Σ noches):
+  base de temporada / **fecha especial** (override absoluto que pisa base y finde) → recargo
+  de finde → **ajuste exclusivo** (a lo sumo uno de promo · último momento · ocupación,
+  prioridad en ese orden). Punto único `calcularPrecioReserva`, reemplaza el `precio × noches`
+  disperso. Ver **docs/PRECIOS.md**.
+- [x] **Precios dinámicos** (ocupación del día + último momento), **fechas especiales**
+  (precio absoluto por noche) y **cargos únicos** por reserva — con UI de config (3 pestañas).
+- [x] **Promo manual**: el staff elige la promo en un dropdown del form (`r.promo`); ya **no**
+  se auto-aplica por fecha. Elegir promo apaga los dinámicos de esa reserva.
+- [x] **Facturación**: flag `facturado` + `nroComprobante` en movimientos; checkbox en el
+  check-in y en caja; IVA calculado **solo sobre lo facturado**; resumen cobrado / facturado /
+  sin facturar por reserva y en Contabilidad. Movimientos linkeados a la reserva (`reservaId`).
+- [x] **Fix del saldo de check-in a caja**: `confirmCheckin` cobra el saldo pendiente (cuando
+  hubo seña previa) y registra la comisión de plataforma una sola vez (guard `comisionRegistrada`).
+- [x] **Tests del motor de precios** (`tests/precios.test.mjs`, 13 casos en verde).
 
 ### Sesión v1.1
 

@@ -22,7 +22,7 @@ Hay dos formas:
    https://raw.githubusercontent.com/mdqclio/sistema-de-reservas/main/index.html
    ```
    
-   (también `checkin.html` y `guest-register.html` por el mismo path)
+   (también `docs/checkin.html` y `docs/guest-register.html` — están en `/docs/`, no en la raíz)
 
 Subí también los `.md` de `/docs/` si hay cambios importantes.
 
@@ -49,9 +49,17 @@ Subí también los `.md` de `/docs/` si hay cambios importantes.
 - Check-in / Check-out (sin campo de llave)
 - Pipeline CRM (kanban de leads: consulta → presupuesto → confirmada → perdida)
 - Huéspedes con ciudad, foto DNI, score (estrellas) y Lista Negra con link público
-- Pre check-in público por link único por reserva (`checkin.html`)
-- Autocarga de huéspedes (`guest-register.html`)
-- Precios por temporada, por cabaña (alta/base/baja), promos, finde largos, plataformas
+- Pre check-in público por link único por reserva (`docs/checkin.html`)
+- Autocarga de huéspedes (`docs/guest-register.html`)
+- **Motor de precios rediseñado** — cascada **noche por noche** (`calcularPrecioReserva`):
+  temporada por cabaña (alta/base/baja) o **fecha especial** (override absoluto que pisa base
+  y finde) → recargo de finde → **ajuste exclusivo** (promo · último momento · ocupación, en
+  ese orden de prioridad). **Precios dinámicos** (ocupación + último momento), **cargos únicos**
+  por reserva y **promo manual** (dropdown en el form → `r.promo`, no auto-aplica). Ver
+  `docs/PRECIOS.md`. Con los nodos nuevos vacíos, da exactamente `precio × noches`.
+- **Facturación**: `facturado` + `nroComprobante` en movimientos (check-in y caja), IVA solo
+  sobre lo facturado, resumen cobrado/facturado/sin facturar por reserva y en Contabilidad,
+  movimientos linkeados a la reserva por `reservaId`
 - Contabilidad completa: movimientos, categorías, proveedores, presupuestos,
   gastos recurrentes, auditoría, exportar CSV
 - Caja diaria con arqueo y cierres
@@ -70,15 +78,29 @@ Subí también los `.md` de `/docs/` si hay cambios importantes.
 
 - ✅ **Color del mapa: RESUELTO** — una cabaña sin reserva activa solo respeta dirty/maintenance;
   ignora un `'occupied'` viejo del nodo `beds` → se ve Libre/verde (consistente con el badge).
+- ✅ **Precio default `510000`: RESUELTO** — el prefill y la grilla salen de `precioNocheCascada`
+  (temporada por cabaña); ya no hay número fijo. (El `510000` que queda es solo el seed de
+  `initData` para las cabañas 1-8, dato real, no un default de cálculo.)
+- ✅ **Total de la reserva: RESUELTO** — `calcTotalReserva` calcula con solo cabaña + fechas
+  (sin precio manual usa la cascada); el precio manual pasó a ser override opcional.
+- ✅ **IDs de precios: RESUELTO** — temporadas/findes/promos/fechas_especiales/cargos_unicos
+  usan push key (`nuevoPrecioId`), ya no `Date.now()`. (Siguen con `Date.now()`
+  roles/usuarios/categorías/proveedores/pipeline/recurrentes — funcionan como clave de hijo,
+  conviene unificar.)
 - La función se llama `camaLabel()`, NUNCA `cabañaLabel()` (bug histórico, hoy OK)
 - **Terminología “cama” todavía en la UI**: modal “Cambio de Cama”, “Mapa Camas”,
   tooltips “Cab./Cama”, opciones “Cama X”. Pendiente cambiar a “cabaña”.
-- El total de la reserva calcula solo si se ingresa el precio
-- El precio de la reserva todavía defaultea a `510000` en algún path (subcobra las de $637.500)
 - El usuario admin del seed tiene email vacío — hay que completarlo en `usuarios`
 
 ### 📋 Features pendientes
 
+- [ ] **Facturación electrónica ARCA (WSFEv1)** — Factura B/A con desglose de IVA, adaptando
+  el skill `afip-facturacion`, corriendo en Hetzner vía n8n. Hoy solo hay flags manuales
+  (`facturado`/`nroComprobante`); no se emiten comprobantes. Ver TAREAS.md (Bloque 4).
+- [ ] **Staging/validación**: los formularios públicos (`checkin.html`/`guest-register.html`)
+  **todavía escriben en Firestore**, sin auth anónima ni nodo `/cabanas/pendientes` — sin
+  implementar. Migrar a un nodo de staging en RTDB + bandeja de pendientes en el admin.
+- [ ] **Reglas de seguridad de Firebase** (RTDB + Storage) por rol.
 - [ ] **Bot → `mibot247/botcontrol` + n8n (Hetzner)** (multi-tenant; el chat embebido del browser
   queda como fallback). WhatsApp / Telegram / Instagram-Facebook se conectan desde ahí.
 - [ ] Sincronización Booking/Airbnb (Beds24)
@@ -125,6 +147,7 @@ El sistema usa **Firebase Realtime Database** (NO Firestore).
 - Proyecto: `sistema-de-reservas-d9e54`
 - Path: `/cabanas/`
 - Acceso vía helper `DB.get(k, def)` / `DB.set(k, v)` sobre un `cache` local
-- Nodos actuales: `reservas, huespedes, beds, precios, roles, usuarios, pipeline, movimientos, cierres, categorias, proveedores, recurrentes, presupuestos, auditoria, tipo_cambio_historial, knowledge_base, bot_config, config_groq_key, init_cabanas`
+- Nodos actuales: `reservas, huespedes, beds, precios, roles, usuarios, pipeline, conversaciones, movimientos, cierres, categorias, proveedores, recurrentes, presupuestos, auditoria, tipo_cambio_historial, knowledge_base, bot_config, config_groq_key, init_cabanas`
+  *(no existe `/cabanas/pendientes`: el flujo de staging aún no se implementó.)*
 - El Firestore que se creó al inicio existe pero NO se usa
 - Las reglas del RTDB tienen fecha de expiración — revisar si expiraron

@@ -38,8 +38,10 @@
   desglose del precio (precio × noches + cada cargo = total) debajo del precio.
   Al editar, se pre-tildan los cargos que la reserva ya tenía.
 
-> Línea de precios + facturación: **completa**. Próximos frentes (otras líneas del
-> backlog): staging+validación, reglas de seguridad de Firebase, Beds24, bot.
+> Línea de precios + facturación **interna**: completa (cascada noche por noche, dinámicos,
+> fechas especiales, cargos únicos, promo manual, flags `facturado`/`nroComprobante`, IVA
+> sobre lo facturado). **Falta la facturación electrónica real** (emitir comprobantes ARCA)
+> → nuevo Bloque 4. Otros frentes abiertos: staging+validación, reglas de seguridad, Beds24, bot.
 
 ## ✅ Hecho esta sesión (v1.1)
 
@@ -68,8 +70,14 @@
 - [ ] 🔴 **Completar el flujo de staging + validación** (antes era “unificar a RTDB”).
   El diseño original ya lo preveía (la UI dice “Pendiente confirmar”), pero quedó a medias:
   los formularios públicos escriben en Firestore y el admin solo lee RTDB.
+  > **Estado real (verificado 2026-07-10 contra el código):** NADA implementado.
+  > `docs/checkin.html` y `docs/guest-register.html` siguen usando **Firestore**
+  > (`getFirestore` + colecciones `reservations`/`guests`, `addDoc`/`updateDoc`). No hay
+  > **auth anónima** (`signInAnonymously`) en ningún archivo, no existe el nodo
+  > `/cabanas/pendientes` en RTDB, ni bandeja de “Pendientes” en el admin. Todo el ítem sigue abierto.
   - [ ] Lo público (pre check-in + autocarga) escribe en un nodo de staging en RTDB
-    (`/cabanas/pendientes`), NO en Firestore (evita mantener 2 bases y 2 SDK).
+    (`/cabanas/pendientes`), NO en Firestore (evita mantener 2 bases y 2 SDK). Requiere
+    habilitar **auth anónima** para que el form público pueda escribir con reglas acotadas.
   - [ ] Bandeja “Pendientes de confirmar” en el admin que liste ese nodo.
   - [ ] Al confirmar: validar + sanitizar y promover a `reservas` / `huespedes`.
   - [ ] Sacar Firestore de `checkin.html` y `guest-register.html`.
@@ -137,6 +145,27 @@
 - [ ] ✨ Elegir modelo (Groq vs Claude).
 - [ ] ✨ Deprecar el chatbot viejo del browser (o dejarlo como fallback).
 - [ ] ✨ Subir `web-puertodelfin.html` con fotos reales + widget del bot.
+
+## 🧾 Bloque 4 — Facturación electrónica ARCA (WSFEv1)
+
+> Emitir comprobantes fiscales reales (hoy la app solo marca `facturado` + `nroComprobante`
+> a mano). Web service **WSFEv1** de ARCA (ex-AFIP). Corre en **Hetzner vía n8n**, reusando
+> y adaptando el skill **`afip-facturacion`** (hoy emite Factura **C** monotributo).
+
+- [ ] 📄 **(a) Trámite de Franco — SIN código.** Certificado digital (produccón + homologación)
+  y **punto de venta nuevo** habilitado para *web services* en ARCA. *No depende de nada;
+  se puede arrancar ya.*
+- [ ] ✨ **(b) Adaptar el skill `afip-facturacion` de Factura C → B/A.** Agregar desglose de
+  IVA (neto + alícuota + IVA) y, para **Factura A**, los datos del receptor (CUIT, condición
+  frente al IVA, razón social). **Probar TODO en homologación** antes de producción.
+  *No depende del Bloque 0; sí necesita el certificado de homologación del punto (a).*
+- [ ] ✨ **(c) Integración n8n ↔ app.** Marcar un movimiento → llamar al servicio → emitir el
+  comprobante → guardar **CAE**, vencimiento del CAE y nro de comprobante de vuelta en el
+  movimiento. *Requiere **Bloque 0 cerrado** (reglas de seguridad + backend n8n en Hetzner
+  expuesto de forma segura).*
+
+> **Dependencias:** (a) y (b) son independientes y se pueden hacer en cualquier momento;
+> (c) requiere el Bloque 0 completo (reglas reales + backend seguro para exponer el webhook).
 
 ## 🧹 Pulido (cuando haya hueco)
 
