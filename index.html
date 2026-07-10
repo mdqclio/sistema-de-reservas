@@ -1091,7 +1091,7 @@ td.acciones .btn:last-child { margin-right: 0; }
       <div class="form-group"><label>Moneda</label>
         <select id="res-moneda"><option value="ARS">ARS</option><option value="USD">USD</option></select>
       </div>
-      <div class="form-group"><label>Precio por noche</label><input type="number" id="res-precio" placeholder="510000" oninput="calcTotalReserva()"></div>
+      <div class="form-group"><label>Precio por noche</label><input type="number" id="res-precio" placeholder="auto según cabaña/temporada" oninput="calcTotalReserva()"></div>
     </div>
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:12px;">
       <p style="font-size:12px;color:var(--text3);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;">Pagos</p>
@@ -3226,6 +3226,85 @@ function precioDefaultCabana(hab, fecha) {
   return Number(cabana.precio_base) || 0;
 }
 
+// ── CASCADA DE PRECIOS (unificada) ──────────────────────────────────────────
+// Un solo lugar para calcular precio. Reemplaza el `precio × noches` disperso en
+// saveReserva / confirmCheckin / openPago / grilla. Multiplicativo encadenado:
+//   noche = base_temporada(fecha)   [o fecha_especial, override absoluto si existe]
+//   noche *= (1 + dinamico%)        // ocupación + last-minute (si precios.dinamicos.activo)
+//   noche *= (1 + finde%)           // recargo si la fecha cae en un finde/feriado configurado
+//   noche *= (1 - promo%)           // descuento si la fecha cae en una promo vigente
+//   total = noche × noches  +  Σ cargos_únicos (fijos por reserva)
+// Sin IVA: el precio es final al huésped. Con finde/promo/dinamicos/fechas_especiales
+// vacíos (estado actual), el resultado es idéntico a precioDefaultCabana → no cambia
+// la operación viva; los factores se activan a medida que se cargan en Configuración.
+
+// Ajuste dinámico % para una fecha: ocupación del día + ventana last-minute.
+function ajusteDinamicoPct(fecha, din) {
+  let pct = 0;
+  if (Array.isArray(din.ocupacion) && din.ocupacion.length) {
+    const totalCab = (DB.get('precios', {}).habitaciones || []).length || 12;
+    const ocupadas = getReservas().filter(r =>
+      (r.estado === 'confirmada' || r.estado === 'checkin') &&
+      r.entrada <= fecha && r.salida > fecha).length;
+    const ocPct = totalCab ? (ocupadas / totalCab * 100) : 0;
+    const tramo = din.ocupacion
+      .filter(t => ocPct >= Number(t.desde_pct))
+      .sort((a, b) => Number(b.desde_pct) - Number(a.desde_pct))[0];
+    if (tramo) pct += Number(tramo.ajuste_pct) || 0;
+  }
+  if (Array.isArray(din.last_minute) && din.last_minute.length) {
+    const dias = nightsBetween(today(), fecha);
+    const tramo = din.last_minute
+      .filter(t => dias <= Number(t.dias))
+      .sort((a, b) => Number(a.dias) - Number(b.dias))[0];
+    if (tramo) pct += Number(tramo.ajuste_pct) || 0;
+  }
+  return pct;
+}
+
+// Precio por noche de una cabaña en una fecha, ya con toda la cascada aplicada.
+function precioNocheCascada(hab, fecha) {
+  const precios = DB.get('precios', {});
+  fecha = fecha || today();
+  // 1) base: fecha especial (override absoluto) o precio de temporada
+  const esp = (precios.fechas_especiales || []).find(e => e.fecha === fecha);
+  let precio = esp ? (Number(esp.precio) || 0) : precioDefaultCabana(hab, fecha);
+  // 2) dinámico (ocupación + last-minute), solo si está activo
+  const din = precios.dinamicos || {};
+  if (din.activo) precio *= (1 + ajusteDinamicoPct(fecha, din) / 100);
+  // 3) recargo de finde/feriado si la fecha cae en un rango configurado
+  const finde = (precios.fines_semana_largos || []).find(f =>
+    f.fecha_inicio && f.fecha_fin && fecha >= f.fecha_inicio && fecha <= f.fecha_fin);
+  if (finde && finde.recargo_pct) precio *= (1 + Number(finde.recargo_pct) / 100);
+  // 4) promo (descuento %) vigente para la fecha
+  const promo = (precios.promociones || []).find(p =>
+    p.tipo === 'descuento_pct' && p.fecha_inicio && p.fecha_fin &&
+    fecha >= p.fecha_inicio && fecha <= p.fecha_fin);
+  if (promo && promo.valor) precio *= (1 - Number(promo.valor) / 100);
+  return Math.round(precio);
+}
+
+// Suma de cargos únicos (fijos por reserva) para una lista de ids.
+function cargosReservaTotal(cargoIds) {
+  if (!cargoIds || !cargoIds.length) return 0;
+  const cargos = DB.get('precios', {}).cargos_unicos || [];
+  return cargoIds.reduce((s, id) => {
+    const c = cargos.find(x => x.id === id);
+    return s + (c ? (Number(c.monto) || 0) : 0);
+  }, 0);
+}
+
+// Cálculo total de una reserva. Si el staff fijó un precio/noche manual
+// (precioOverride), se respeta ese en vez del sugerido por la cascada.
+function calcularPrecioReserva(hab, entrada, salida, opts = {}) {
+  const noches = Math.max(nightsBetween(entrada, salida), 0);
+  const usarOverride = opts.precioOverride != null && opts.precioOverride !== '' && Number(opts.precioOverride) > 0;
+  const precioNoche = usarOverride ? Number(opts.precioOverride) : precioNocheCascada(hab, entrada);
+  const cargosTotal = cargosReservaTotal(opts.cargos);
+  const subtotal = precioNoche * noches;
+  return { noches, precioNoche, subtotal, cargosTotal, total: subtotal + cargosTotal };
+}
+
 // Precio abreviado en miles para la grilla. 510000 → "$510k"; 637500 → "$637,5k"; <1000 → "$n".
 function fmtPrecioCorto(n) {
   n = Number(n) || 0;
@@ -3241,7 +3320,7 @@ function onHabChange() {
   const entradaEl = document.getElementById('res-entrada');
   if (!hab) return;
   // Autocompletar el precio de la cabaña elegida (visible y sobrescribible por el usuario).
-  precioEl.value = precioDefaultCabana(hab, entradaEl?.value);
+  precioEl.value = precioNocheCascada(hab, entradaEl?.value);
 }
 
 function updateBedsSelect() {
@@ -3272,14 +3351,15 @@ function updateBedsSelect() {
 }
 
 function calcTotalReserva() {
+  const hab = document.getElementById('res-hab').value;
   const precio = Number(document.getElementById('res-precio').value)||0;
   const entrada = document.getElementById('res-entrada').value;
   const salida = document.getElementById('res-salida').value;
   const pagado = Number(document.getElementById('res-pagado').value)||0;
   const moneda = document.getElementById('res-moneda').value;
   if(precio && entrada && salida) {
-    const nights = nightsBetween(entrada, salida);
-    const total = precio * Math.max(nights, 0);
+    // El precio del form es override manual del staff; la cascada suma cargos únicos.
+    const { total } = calcularPrecioReserva(hab, entrada, salida, { precioOverride: precio, cargos: [] });
     const saldo = Math.max(total - pagado, 0);
     document.getElementById('res-total-display').value = fmtMoney(total, moneda);
     document.getElementById('res-saldo-display').value = saldo > 0 ? fmtMoney(saldo, moneda) : '✓ Sin saldo';
@@ -3389,10 +3469,12 @@ async function saveReserva() {
   }
   savingReserva = true;
   // Fallback derivado de la cabaña/temporada (NO un número fijo): evita subcobrar las 9-12.
-  const precio = Number(document.getElementById('res-precio').value) || precioDefaultCabana(hab, entrada);
+  const precio = Number(document.getElementById('res-precio').value) || precioNocheCascada(hab, entrada);
   const moneda = document.getElementById('res-moneda').value;
   const nights = nightsBetween(entrada, salida);
-  const totalEstadia = precio * nights;
+  // Total por la cascada unificada: precio/noche (override del staff) × noches + cargos únicos.
+  const cargosReserva = [];
+  const { total: totalEstadia } = calcularPrecioReserva(hab, entrada, salida, { precioOverride: precio, cargos: cargosReserva });
   const pagado = Number(document.getElementById('res-pagado').value)||0;
   const saldo = Math.max(totalEstadia - pagado, 0);
   const estadoPago = document.getElementById('res-estado-pago').value;
@@ -3413,6 +3495,7 @@ async function saveReserva() {
     guestName: huespedData ? huespedData.nombre+' '+huespedData.apellido : h,
     hab, cabaña, entrada, salida,
     precio, moneda,
+    total: totalEstadia, cargos: cargosReserva,
     pago: document.getElementById('res-pago').value,
     plataforma: document.getElementById('res-plat').value,
     estado: document.getElementById('res-estado').value,
@@ -3483,8 +3566,9 @@ async function confirmCheckin() {
   // Cobrar el saldo pendiente al hacer check-in. Con seña previa (flujo normal
   // 30% + saldo), el 70% restante entra a caja recién acá; el gate anterior
   // (pagado===0) hacía que ese saldo nunca se registrara y se perdiera plata.
-  const nights = nightsBetween(r.entrada, r.salida);
-  const montoTotal = r.precio * nights;
+  // Total autoritativo: el guardado en la reserva (cascada) o, para reservas viejas
+  // sin `total`, se recalcula con la cascada respetando el precio/noche guardado.
+  const montoTotal = Number(r.total) || calcularPrecioReserva(r.hab, r.entrada, r.salida, { precioOverride: r.precio, cargos: r.cargos }).total;
   const yaPagado = Number(r.pagado) || 0;
   const saldoPendiente = Math.max(montoTotal - yaPagado, 0);
   if (saldoPendiente > 0) {
@@ -3520,8 +3604,7 @@ function openPago(rid) {
   const reservas = getReservas();
   const r = reservas.find(x=>x.id===rid);
   if(!r) return;
-  const nights = nightsBetween(r.entrada, r.salida);
-  const total = r.precio * nights;
+  const total = Number(r.total) || calcularPrecioReserva(r.hab, r.entrada, r.salida, { precioOverride: r.precio, cargos: r.cargos }).total;
   document.getElementById('pago-res-id').value = rid;
   document.getElementById('pago-monto').value = r.saldo || '';
   document.getElementById('pago-concepto').value = `Saldo estadía ${getHuespedNombre(r.huespedId)}`;
@@ -5590,7 +5673,7 @@ function renderGrilla() {
           html += `<td class="grilla-cell ${cls}${isToday ? ' gc-today' : ''}" colspan="${span}" onclick="cycleBed('${b.id}')"><div class="grilla-span ${res.estado}" title="${nombre}">${nombre}${debe}</div></td>`;
           i += span - 1;
         } else {
-          const pr = precioDefaultCabana(hs, f);
+          const pr = precioNocheCascada(hs, f);
           const inner = pr > 0 ? `<div class="grilla-precio">${fmtPrecioCorto(pr)}</div>` : '';
           html += `<td class="grilla-cell gc-free${isToday ? ' gc-today' : ''}" data-cab="${b.id}" data-fecha="${f}" onclick="grillaCellClick(this,'${b.id}','${hs}','${f}')" style="cursor:pointer">${inner}</td>`;
         }
@@ -5678,8 +5761,8 @@ function openReservaDesdeGrilla(hab, cabId, entrada, salida) {
   document.getElementById('res-salida').value = salida;
   updateBedsSelect();
   document.getElementById('res-cabaña').value = cabId;
-  // Precio por temporada (NO hardcodeado)
-  document.getElementById('res-precio').value = precioDefaultCabana(hab, entrada);
+  // Precio por noche con la cascada completa (temporada + finde/promo/dinámicos si hay)
+  document.getElementById('res-precio').value = precioNocheCascada(hab, entrada);
   // Reset del resto
   document.getElementById('res-pagado').value = '';
   document.getElementById('res-notas').value = '';
@@ -6804,6 +6887,7 @@ Object.assign(window, {
   limpiarDuplicados,
   showPublicFormLink, copyPublicLink, openPublicFormPreview, submitPublicRegistration, previewPubDoc, showPublicRegistrationForm,
   updateBedsSelect, onEntradaChange, calcTotalReserva, calcExtension, toggleHorarioCobro, toggleHorarioCobroToggle: toggleHorarioCobro,
+  calcularPrecioReserva, precioNocheCascada, cargosReservaTotal, ajusteDinamicoPct,
   cycleBed, showGuestDetail, previewDoc, populateRolSelect,
   switchPricingTab, switchAcctTab, cerrarCaja,
   addTemporada, deleteTemporada, updateTemporada, updateHabPrecio, updatePlatPrecio,
