@@ -97,9 +97,12 @@ Subí también los `.md` de `/docs/` si hay cambios importantes.
 - [ ] **Facturación electrónica ARCA (WSFEv1)** — Factura B/A con desglose de IVA, adaptando
   el skill `afip-facturacion`, corriendo en Hetzner vía n8n. Hoy solo hay flags manuales
   (`facturado`/`nroComprobante`); no se emiten comprobantes. Ver TAREAS.md (Bloque 4).
-- [ ] **Staging/validación**: los formularios públicos (`checkin.html`/`guest-register.html`)
-  **todavía escriben en Firestore**, sin auth anónima ni nodo `/cabanas/pendientes` — sin
-  implementar. Migrar a un nodo de staging en RTDB + bandeja de pendientes en el admin.
+- [x] **Staging/validación (HECHO)**: los formularios públicos (`checkin.html`/`guest-register.html`)
+  ahora escriben en RTDB `/cabanas/pendientes` vía **Anonymous Auth** (cero Firestore). El staff
+  valida y promueve desde la **Bandeja de Pendientes** en el admin. Pre check-in lee el nodo puntual
+  `/cabanas/checkin_tokens/{token}`. Reglas nuevas en `security/database.rules*.json`.
+  > ⚠️ **Deploy manual pendiente (Leonardo):** 1º publicar las reglas nuevas, 2º habilitar el
+  > proveedor **Anonymous** en la consola. NUNCA al revés (con las reglas viejas un anónimo tendría acceso total).
 - [ ] **Reglas de seguridad de Firebase** (RTDB + Storage) por rol.
 - [ ] **Bot → `mibot247/botcontrol` + n8n (Hetzner)** (multi-tenant; el chat embebido del browser
   queda como fallback). WhatsApp / Telegram / Instagram-Facebook se conectan desde ahí.
@@ -147,7 +150,7 @@ El sistema usa **Firebase Realtime Database** (NO Firestore).
 - Proyecto: `sistema-de-reservas-d9e54`
 - Path: `/cabanas/`
 - Acceso vía helper `DB.get(k, def)` / `DB.set(k, v)` sobre un `cache` local
-- Nodos actuales: `reservas, huespedes, beds, precios, roles, usuarios, pipeline, conversaciones, movimientos, cierres, categorias, proveedores, recurrentes, presupuestos, auditoria, tipo_cambio_historial, knowledge_base, bot_config, config_groq_key, init_cabanas`
-  *(no existe `/cabanas/pendientes`: el flujo de staging aún no se implementó.)*
-- El Firestore que se creó al inicio existe pero NO se usa
+- Nodos actuales: `reservas, huespedes, beds, precios, roles, usuarios, pipeline, conversaciones, movimientos, cierres, categorias, proveedores, recurrentes, presupuestos, auditoria, tipo_cambio_historial, knowledge_base, bot_config, pendientes, checkin_tokens, config_groq_key, init_cabanas`
+  *(`pendientes` = staging de los formularios públicos; `checkin_tokens` = doc puntual por token de pre check-in. Foto DNI en el nodo top-level `/fotos_huespedes/{id}`.)*
+- El Firestore que se creó al inicio existe pero **ya NO se usa** (los formularios públicos migraron a RTDB)
 - Las reglas del RTDB tienen fecha de expiración — revisar si expiraron

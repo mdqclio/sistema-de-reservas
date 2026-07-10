@@ -6,48 +6,48 @@
 <title>Pre Check-in — Puerto Delfín</title>
 
 <script type="module">
-  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-  import { getFirestore, collection, query, where, getDocs, updateDoc, doc, serverTimestamp }
-    from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+  // Formulario PÚBLICO de pre check-in.
+  // Lee SOLO /cabanas/checkin_tokens/{token} (path puntual) para saludar y precargar.
+  // Escribe en /cabanas/pendientes/{pushKey} vía Firebase Anonymous Auth.
+  // NO lee /cabanas/reservas (staff-only) ni escribe en ella: el staff promueve.
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js';
+  import { getDatabase, ref, get, push, set } from 'https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js';
+  import { getAuth, signInAnonymously } from 'https://www.gstatic.com/firebasejs/12.10.0/firebase-auth.js';
 
   const firebaseConfig = {
     apiKey: "AIzaSyBO6nDGdYWHWd5CQiYnbNojq8Yi7i1YJRc",
     authDomain: "sistema-de-reservas-d9e54.firebaseapp.com",
+    databaseURL: "https://sistema-de-reservas-d9e54-default-rtdb.firebaseio.com",
     projectId: "sistema-de-reservas-d9e54",
     storageBucket: "sistema-de-reservas-d9e54.firebasestorage.app",
     messagingSenderId: "461330609922",
     appId: "1:461330609922:web:70c6726069e21cf810341b"
   };
 
-  const app = initializeApp(firebaseConfig);
-  const db  = getFirestore(app);
+  const app  = initializeApp(firebaseConfig);
+  const db   = getDatabase(app);
+  const auth = getAuth(app);
+  const $    = id => document.getElementById(id);
 
-  const $ = id => document.getElementById(id);
-
-  // Leer token de la URL
+  // Token de la URL
   const params = new URLSearchParams(window.location.search);
   const token  = params.get('token');
-
-  let reservationId = null;
-  let reservationData = null;
+  let tokenData = null;
 
   async function init() {
-    if (!token) { showError('Link inválido. Pedile a la cabaña un nuevo link.'); return; }
+    if (!token) { showError('Link inválido. Pedile a la recepción un nuevo link.'); return; }
 
-    // Buscar la reserva por token
-    const snap = await getDocs(query(collection(db, 'reservations'), where('checkinToken', '==', token)));
-    if (snap.empty) { showError('Link inválido o expirado.'); return; }
+    // Auth anónima primero (las reglas exigen auth != null para leer el token).
+    try { await signInAnonymously(auth); }
+    catch(e) { console.error('anon auth error', e); showError('No se pudo conectar. Probá de nuevo en un momento.'); return; }
 
-    const d = snap.docs[0];
-    reservationId   = d.id;
-    reservationData = d.data();
+    // Lectura de UN SOLO path: el token puntual. No se puede listar el nodo.
+    let snap;
+    try { snap = await get(ref(db, 'cabanas/checkin_tokens/' + token)); }
+    catch(e) { showError('Link inválido o expirado.'); return; }
+    if (!snap.exists()) { showError('Link inválido o expirado.'); return; }
 
-    // Si ya completó los datos
-    if (reservationData.guestCheckinDone) {
-      showDone();
-      return;
-    }
-
+    tokenData = snap.val();
     renderForm();
   }
 
@@ -59,43 +59,49 @@
 
   function showDone() {
     $('loader').style.display = 'none';
+    $('formBox').style.display = 'none';
     $('doneBox').style.display = 'block';
   }
 
   function renderForm() {
     $('loader').style.display = 'none';
 
-    const r = reservationData;
-    // Pre-llenar con datos que ya tiene la reserva
-    $('fName').value    = r.guestName    || '';
-    $('fPhone').value   = r.guestPhone   || '';
-    $('fEmail').value   = r.guestEmail   || '';
-    $('fDoc').value     = r.guestDoc     || '';
-    $('fAddress').value = r.guestAddress || '';
-    $('fCity').value    = r.guestCity    || '';
-    $('fPets').value    = r.guestPets    || '';
-    $('fPlate').value   = r.guestPlate   || '';
-    $('fGuests').value  = r.guests       || 1;
+    const t = tokenData;
+    // Precargar el nombre (el resto lo completa el huésped).
+    $('fName').value = t.guestName || '';
 
-    // Info de la reserva
     const fmtDate = d => d ? new Date(d+'T00:00:00').toLocaleDateString('es-AR') : '';
     $('resInfo').innerHTML = `
       <div class="res-badge">
-        <span>🏡 ${r.unitId ? r.unitId.replace('c','Cabaña ') : ''}</span>
-        <span>📅 ${fmtDate(r.checkIn)} → ${fmtDate(r.checkOut)}</span>
-        <span>👥 ${r.guests || ''} personas</span>
+        <span>🏡 ${t.hab ? 'Cabaña ' + t.hab : ''}</span>
+        <span>📅 ${fmtDate(t.entrada)} → ${fmtDate(t.salida)}</span>
       </div>`;
 
     $('formBox').style.display = 'block';
   }
 
-  // Convertir imagen a base64
-  function fileToBase64(file) {
-    return new Promise((res, rej) => {
-      const reader = new FileReader();
-      reader.onload  = () => res(reader.result);
-      reader.onerror = rej;
-      reader.readAsDataURL(file);
+  // Compresión en cliente (canvas, máx ~1000px, JPEG 0.7) — mismo patrón que el admin.
+  function compressImageToDataUrl(file, maxW = 1000, q = 0.7) {
+    return new Promise((resolve, reject) => {
+      try {
+        const reader = new FileReader();
+        reader.onload = e => {
+          const img = new Image();
+          img.onload = () => {
+            const scale = Math.min(1, maxW / img.width);
+            const w = Math.round(img.width * scale);
+            const h = Math.round(img.height * scale);
+            const canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL('image/jpeg', q));
+          };
+          img.onerror = reject;
+          img.src = e.target.result;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      } catch(err) { reject(err); }
     });
   }
 
@@ -103,11 +109,14 @@
   $('fDniPhoto').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (file.size > 3 * 1024 * 1024) { alert('La foto no puede superar 3MB'); e.target.value=''; return; }
-    const b64 = await fileToBase64(file);
-    $('dniPreview').src = b64;
-    $('dniPreview').style.display = 'block';
-    $('dniPreviewWrap').style.display = 'block';
+    if (file.size > 10 * 1024 * 1024) { alert('La foto no puede superar 10MB'); e.target.value=''; return; }
+    const reader = new FileReader();
+    reader.onload = ev => {
+      $('dniPreview').src = ev.target.result;
+      $('dniPreview').style.display = 'block';
+      $('dniPreviewWrap').style.display = 'block';
+    };
+    reader.readAsDataURL(file);
   });
 
   window.submitForm = async () => {
@@ -115,49 +124,44 @@
     btn.disabled = true;
     btn.textContent = 'Enviando...';
 
-    const name    = $('fName').value.trim();
-    const phone   = $('fPhone').value.trim();
-    const email   = $('fEmail').value.trim();
-    const dni     = $('fDoc').value.trim();
-    const address = $('fAddress').value.trim();
-    const city    = $('fCity').value.trim();
+    const nombre    = $('fName').value.trim();
+    const dni       = $('fDoc').value.trim();
+    const tel       = $('fPhone').value.trim();
+    const email     = $('fEmail').value.trim();
+    const direccion = $('fAddress').value.trim();
+    const ciudad    = $('fCity').value.trim();
+    const mascotas  = $('fPets').value.trim();
+    const patente   = $('fPlate').value.trim();
+    const pasajeros = parseInt($('fGuests').value) || 1;
 
-    if (!name || !dni || !address) {
+    if (!nombre || !dni || !direccion) {
       alert('Completá al menos nombre, DNI y dirección.');
       btn.disabled = false;
-      btn.textContent = 'Confirmar datos';
+      btn.textContent = '✅ Confirmar datos';
       return;
     }
 
-    let dniPhotoBase64 = '';
-    const file = $('fDniPhoto').files[0];
-    if (file) {
-      try { dniPhotoBase64 = await fileToBase64(file); }
-      catch(e) { console.warn('Error foto DNI', e); }
-    }
-
     try {
-      await updateDoc(doc(db, 'reservations', reservationId), {
-        guestName:       name,
-        guestPhone:      phone,
-        guestEmail:      email,
-        guestDni:        dni,
-        guestDoc:        dni,
-        guestAddress:    address,
-        guestCity:       city,
-        guestPets:       $('fPets').value.trim(),
-        guestPlate:      $('fPlate').value.trim(),
-        guests:          parseInt($('fGuests').value) || 1,
-        guestDniPhoto:   dniPhotoBase64,
-        guestCheckinDone: true,
-        checkinDoneAt:   serverTimestamp()
-      });
-      $('formBox').style.display = 'none';
+      let fotoDni = '';
+      const file = $('fDniPhoto').files[0];
+      if (file) {
+        try { fotoDni = await compressImageToDataUrl(file, 1000, 0.7); }
+        catch(e) { console.warn('Error comprimiendo foto DNI', e); }
+      }
+
+      const datos = { nombre, dni, tel, email, direccion, ciudad, mascotas, patente, pasajeros };
+      const rec = { tipo: 'precheckin', token, datos, creado: Date.now(), estado: 'pendiente' };
+      if (fotoDni) rec.fotoDni = fotoDni;
+
+      // Push key de Firebase + escritura por hijo (NUNCA set del nodo entero).
+      const key = push(ref(db, 'cabanas/pendientes')).key;
+      await set(ref(db, 'cabanas/pendientes/' + key), rec);
+
       showDone();
     } catch(e) {
-      alert('Error al enviar: ' + e.message);
+      alert('Error al enviar: ' + (e?.message || e));
       btn.disabled = false;
-      btn.textContent = 'Confirmar datos';
+      btn.textContent = '✅ Confirmar datos';
     }
   };
 
@@ -354,7 +358,7 @@ html, body { min-height: 100vh; background: var(--bg); color: var(--text);
     <!-- Foto DNI -->
     <div class="card">
       <div class="card-title">Foto del DNI</div>
-      <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Sacá una foto del frente de tu DNI (o subí una imagen). Máximo 3MB.</p>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Sacá una foto del frente de tu DNI (o subí una imagen).</p>
       <label class="upload-area" for="fDniPhoto">
         <input type="file" id="fDniPhoto" accept="image/*" capture="environment">
         <div class="upload-icon">📷</div>

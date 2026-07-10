@@ -601,6 +601,9 @@ td.acciones .btn:last-child { margin-right: 0; }
       <div class="nav-item" onclick="showSection('huespedes');closeSidebar()" id="nav-huespedes">
         <span class="icon">👤</span> Huéspedes
       </div>
+      <div class="nav-item" onclick="showSection('pendientes');closeSidebar()" id="nav-pendientes" style="display:none;">
+        <span class="icon">📥</span> Pendientes <span id="pendientesBadge" style="display:none;background:#f59e0b;color:#1a1a1a;font-size:11px;font-weight:700;border-radius:10px;padding:1px 7px;margin-left:6px;"></span>
+      </div>
       <div class="nav-section admin-only" style="display:none;">Administración</div>
       <div class="nav-item admin-only" onclick="showSection('contabilidad');closeSidebar()" id="nav-contabilidad" style="display:none;">
         <span class="icon">📒</span> Contabilidad
@@ -940,6 +943,19 @@ td.acciones .btn:last-child { margin-right: 0; }
 
     <!-- LOG DE ACTIVIDAD -->
     <div id="section-log" class="section"><div id="logContent"></div></div>
+
+    <!-- BANDEJA DE PENDIENTES (staging de formularios públicos) -->
+    <div id="section-pendientes" class="section">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
+        <div>
+          <h2 style="font-size:20px;font-weight:600;">📥 Bandeja de Pendientes</h2>
+          <p style="font-size:13px;color:var(--text3);margin-top:2px;">Cargas de huéspedes y pre check-ins enviados desde los formularios públicos. Validá y promové cada registro.</p>
+        </div>
+      </div>
+      <div id="pendientesLista" style="display:flex;flex-direction:column;gap:10px;">
+        <p style="color:var(--text3);font-size:13px;">Cargando...</p>
+      </div>
+    </div>
 
     <!-- BASE DE CONOCIMIENTO -->
     <div id="section-knowledge" class="section">
@@ -2440,6 +2456,7 @@ async function loadAllData() {
     try { await initHuespedesLive(); } catch(e) { console.error('huespedes live init error:', e); }
     try { await initMovimientosLive(); } catch(e) { console.error('movimientos live init error:', e); }
     try { await initBedsLive(); } catch(e) { console.error('beds live init error:', e); }
+    try { attachPendientesLive(); } catch(e) { console.error('pendientes live init error:', e); }
     // Corrige tipo/mts2/capacidad de las cabañas ya cargadas (una sola vez, aislada).
     try { await migrateHabitacionesConfig(); } catch(e) { console.error('habitaciones_config migration error:', e); }
     // Migración + sync en vivo del resto de las colecciones (cada una aislada).
@@ -2660,13 +2677,16 @@ function applyRoleUI(rolKey, rolObj) {
   document.getElementById('nav-listanegra')?.style && (document.getElementById('nav-listanegra').style.display = isAdmin ? '' : 'none');
   const adminEls = document.querySelectorAll('.admin-only');
   adminEls.forEach(el => el.style.display = isAdmin ? '' : 'none');
+  // Bandeja de Pendientes: visible para admin y recepción (no admin-only).
+  const canPend = isAdmin || rolKey === 'recepcion';
+  const np = document.getElementById('nav-pendientes'); if (np) np.style.display = canPend ? '' : 'none';
 }
 
 // ===================== NAVIGATION =====================
 const sectionTitles = {
   dashboard:'Dashboard', mapa:'Mapa de Cabañas', reservas:'Reservas',
   checkin:'Check-In / Check-Out', pipeline:'Pipeline CRM', huespedes:'Huéspedes', precios:'Gestión de Precios',
-  grilla:'Grilla de Reservas', listanegra:'Lista Negra', contabilidad:'Contabilidad', caja:'Caja Diaria', usuarios:'Usuarios del Sistema', roles:'Roles y Permisos', log:'Log de Actividad', knowledge:'Base de Conocimiento', conversaciones:'Conversaciones', botconfig:'Configuración del Bot'
+  grilla:'Grilla de Reservas', listanegra:'Lista Negra', contabilidad:'Contabilidad', caja:'Caja Diaria', usuarios:'Usuarios del Sistema', roles:'Roles y Permisos', log:'Log de Actividad', knowledge:'Base de Conocimiento', conversaciones:'Conversaciones', botconfig:'Configuración del Bot', pendientes:'Bandeja de Pendientes'
 };
 
 function showSection(s) {
@@ -2692,6 +2712,7 @@ function showSection(s) {
   if (s === 'log') renderLog();
   if (s === 'knowledge') renderKnowledge();
   if (s === 'conversaciones') loadAllData().then(() => renderConversaciones());
+  if (s === 'pendientes') loadAllData().then(() => renderPendientes());
   if (s === 'pipeline') loadAllData().then(() => renderPipeline());
   if (s === 'botconfig') renderBotConfig();
 }
@@ -3207,6 +3228,7 @@ function renderReservas() {
         ${(canCheckin||canCheckout) ? `<button class="btn btn-ghost btn-icon" title="Cambiar cabaña" onclick="openCambioCama('${r.id}')">🔄</button>` : ''}
         ${canCheckout ? `<button class="btn btn-blue btn-icon" title="Extender días" onclick="openExtender('${r.id}')">➕</button>` : ''}
         ${(canCheckin||canCheckout) && hasSaldo ? `<button class="btn btn-green btn-icon" title="Cobrar saldo" onclick="openPago('${r.id}')">💰</button>` : ''}
+        ${canCheckin ? `<button class="btn btn-ghost btn-icon" title="Link de pre check-in" onclick="generarLinkPrecheckin('${r.id}')">🔗</button>` : ''}
         <button class="btn btn-ghost btn-icon" title="Editar" onclick="editReserva('${r.id}')">✏️</button>
         <button class="btn btn-red btn-icon" title="Eliminar" onclick="confirmDelete('reserva','${r.id}')">🗑</button>
       </td>
@@ -3731,6 +3753,8 @@ async function confirmCheckin() {
   r.llave = llave;
   r.horaCheckin = hora;
   r.obsCheckin = obs;
+  // Consumir el token de pre check-in (si existía): ya no debe poder usarse.
+  if (r.checkinToken) { try { await removeCheckinToken(r.checkinToken); } catch(e) { console.warn('no se pudo borrar checkin_token', e); } delete r.checkinToken; }
   // Cobrar el saldo pendiente al hacer check-in. Con seña previa (flujo normal
   // 30% + saldo), el 70% restante entra a caja recién acá; el gate anterior
   // (pagado===0) hacía que ese saldo nunca se registrara y se perdiera plata.
@@ -7237,6 +7261,207 @@ async function fetchCotizacionDolar(targetInputId) {
   }
 }
 
+// ============================================================================
+// BANDEJA DE PENDIENTES (staging de formularios públicos)
+// Los forms públicos (docs/checkin.html, docs/guest-register.html) escriben en
+// /cabanas/pendientes/{pushKey} vía Anonymous Auth. El staff valida y promueve.
+// La sanitización (escapeHtml) vive en el RENDER: es el punto donde se mata el XSS.
+// ============================================================================
+let pendientesData = {};
+let pendientesExpandido = {};
+
+function attachPendientesLive() {
+  onValue(ref(db, 'cabanas/pendientes'), snap => {
+    pendientesData = snap.exists() ? (snap.val() || {}) : {};
+    updatePendientesBadge();
+    if (document.getElementById('section-pendientes')?.classList.contains('active')) renderPendientes();
+  });
+}
+
+function pendientesEntries() {
+  return Object.entries(pendientesData)
+    .filter(([, v]) => v && typeof v === 'object')
+    .sort((a, b) => (b[1].creado || 0) - (a[1].creado || 0));
+}
+
+function updatePendientesBadge() {
+  const n = pendientesEntries().length;
+  const b = document.getElementById('pendientesBadge');
+  if (b) { b.textContent = n; b.style.display = n ? '' : 'none'; }
+}
+
+function togglePendiente(key) {
+  pendientesExpandido[key] = !pendientesExpandido[key];
+  renderPendientes();
+}
+
+const PEND_LABELS = { nombre:'Nombre', dni:'DNI', tel:'Teléfono', email:'Email', direccion:'Dirección', ciudad:'Ciudad', mascotas:'Mascotas', patente:'Patente', pasajeros:'Personas' };
+
+function renderPendientes() {
+  const cont = document.getElementById('pendientesLista');
+  if (!cont) return;
+  const entries = pendientesEntries();
+  if (!entries.length) {
+    cont.innerHTML = '<p style="color:var(--text3);font-size:13px;">No hay registros pendientes. 🎉</p>';
+    return;
+  }
+  cont.innerHTML = entries.map(([key, p]) => {
+    const datos = (p && p.datos && typeof p.datos === 'object') ? p.datos : {};
+    const tipoLabel = p.tipo === 'precheckin' ? '🛂 Pre check-in' : '👤 Autocarga huésped';
+    const nombre = escapeHtml(datos.nombre || '(sin nombre)');
+    const fecha = p.creado ? new Date(p.creado).toLocaleString('es-AR') : '';
+    const abierto = !!pendientesExpandido[key];
+    // TODO dato de usuario pasa por escapeHtml ANTES de innerHTML.
+    const detalle = Object.keys(PEND_LABELS)
+      .filter(k => datos[k] !== undefined && datos[k] !== '')
+      .map(k => `<div style="display:flex;gap:8px;"><span style="color:var(--text3);min-width:90px;">${PEND_LABELS[k]}</span><span>${escapeHtml(datos[k])}</span></div>`)
+      .join('');
+    const foto = p.fotoDni
+      ? `<div style="margin-top:10px;"><img src="${escapeHtml(p.fotoDni)}" alt="DNI" style="max-width:220px;max-height:160px;border-radius:8px;border:1px solid var(--border);"></div>`
+      : '';
+    return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+        <div style="cursor:pointer;flex:1;min-width:200px;" onclick="togglePendiente('${key}')">
+          <div style="font-weight:600;">${tipoLabel} — ${nombre}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px;">${escapeHtml(fecha)}${p.fotoDni ? ' · 📎 foto DNI' : ''}</div>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-green btn-sm" onclick="promoverPendiente('${key}')">✔ Promover</button>
+          <button class="btn btn-red btn-sm" onclick="rechazarPendiente('${key}')">✖ Rechazar</button>
+        </div>
+      </div>
+      ${abierto ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);font-size:13px;display:flex;flex-direction:column;gap:5px;">${detalle || '<span style="color:var(--text3)">Sin datos</span>'}${foto}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+// Nombre completo → {nombre, apellido} (primer token = nombre; resto = apellido).
+function splitNombre(full) {
+  const parts = String(full || '').trim().split(/\s+/).filter(Boolean);
+  const nombre = parts.shift() || '';
+  return { nombre, apellido: parts.join(' ') };
+}
+
+async function rechazarPendiente(key) {
+  const p = pendientesData[key];
+  if (!p) return;
+  if (!confirm('¿Rechazar y borrar este registro pendiente?')) return;
+  await remove(ref(db, 'cabanas/pendientes/' + key)); // borrado por hijo
+  auditLog('rechazar', 'Pendiente', `${p.datos?.nombre || key} · ${p.tipo || ''}`);
+  showNotif('Registro rechazado');
+  renderPendientes();
+}
+
+async function promoverPendiente(key) {
+  const p = pendientesData[key];
+  if (!p) return;
+  const datos = (p.datos && typeof p.datos === 'object') ? p.datos : {};
+  try {
+    if (p.tipo === 'precheckin') await promoverPrecheckin(key, p, datos);
+    else await promoverAutocarga(key, p, datos);
+  } catch(e) {
+    console.error('promover pendiente error', e);
+    showNotif('Error al promover: ' + (e?.message || e), 'error');
+  }
+}
+
+async function promoverPrecheckin(key, p, datos) {
+  const token = p.token;
+  if (!token) { showNotif('Pre check-in sin token; no se puede vincular a una reserva', 'error'); return; }
+  // Resolver la reserva por el token puntual.
+  let reservaId = null;
+  try { const snap = await get(ref(db, 'cabanas/checkin_tokens/' + token)); if (snap.exists()) reservaId = snap.val().reservaId; } catch(e) {}
+  const r = getReservas().find(x => x.id === reservaId);
+  if (!r) {
+    if (!confirm('No se encontró la reserva del token (¿check-out o borrada?). ¿Descartar este pendiente?')) return;
+    await remove(ref(db, 'cabanas/pendientes/' + key));
+    showNotif('Pendiente descartado (sin reserva)');
+    renderPendientes();
+    return;
+  }
+  const { nombre, apellido } = splitNombre(datos.nombre);
+  const tieneFoto = !!p.fotoDni;
+  let h = getHuespedes().find(x => x.id === r.huespedId);
+  let huespedId = r.huespedId;
+  if (!h) { huespedId = nuevoHuespedId(); h = { id: huespedId, estadias: 0 }; }
+  const huesped = {
+    ...h, id: huespedId,
+    nombre: nombre || h.nombre || '', apellido: apellido || h.apellido || '',
+    dni: datos.dni || h.dni || '', tel: datos.tel || h.tel || '', email: datos.email || h.email || '',
+    ciudad: datos.ciudad || h.ciudad || '', direccion: datos.direccion || h.direccion || '',
+    mascotas: datos.mascotas || h.mascotas || '', patente: datos.patente || h.patente || '',
+    tieneFoto: tieneFoto || h.tieneFoto || false, estadias: h.estadias || 0
+  };
+  if (tieneFoto) await writeFoto(huespedId, p.fotoDni); // /fotos_huespedes/{id} (lazy-load)
+  await writeHuesped(huesped); // escritura por hijo
+  r.huespedId = huespedId;
+  r.guestName = `${huesped.nombre} ${huesped.apellido}`.trim() || r.guestName;
+  if (datos.pasajeros) r.pasajeros = Number(datos.pasajeros) || r.pasajeros;
+  r.guestCheckinDone = true;
+  await writeReserva(r); // escritura por hijo
+  await removeCheckinToken(token); // el token ya no se necesita
+  await remove(ref(db, 'cabanas/pendientes/' + key));
+  auditLog('promover pre check-in', 'Reserva', `${r.guestName} · Cab ${r.hab}`);
+  showNotif('✅ Pre check-in promovido: ' + r.guestName);
+  renderPendientes();
+  if (document.getElementById('section-huespedes')?.classList.contains('active')) renderHuespedes();
+}
+
+async function promoverAutocarga(key, p, datos) {
+  const { nombre, apellido } = splitNombre(datos.nombre);
+  const dni = (datos.dni || '').trim();
+  const tieneFoto = !!p.fotoDni;
+  // Chequear duplicado por DNI antes de crear.
+  const existente = dni ? getHuespedes().find(h => (h.dni || '').trim() === dni) : null;
+  let huespedId;
+  if (existente) {
+    if (!confirm(`Ya existe un huésped con DNI ${dni} (${existente.nombre || ''} ${existente.apellido || ''}). ¿Actualizar sus datos con esta carga?`)) return;
+    huespedId = existente.id;
+  } else {
+    huespedId = nuevoHuespedId();
+  }
+  const base = existente || { estadias: 0 };
+  const huesped = {
+    ...base, id: huespedId,
+    nombre: nombre || base.nombre || '', apellido: apellido || base.apellido || '',
+    dni: dni || base.dni || '', tel: datos.tel || base.tel || '', email: datos.email || base.email || '',
+    ciudad: datos.ciudad || base.ciudad || '', direccion: datos.direccion || base.direccion || '',
+    mascotas: datos.mascotas || base.mascotas || '', patente: datos.patente || base.patente || '',
+    tieneFoto: tieneFoto || base.tieneFoto || false, estadias: base.estadias || 0
+  };
+  if (tieneFoto) await writeFoto(huespedId, p.fotoDni);
+  await writeHuesped(huesped); // escritura por hijo
+  await remove(ref(db, 'cabanas/pendientes/' + key));
+  auditLog(existente ? 'actualizar (autocarga)' : 'crear (autocarga)', 'Huésped', `${huesped.nombre} ${huesped.apellido}`.trim());
+  showNotif('✅ Huésped ' + (existente ? 'actualizado' : 'creado') + ': ' + huesped.nombre);
+  renderPendientes();
+  if (document.getElementById('section-huespedes')?.classList.contains('active')) renderHuespedes();
+}
+
+// ============================================================================
+// CHECKIN TOKENS: doc puntual que el form público de pre check-in lee SIN
+// acceso a /cabanas/reservas (staff-only). Escritura por hijo (path puntual).
+// ============================================================================
+async function writeCheckinToken(token, data) { await set(ref(db, 'cabanas/checkin_tokens/' + token), data); }
+async function removeCheckinToken(token) { await remove(ref(db, 'cabanas/checkin_tokens/' + token)); }
+
+async function generarLinkPrecheckin(rid) {
+  const r = getReservas().find(x => x.id === rid);
+  if (!r) { showNotif('Reserva no encontrada', 'error'); return; }
+  // Token opaco no adivinable; reusar si la reserva ya tiene uno.
+  const token = r.checkinToken || (self.crypto?.randomUUID ? crypto.randomUUID() : (nuevaReservaId() + nuevaReservaId()));
+  r.checkinToken = token;
+  await writeReserva(r); // merge por hijo
+  await writeCheckinToken(token, {
+    reservaId: r.id, hab: r.hab || '', entrada: r.entrada || '', salida: r.salida || '',
+    guestName: getHuespedNombre(r.huespedId, r) || ''
+  });
+  const url = new URL('checkin.html', location.href).href + '?token=' + token;
+  try { await navigator.clipboard.writeText(url); showNotif('🔗 Link de pre check-in copiado al portapapeles'); }
+  catch(e) { prompt('Link de pre check-in:', url); }
+  auditLog('link pre check-in', 'Reserva', `${getHuespedNombre(r.huespedId, r)} · Cab ${r.hab}`);
+}
+
 Object.assign(window, {
   doLogin, doLogout, renderKnowledge, saveKnowledgeEntry, deleteKnowledgeEntry, editKnowledgeEntry, cancelEditKnowledge, saveEditKnowledge, showSection, closeSidebar, toggleSidebar, openNuevaReserva, onHabChange,
   toggleChatFloat, initChatbot, clearChat, sendChat, sendQuickReply, saveApiKey, copyMsg, editBotMsg, saveEditedBotMsg,
@@ -7277,6 +7502,7 @@ Object.assign(window, {
   togglePerm, deleteRol, toggleUsuarioEstado,
   grillaCellClick, setHuespedMode, filtrarHuespedes, seleccionarHuesped, openReservaDesdeGrilla,
   renderConversaciones, abrirConversacion, togglePausaBot, enviarMensajeConv, convInputKey,
+  renderPendientes, togglePendiente, promoverPendiente, rechazarPendiente, generarLinkPrecheckin,
 });
 </script>
 </body>

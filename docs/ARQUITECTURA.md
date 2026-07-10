@@ -122,6 +122,25 @@ colRoles.nuevoId();     // push key de Firebase
   auditoria:   [...]            ← log de acciones (auditLog)
   tipo_cambio_historial: [...]  ← histórico de cotización del dólar
 
+  ── Staging de formularios públicos (Bloque 0 #2) ──
+  pendientes: {                 ← cuarentena de envíos públicos (Anonymous Auth, create-only)
+    "{pushKey}": {              //   push key de Firebase (NUNCA Date.now())
+      tipo: 'precheckin'|'autocarga',
+      token,                    //   solo precheckin: liga al checkin_tokens/{token}
+      datos: { nombre, dni, tel, email, direccion, ciudad, mascotas, patente, pasajeros },
+      fotoDni,                  //   dataURL comprimido (canvas ~1000px JPEG 0.7), opcional
+      creado,                   //   timestamp
+      estado: 'pendiente'
+    }
+  }
+  //   El staff valida y promueve desde la Bandeja de Pendientes (renderPendientes).
+  //   Al promover se sanitiza en el render (escapeHtml) — mata el XSS del input público.
+  checkin_tokens: {             ← doc puntual por token de pre check-in (lo escribe el staff)
+    "{token}": { reservaId, hab, entrada, salida, guestName }
+  }
+  //   checkin.html lee SOLO su token (no puede listar ni leer /cabanas/reservas, staff-only).
+  //   El token se borra al promover el pendiente o al hacer check-in.
+
   ── Chatbot ──
   knowledge_base: [ { category, question, answer } ]
   bot_config: {                 ← info del hostel editable desde la app
@@ -172,13 +191,13 @@ en el nodo `precios.habitaciones`.
 ## Módulos / secciones (`showSection`)
 
 dashboard · mapa · reservas · grilla · checkin · pipeline · conversaciones · huespedes ·
-listanegra · precios · contabilidad · caja · usuarios · roles · **log** · knowledge · botconfig
+**pendientes** · listanegra · precios · contabilidad · caja · usuarios · roles · **log** · knowledge · botconfig
 *(chatbot embebido existe pero está deprecado/fallback; se mueve a mibot247 — ver CHATBOT.md)*
 
 Agrupación del nav (`sidebarNav`):
 
 - **Principal**: Dashboard, Mapa, Reservas, Grilla
-- **Operaciones**: Check-in/out, Pipeline, Conversaciones, Huéspedes
+- **Operaciones**: Check-in/out, Pipeline, Conversaciones, Huéspedes, **Pendientes** (admin + recepción)
 - **Administración** (`admin-only`): Contabilidad, Caja, Lista Negra
 - **Configuración**: Precios (todos) · Usuarios, Roles, **Log de Actividad** (`admin-only`)
 
@@ -219,6 +238,10 @@ con filtro por entidad (`setAuditFiltro` / `currentAuditFiltro`).
 |`habBeds(hab)`                                                           |Retorna `[{id, label}]` (1 unidad por cabaña)          |
 |`camaLabel(camaId)`                                                      |Retorna “Cabaña X” — **NUNCA usar `cabañaLabel()`**    |
 |`getHuespedNombre(id, reserva)`                                          |Nombre del huésped, con fallback a `reserva.guestName` |
+|`renderPendientes()` / `togglePendiente(key)`                            |Bandeja de Pendientes: lista `/cabanas/pendientes` (detalle expandible, sanitizado con `escapeHtml`) |
+|`promoverPendiente(key)` / `rechazarPendiente(key)`                      |Promueve (precheckin→reserva del token; autocarga→huésped, dedup por DNI) o borra el registro; `auditLog` en ambas |
+|`generarLinkPrecheckin(rid)`                                             |Genera token opaco, lo guarda en la reserva + `/cabanas/checkin_tokens/{token}`, copia el link `checkin.html?token=…` |
+|`writeCheckinToken(t,d)` / `removeCheckinToken(t)`                       |Escritura/borrado por hijo del doc puntual de token (path puntual, nunca `set()` del nodo) |
 
 ## Pipeline CRM — etapas
 
@@ -248,7 +271,15 @@ llaman `renderMapa()`.
    migración usa `update()` merge, nunca `set()` de nodo entero, así no pisa hijos concurrentes.
 1. **El replace `38→12`** en adaptaciones puede romper valores CSS en px (380px→120px). Siempre verificar después.
 1. **`buildSystemPrompt()` lee del cache** — llamar `loadAllData()` antes para datos frescos.
-1. **Firebase Realtime Database, NO Firestore** — el Firestore creado al inicio no se usa.
+1. **Firebase Realtime Database, NO Firestore** — el Firestore creado al inicio ya no se usa
+   por nadie (los formularios públicos `checkin.html`/`guest-register.html` migraron a RTDB
+   con Anonymous Auth escribiendo en `/cabanas/pendientes`).
+1. **Deploy de las reglas de staging (orden estricto)** — 1º publicar
+   `security/database.rules.json` (o `database.rules.staging.json`), 2º habilitar el proveedor
+   **Anonymous** en la consola. NUNCA al revés: con las reglas viejas (`auth != null`) un
+   anónimo tendría acceso total a `/cabanas`. Las reglas nuevas exigen
+   `auth.provider !== 'anonymous'` salvo el carve-out create-only de `pendientes` y la lectura
+   puntual de `checkin_tokens/$token`.
 1. **Admin no hardcodeado** — usuarios se crean en Firebase Auth y se cargan en el nodo `usuarios`.
 1. **Handlers inline → `Object.assign(window, {...})`** — toda función usada desde un
    `onclick`/`onchange`/`oninput` inline DEBE estar registrada en el bloque `Object.assign(window, …)`

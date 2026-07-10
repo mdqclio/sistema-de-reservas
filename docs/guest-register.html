@@ -6,86 +6,108 @@
 <title>Registro de Huésped — Puerto Delfín</title>
 
 <script type="module">
-  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-  import { getFirestore, collection, addDoc, query, where, getDocs, serverTimestamp }
-    from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+  // Formulario PÚBLICO de autocarga de huésped.
+  // Escribe en RTDB /cabanas/pendientes/{pushKey} vía Firebase Anonymous Auth.
+  // NO toca reservas/huespedes: el staff valida y promueve desde la Bandeja de Pendientes.
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js';
+  import { getDatabase, ref, push, set } from 'https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js';
+  import { getAuth, signInAnonymously } from 'https://www.gstatic.com/firebasejs/12.10.0/firebase-auth.js';
 
   const firebaseConfig = {
     apiKey: "AIzaSyBO6nDGdYWHWd5CQiYnbNojq8Yi7i1YJRc",
     authDomain: "sistema-de-reservas-d9e54.firebaseapp.com",
+    databaseURL: "https://sistema-de-reservas-d9e54-default-rtdb.firebaseio.com",
     projectId: "sistema-de-reservas-d9e54",
     storageBucket: "sistema-de-reservas-d9e54.firebasestorage.app",
     messagingSenderId: "461330609922",
     appId: "1:461330609922:web:70c6726069e21cf810341b"
   };
 
-  const app = initializeApp(firebaseConfig);
-  const db  = getFirestore(app);
-  const $   = id => document.getElementById(id);
+  const app  = initializeApp(firebaseConfig);
+  const db   = getDatabase(app);
+  const auth = getAuth(app);
+  const $    = id => document.getElementById(id);
 
-  // Preview foto DNI
-  $('fDniPhoto').addEventListener('change', async e => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (file.size > 3 * 1024 * 1024) { alert('La foto no puede superar 3MB'); e.target.value=''; return; }
-    const b64 = await toBase64(file);
-    $('dniPreview').src = b64;
-    $('dniPreview').style.display = 'block';
-    $('dniPreviewWrap').style.display = 'block';
-  });
+  // Auth anónima al cargar (el proveedor lo habilita Leonardo en la consola).
+  const authReady = signInAnonymously(auth).catch(e => { console.error('anon auth error', e); });
 
-  function toBase64(file) {
-    return new Promise((res, rej) => {
-      const r = new FileReader();
-      r.onload  = () => res(r.result);
-      r.onerror = rej;
-      r.readAsDataURL(file);
+  // Compresión en cliente (canvas, máx ~1000px, JPEG 0.7) — mismo patrón que el admin.
+  function compressImageToDataUrl(file, maxW = 1000, q = 0.7) {
+    return new Promise((resolve, reject) => {
+      try {
+        const reader = new FileReader();
+        reader.onload = e => {
+          const img = new Image();
+          img.onload = () => {
+            const scale = Math.min(1, maxW / img.width);
+            const w = Math.round(img.width * scale);
+            const h = Math.round(img.height * scale);
+            const canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL('image/jpeg', q));
+          };
+          img.onerror = reject;
+          img.src = e.target.result;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      } catch(err) { reject(err); }
     });
   }
 
+  // Preview foto DNI (solo vista previa; la compresión real se hace al enviar)
+  $('fDniPhoto').addEventListener('change', async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { alert('La foto no puede superar 10MB'); e.target.value=''; return; }
+    const reader = new FileReader();
+    reader.onload = ev => {
+      $('dniPreview').src = ev.target.result;
+      $('dniPreview').style.display = 'block';
+      $('dniPreviewWrap').style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+  });
+
   window.submitForm = async () => {
     const btn = $('submitBtn');
-    const name    = $('fName').value.trim();
-    const doc_    = $('fDoc').value.trim();
-    const phone   = $('fPhone').value.trim();
+    const nombre  = $('fName').value.trim();
+    const dni     = $('fDoc').value.trim();
+    const tel     = $('fPhone').value.trim();
     const email   = $('fEmail').value.trim();
-    const address = $('fAddress').value.trim();
-    const city    = $('fCity').value.trim();
-    const pets    = $('fPets').value.trim();
-    const plate   = $('fPlate').value.trim();
+    const direccion = $('fAddress').value.trim();
+    const ciudad  = $('fCity').value.trim();
+    const mascotas = $('fPets').value.trim();
+    const patente = $('fPlate').value.trim();
 
-    if (!name || !doc_) { alert('Nombre y DNI son obligatorios'); return; }
+    if (!nombre || !dni) { alert('Nombre y DNI son obligatorios'); return; }
 
     btn.disabled = true;
     btn.textContent = 'Enviando...';
 
-    // Verificar si ya existe
-    const existing = await getDocs(query(collection(db, 'guests'), where('doc', '==', doc_)));
-
-    let dniPhoto = '';
-    const file = $('fDniPhoto').files[0];
-    if (file) {
-      try { dniPhoto = await toBase64(file); } catch(e) {}
-    }
-
-    const data = {
-      name, doc: doc_, phone, email, address, city, pets, plate,
-      dniPhoto, selfRegistered: true,
-      createdAt: serverTimestamp(), updatedAt: serverTimestamp()
-    };
-
     try {
-      if (!existing.empty) {
-        // Ya existe — actualizar
-        const { updateDoc, doc: docRef } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
-        await updateDoc(docRef(db, 'guests', existing.docs[0].id), { ...data });
-      } else {
-        await addDoc(collection(db, 'guests'), data);
+      await authReady;
+
+      let fotoDni = '';
+      const file = $('fDniPhoto').files[0];
+      if (file) {
+        try { fotoDni = await compressImageToDataUrl(file, 1000, 0.7); }
+        catch(e) { console.warn('Error comprimiendo foto DNI', e); }
       }
+
+      const datos = { nombre, dni, tel, email, direccion, ciudad, mascotas, patente };
+      const rec = { tipo: 'autocarga', datos, creado: Date.now(), estado: 'pendiente' };
+      if (fotoDni) rec.fotoDni = fotoDni;
+
+      // Push key de Firebase + escritura por hijo (NUNCA set del nodo entero).
+      const key = push(ref(db, 'cabanas/pendientes')).key;
+      await set(ref(db, 'cabanas/pendientes/' + key), rec);
+
       $('formBox').style.display = 'none';
       $('doneBox').style.display = 'block';
     } catch(e) {
-      alert('Error al enviar: ' + e.message);
+      alert('Error al enviar: ' + (e?.message || e));
       btn.disabled = false;
       btn.textContent = '✅ Registrarme';
     }
@@ -146,7 +168,7 @@ html, body { min-height:100vh; background:var(--bg); color:var(--text); font-fam
   <div id="doneBox">
     <div class="done-icon">🎉</div>
     <div class="done-title">¡Datos registrados!</div>
-    <p class="done-sub">Gracias por registrarte.<br>¡Te esperamos en Puerto Delfín! 🌊🐬</p>
+    <p class="done-sub">Gracias por registrarte.<br>El equipo del hostel confirmará tus datos.<br>¡Te esperamos en Puerto Delfín! 🌊🐬</p>
   </div>
 
   <div id="formBox">

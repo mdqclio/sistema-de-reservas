@@ -67,22 +67,23 @@
   genérica `makeLiveCollection`. Ya no se pisa ningún array entero con `DB.set`.
   *(precios y bot_config quedan como objetos de config únicos — se escriben enteros a
   propósito, no son colecciones de registros.)* Prerrequisito de Beds24: cumplido.
-- [ ] 🔴 **Completar el flujo de staging + validación** (antes era “unificar a RTDB”).
-  El diseño original ya lo preveía (la UI dice “Pendiente confirmar”), pero quedó a medias:
-  los formularios públicos escriben en Firestore y el admin solo lee RTDB.
-  > **Estado real (verificado 2026-07-10 contra el código):** NADA implementado.
-  > `docs/checkin.html` y `docs/guest-register.html` siguen usando **Firestore**
-  > (`getFirestore` + colecciones `reservations`/`guests`, `addDoc`/`updateDoc`). No hay
-  > **auth anónima** (`signInAnonymously`) en ningún archivo, no existe el nodo
-  > `/cabanas/pendientes` en RTDB, ni bandeja de “Pendientes” en el admin. Todo el ítem sigue abierto.
-  - [ ] Lo público (pre check-in + autocarga) escribe en un nodo de staging en RTDB
-    (`/cabanas/pendientes`), NO en Firestore (evita mantener 2 bases y 2 SDK). Requiere
-    habilitar **auth anónima** para que el form público pueda escribir con reglas acotadas.
-  - [ ] Bandeja “Pendientes de confirmar” en el admin que liste ese nodo.
-  - [ ] Al confirmar: validar + sanitizar y promover a `reservas` / `huespedes`.
-  - [ ] Sacar Firestore de `checkin.html` y `guest-register.html`.
-    *Beneficio extra: la cuarentena mantiene input no confiable fuera de producción
-    y el momento de promover es donde se escapa/valida el dato (mata el XSS).*
+- [x] 🔴 **Completar el flujo de staging + validación. (HECHO 2026-07-10)**
+  Los formularios públicos (`docs/checkin.html`, `docs/guest-register.html`) migraron
+  de Firestore a RTDB con **Firebase Anonymous Auth**, escribiendo por push key en el nodo
+  de staging `/cabanas/pendientes/{pushKey}`. El staff valida y promueve desde la nueva
+  **Bandeja de Pendientes** en `index.html` (visible para admin y recepción).
+  - [x] Lo público (pre check-in + autocarga) escribe en `/cabanas/pendientes` (create-only,
+    reglas acotadas), NO en Firestore. Auth anónima con `signInAnonymously` al cargar.
+  - [x] Bandeja “Pendientes” en el admin lista el nodo con detalle expandible + Promover/Rechazar.
+  - [x] Al promover: `escapeHtml` en el render (mata el XSS), promoción a `reservas`/`huespedes`
+    (precheckin vuelca a la reserva del token; autocarga crea/actualiza huésped por DNI),
+    foto DNI → `/fotos_huespedes/{id}`, `auditLog` en promover y rechazar.
+  - [x] Cero referencias a Firestore en `checkin.html` y `guest-register.html`.
+  - [x] Nodo `/cabanas/checkin_tokens/{token}` para que el pre check-in salude/precargue
+    sin leer `/cabanas/reservas` (staff-only); el token se borra al promover o al hacer check-in.
+  > **Falta (lo hace Leonardo a mano, en orden):** 1º publicar las reglas nuevas
+  > (`security/database.rules.json` / `database.rules.staging.json`), 2º habilitar el
+  > proveedor **Anonymous** en la consola de Firebase. NUNCA al revés.
 - [ ] 🔴 **Reglas de seguridad de Firebase** (RTDB + Storage), por rol.
   `pendientes` escribible por cualquiera (con límite de tamaño/tipo); `reservas`,
   `huespedes`, etc. solo staff. *Prerrequisito de salir a producción y de exponer
