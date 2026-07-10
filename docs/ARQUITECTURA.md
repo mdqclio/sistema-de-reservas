@@ -71,16 +71,29 @@ colRoles.nuevoId();     // push key de Firebase
 
   precios: {                    ← configuración de precios y catálogo de cabañas
     temporadas:        [{ id, nombre, fecha_inicio, fecha_fin, tipo, anual }]
-    fines_semana_largos: [...]
-    promociones:       [...]
+    fines_semana_largos: [{ id, nombre, fecha_inicio, fecha_fin, recargo_pct }]
+    promociones:       [{ id, nombre, fecha_inicio, fecha_fin, tipo:'descuento_pct', valor, condicion }]
+    dinamicos: {                ← precios dinámicos (objeto único, no colección)
+      activo,                   //   master on/off; si false, no se aplica ningún ajuste dinámico
+      ocupacion:   [{ id, desde_pct, ajuste_pct }],   // recargo según % ocupación del día
+      last_minute: [{ id, dias, ajuste_pct }]         // ajuste según días hasta la entrada (suele ser dto.)
+    }
+    fechas_especiales: [{ id, nombre, fecha, precio }]  // precio ABSOLUTO que reemplaza la temporada de esa noche
+    cargos_unicos:     [{ id, nombre, monto }]          // cargos FIJOS por reserva (limpieza, ropa, mascota…)
     habitaciones:      [{ hab, nombre, tipo, mts2, capacidad, precio_base, precio_alta, precio_baja, moneda }]
     plataformas:       [{ plat, descuento, comision }]   // directo 0% / booking 15% / airbnb 12%
   }
+  // Cascada de precios completa: ver docs/PRECIOS.md
 
   reservas: [ { id, huespedId, guestName, hab, cabaña, entrada, salida,
-                precio, total, pagado, estado, plataforma, notas,
+                precio, total, cargos, pagado, estado, plataforma, notas,
+                comisionRegistrada,
                 checkinToken, guestDniPhoto,
                 guestScore, guestScoreAvg, guestScoreComment } ]
+  //   precio  = precio/noche (override manual del staff; vacío = usa cascada)
+  //   total   = total autoritativo calculado por la cascada al guardar (ver PRECIOS.md)
+  //   cargos  = [id,…] de precios.cargos_unicos tildados en el modal (cargos fijos)
+  //   comisionRegistrada = flag: la comisión de plataforma ya se asentó como egreso (una sola vez)
 
   huespedes: [ { id, nombre, apellido, dni, nac, ciudad, tel, email, foto, estadias } ]
 
@@ -95,7 +108,11 @@ colRoles.nuevoId();     // push key de Firebase
   usuarios: [ { id, nombre, email, rol, estado, ultimoAcceso } ]
 
   ── Contabilidad ──
-  movimientos: [...]            ← ingresos/egresos (antes 'caja')
+  movimientos: [ { id, tipo:'ingreso'|'egreso', cat, moneda, monto, metodo, fecha, concepto,
+                   reservaId, facturado, nroComprobante } ]   ← ingresos/egresos (antes 'caja')
+  //   reservaId      = linkea el movimiento a su reserva (resumen cobrado/facturado por reserva)
+  //   facturado      = bool; el IVA en el resumen se calcula SOLO sobre movimientos facturados
+  //   nroComprobante = nº de factura/comprobante (se carga en el check-in y en movimientos)
   cierres:     [...]            ← cierres / arqueos de caja
   categorias:  [ { id, nombre, tipo: 'ingreso'|'egreso'|'devolucion'|'ambos' } ]
   proveedores: [...]
@@ -183,6 +200,10 @@ con filtro por entidad (`setAuditFiltro` / `currentAuditFiltro`).
 |`renderGrilla()`                                                         |Grilla calendario; cada reserva = UNA barra (`colspan`) con nombre+apellido centrado y "debe $X" en rojo; celdas libres muestran precio/noche y abren el modal con selección por 2 clicks |
 |`fmtPrecioCorto(n)`                                                      |Precio abreviado en miles (`$510k`, `$637,5k`)         |
 |`precioDefaultCabana(hab, fecha)`                                        |Precio por noche según temporada (alta/baja/base) desde `precios.habitaciones` |
+|`calcularPrecioReserva(hab, entrada, salida, opts)`                      |**Punto único** de cálculo de precio. Cascada multiplicativa encadenada (temporada/fecha especial → dinámico → finde → promo) + cargos únicos. Respeta `opts.precioOverride`. Devuelve `{noches, precioNoche, subtotal, cargosTotal, total}`. Ver **docs/PRECIOS.md** |
+|`precioNocheCascada(hab, fecha)` / `ajusteDinamicoPct(fecha, din)`       |Precio por noche con toda la cascada; ajuste dinámico % (ocupación + último momento) |
+|`totalReserva(r)` / `cargosReservaTotal(ids)`                            |Total autoritativo de una reserva (guardado o recalculado); suma de cargos únicos |
+|`resumenFacturacionReserva(rid)`                                         |`{cobrado, facturado, sinFacturar}` de una reserva desde sus movimientos (`reservaId`); IVA solo sobre `facturado` |
 |`doCheckin()` / `confirmCheckin()` / `doCheckout()`                      |Check-in/out                                           |
 |`renderPipeline()` / `saveLead()` / `moveLeadEtapa()`                    |CRM kanban                                             |
 |`renderHuespedes()` / `renderListaNegra()` / `getScoreBadge()`           |Huéspedes + score                                      |
