@@ -1469,6 +1469,16 @@ td.acciones .btn:last-child { margin-right: 0; }
       <label>Referencia al movimiento original</label>
       <input type="text" id="mov-ref" placeholder="Concepto o ID del movimiento original">
     </div>
+    <div class="form-row">
+      <div class="form-group" style="display:flex;align-items:center;gap:8px;padding-top:18px;">
+        <input type="checkbox" id="mov-facturado" style="accent-color:var(--accent);width:16px;height:16px;" onchange="onMovFacturadoChange()">
+        <label style="margin:0;text-transform:none;font-size:13px;color:var(--text2);">Facturado</label>
+      </div>
+      <div class="form-group" id="mov-comprobante-group" style="display:none;">
+        <label>N° comprobante</label>
+        <input type="text" id="mov-comprobante" placeholder="Ej: 0001-00001234">
+      </div>
+    </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modalMovimiento')">Cancelar</button>
       <button class="btn btn-blue" onclick="saveMovimiento()">Guardar</button>
@@ -2103,6 +2113,10 @@ function nuevoMovimientoId() {
 // Escritura por hijo: NO pisa el resto del nodo
 async function writeMovimiento(reg) {
   if (!reg || !reg.id) return;
+  // Flags de facturación: default acá para que TODO movimiento los tenga,
+  // aunque el call site (seña, saldo check-in, comisión, savePago) no los pase.
+  if (reg.facturado === undefined) reg.facturado = false;
+  if (reg.nroComprobante === undefined) reg.nroComprobante = '';
   const id = reg.id;
   ensureMovimientosObj();
   cache.movimientos[id] = reg;        // update optimista del cache
@@ -3466,21 +3480,30 @@ async function confirmCheckin() {
   r.llave = llave;
   r.horaCheckin = hora;
   r.obsCheckin = obs;
-  // Registrar pago si no había pago previo
-  if(!r.pagado || r.pagado === 0) {
-    const nights = nightsBetween(r.entrada, r.salida);
-    const montoTotal = r.precio * nights;
-    await writeMovimiento({ id:nuevoMovimientoId(), tipo:'ingreso', cat:'Reserva / Check-in', moneda:r.moneda, monto:montoTotal, metodo:r.pago, fecha:today(), concepto:`Check-in ${getHuespedNombre(r.huespedId)} - Cab.${r.hab}` }); // escritura por hijo
-    // Comisión automática de plataforma (feature 6)
+  // Cobrar el saldo pendiente al hacer check-in. Con seña previa (flujo normal
+  // 30% + saldo), el 70% restante entra a caja recién acá; el gate anterior
+  // (pagado===0) hacía que ese saldo nunca se registrara y se perdiera plata.
+  const nights = nightsBetween(r.entrada, r.salida);
+  const montoTotal = r.precio * nights;
+  const yaPagado = Number(r.pagado) || 0;
+  const saldoPendiente = Math.max(montoTotal - yaPagado, 0);
+  if (saldoPendiente > 0) {
+    await writeMovimiento({ id:nuevoMovimientoId(), tipo:'ingreso', cat:'Reserva / Check-in', moneda:r.moneda, monto:saldoPendiente, metodo:r.pago, fecha:today(), concepto:`${yaPagado>0?'Saldo':'Pago'} check-in ${getHuespedNombre(r.huespedId)} - Cab.${r.hab}` }); // escritura por hijo
+    r.pagado = montoTotal;
+    r.saldo = 0;
+    r.estadoPago = 'total';
+  }
+  // Comisión automática de plataforma: una sola vez, sobre el total, con guard
+  // anti-duplicado. Antes vivía dentro del branch pagado===0, así que las reservas
+  // con seña nunca registraban comisión (otro agujero de plata).
+  if (!r.comisionRegistrada) {
     const precios = DB.get('precios', {});
     const platData = (precios.plataformas||[]).find(p => p.plat === (r.plataforma||'directo'));
     if (platData && platData.comision > 0) {
       const comision = Math.round(montoTotal * platData.comision / 100);
       await writeMovimiento({ id:nuevoMovimientoId(), tipo:'egreso', cat:'Comisión plataforma', moneda:r.moneda, monto:comision, metodo:'transferencia', fecha:today(), concepto:`Comisión ${r.plataforma} ${platData.comision}% - Cab.${r.hab}` }); // escritura por hijo
     }
-    r.pagado = montoTotal;
-    r.saldo = 0;
-    r.estadoPago = 'total';
+    r.comisionRegistrada = true;
   }
   await writeReserva(r); // escritura por hijo
   // Actualizar estado de cabaña en beds (escritura por hijo)
@@ -4199,6 +4222,12 @@ function onMovImpuestoChange() {
   if (group) group.style.display = checked ? '' : 'none';
 }
 
+function onMovFacturadoChange() {
+  const checked = document.getElementById('mov-facturado')?.checked;
+  const group = document.getElementById('mov-comprobante-group');
+  if (group) group.style.display = checked ? '' : 'none';
+}
+
 function openMovimientoModal() {
   populateMovCats();
   populateProvSelect('mov-proveedor');
@@ -4207,6 +4236,9 @@ function openMovimientoModal() {
   document.getElementById('mov-ref-group').style.display = 'none';
   document.getElementById('mov-impuesto-pct-group').style.display = 'none';
   document.getElementById('mov-impuesto').checked = false;
+  document.getElementById('mov-facturado').checked = false;
+  document.getElementById('mov-comprobante-group').style.display = 'none';
+  document.getElementById('mov-comprobante').value = '';
   document.getElementById('mov-tipo').value = 'egreso';
   populateMovCats();
   openModal('modalMovimiento');
@@ -4722,6 +4754,8 @@ function saveMovimiento() {
   const tieneImpuesto = document.getElementById('mov-impuesto')?.checked;
   const impuestoPct = tieneImpuesto ? Number(document.getElementById('mov-impuesto-pct')?.value || 0) : null;
   const tipo = document.getElementById('mov-tipo').value;
+  const facturado = document.getElementById('mov-facturado')?.checked || false;
+  const nroComprobante = facturado ? (document.getElementById('mov-comprobante')?.value?.trim() || '') : '';
   const mov = {
     id: nuevoMovimientoId(),
     tipo,
@@ -4735,6 +4769,8 @@ function saveMovimiento() {
     impuesto: tieneImpuesto || false,
     impuestoPct: impuestoPct || null,
     ref: document.getElementById('mov-ref')?.value?.trim() || '',
+    facturado,
+    nroComprobante,
   };
   if (tc) mov.tc = tc;
   writeMovimiento(mov); // escritura por hijo
@@ -6760,7 +6796,7 @@ Object.assign(window, {
   saveProveedor, deleteProveedor, openProveedorModal, renderProveedores,
   saveRecurrente, deleteRecurrente, openRecurrenteModal, aplicarRecurrentes,
   savePresupuesto, exportarCSV, calcArqueo,
-  openMovimientoModal, onMovTipoChange, onMovMonedaChange, onMovImpuestoChange,
+  openMovimientoModal, onMovTipoChange, onMovMonedaChange, onMovImpuestoChange, onMovFacturadoChange,
   renderCuentasPorCobrar, renderPresupuesto, renderRecurrentes, renderAuditoria, setAuditFiltro, renderProveedores,
   editReserva,
   openEditHuesped, saveEditHuesped, confirmDelete, deleteHuesped, deleteReserva,
