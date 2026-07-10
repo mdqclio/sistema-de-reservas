@@ -1096,6 +1096,11 @@ td.acciones .btn:last-child { margin-right: 0; }
       </div>
       <div class="form-group"><label>Precio por noche</label><input type="number" id="res-precio" placeholder="auto según cabaña/temporada" oninput="calcTotalReserva()"></div>
     </div>
+    <div class="form-group" id="res-cargos-group" style="display:none;margin-bottom:12px;">
+      <label>Cargos únicos (opcionales)</label>
+      <div id="res-cargos-list" style="display:flex;flex-wrap:wrap;gap:14px;"></div>
+    </div>
+    <div id="res-desglose" style="font-size:12px;color:var(--text3);margin-bottom:12px;line-height:1.7;"></div>
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:12px;">
       <p style="font-size:12px;color:var(--text3);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;">Pagos</p>
       <div class="form-row" style="margin-bottom:8px;">
@@ -3382,6 +3387,28 @@ function updateBedsSelect() {
   }).join('');
 }
 
+// Ids de los cargos únicos tildados en el form de reserva.
+function reservaCargosSeleccionados() {
+  return Array.from(document.querySelectorAll('#res-cargos-list input[type=checkbox]:checked')).map(el => el.value);
+}
+
+// Pinta los checkboxes de cargos únicos definidos en Config (apagados por default).
+// `selected` pre-tilda los que ya tenía la reserva (al editar).
+function renderResCargos(selected) {
+  selected = selected || [];
+  const cargos = (DB.get('precios', {}).cargos_unicos) || [];
+  const group = document.getElementById('res-cargos-group');
+  const list = document.getElementById('res-cargos-list');
+  if (!group || !list) return;
+  if (!cargos.length) { group.style.display = 'none'; list.innerHTML = ''; return; }
+  group.style.display = '';
+  list.innerHTML = cargos.map(c => `
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--text2);text-transform:none;">
+      <input type="checkbox" value="${c.id}" ${selected.includes(c.id)?'checked':''} onchange="calcTotalReserva()" style="width:15px;height:15px;accent-color:var(--accent);">
+      ${escapeHtml(c.nombre||'Cargo')} <span style="color:var(--text3)">(${fmtMoney(Number(c.monto)||0)})</span>
+    </label>`).join('');
+}
+
 function calcTotalReserva() {
   const hab = document.getElementById('res-hab').value;
   const precio = Number(document.getElementById('res-precio').value)||0;
@@ -3389,12 +3416,26 @@ function calcTotalReserva() {
   const salida = document.getElementById('res-salida').value;
   const pagado = Number(document.getElementById('res-pagado').value)||0;
   const moneda = document.getElementById('res-moneda').value;
+  const desg = document.getElementById('res-desglose');
   if(precio && entrada && salida) {
-    // El precio del form es override manual del staff; la cascada suma cargos únicos.
-    const { total } = calcularPrecioReserva(hab, entrada, salida, { precioOverride: precio, cargos: [] });
+    // El precio del form es override manual del staff; la cascada suma los cargos tildados.
+    const cargos = reservaCargosSeleccionados();
+    const { noches, subtotal, cargosTotal, total } = calcularPrecioReserva(hab, entrada, salida, { precioOverride: precio, cargos });
     const saldo = Math.max(total - pagado, 0);
     document.getElementById('res-total-display').value = fmtMoney(total, moneda);
     document.getElementById('res-saldo-display').value = saldo > 0 ? fmtMoney(saldo, moneda) : '✓ Sin saldo';
+    if (desg) {
+      const cargosCfg = (DB.get('precios', {}).cargos_unicos) || [];
+      const lineas = cargos.map(id => {
+        const c = cargosCfg.find(x=>x.id===id);
+        return c ? `<div>+ ${escapeHtml(c.nombre)}: ${fmtMoney(Number(c.monto)||0, moneda)}</div>` : '';
+      }).join('');
+      desg.innerHTML = `<div>${fmtMoney(precio, moneda)} × ${noches} noche${noches===1?'':'s'} = ${fmtMoney(subtotal, moneda)}</div>`
+        + lineas
+        + (cargosTotal > 0 ? `<div style="color:var(--text2);font-weight:600;margin-top:2px;">Total: ${fmtMoney(total, moneda)}</div>` : '');
+    }
+  } else if (desg) {
+    desg.innerHTML = '';
   }
 }
 
@@ -3416,6 +3457,7 @@ function openNuevaReserva() {
   document.getElementById('res-notas').value = '';
   document.getElementById('res-pasajeros').value = '';
   document.getElementById('res-desayuno').value = 'si';
+  renderResCargos([]);
   calcTotalReserva();
   openModal('modalReserva');
 }
@@ -3447,6 +3489,7 @@ function editReserva(rid) {
   document.getElementById('res-notas').value = r.notas || '';
   document.getElementById('res-pasajeros').value = r.pasajeros || '';
   document.getElementById('res-desayuno').value = r.desayuno === false ? 'no' : 'si';
+  renderResCargos(r.cargos || []);
   calcTotalReserva();
   openModal('modalReserva');
 }
@@ -3505,7 +3548,7 @@ async function saveReserva() {
   const moneda = document.getElementById('res-moneda').value;
   const nights = nightsBetween(entrada, salida);
   // Total por la cascada unificada: precio/noche (override del staff) × noches + cargos únicos.
-  const cargosReserva = [];
+  const cargosReserva = reservaCargosSeleccionados();
   const { total: totalEstadia } = calcularPrecioReserva(hab, entrada, salida, { precioOverride: precio, cargos: cargosReserva });
   const pagado = Number(document.getElementById('res-pagado').value)||0;
   const saldo = Math.max(totalEstadia - pagado, 0);
@@ -6013,6 +6056,7 @@ function openReservaDesdeGrilla(hab, cabId, entrada, salida) {
   document.getElementById('res-notas').value = '';
   document.getElementById('res-pasajeros').value = '';
   document.getElementById('res-desayuno').value = 'si';
+  renderResCargos([]);
   calcTotalReserva();
   openModal('modalReserva');
 }
@@ -7132,7 +7176,7 @@ Object.assign(window, {
   limpiarDuplicados,
   showPublicFormLink, copyPublicLink, openPublicFormPreview, submitPublicRegistration, previewPubDoc, showPublicRegistrationForm,
   updateBedsSelect, onEntradaChange, calcTotalReserva, calcExtension, toggleHorarioCobro, toggleHorarioCobroToggle: toggleHorarioCobro,
-  calcularPrecioReserva, precioNocheCascada, cargosReservaTotal, ajusteDinamicoPct,
+  calcularPrecioReserva, precioNocheCascada, cargosReservaTotal, ajusteDinamicoPct, renderResCargos, reservaCargosSeleccionados,
   cycleBed, showGuestDetail, previewDoc, populateRolSelect,
   switchPricingTab, switchAcctTab, cerrarCaja,
   addTemporada, deleteTemporada, updateTemporada, updateHabPrecio, updatePlatPrecio,

@@ -32,9 +32,14 @@
     calculado solo sobre `facturado:true`** (`facturado/1.21*0.21`).
   - Resumen por reserva en la lista: total / facturado / sin facturar
     (`resumenFacturacionReserva`).
+- ✨ **Selector de cargos únicos por reserva**: checkboxes en el form de reserva
+  (los cargos definidos en Config aparecen tildables, apagados por default),
+  `saveReserva` manda los elegidos en `opts.cargos` y los guarda en `r.cargos`;
+  desglose del precio (precio × noches + cada cargo = total) debajo del precio.
+  Al editar, se pre-tildan los cargos que la reserva ya tenía.
 
-> Pendiente de esta línea: selector de cargos únicos **por reserva** en el formulario
-> (el motor ya los soporta vía `opts.cargos`, pero la UI de reserva todavía manda `[]`).
+> Línea de precios + facturación: **completa**. Próximos frentes (otras líneas del
+> backlog): staging+validación, reglas de seguridad de Firebase, Beds24, bot.
 
 ## ✅ Hecho esta sesión (v1.1)
 
