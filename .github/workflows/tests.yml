@@ -1,0 +1,34 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Tests del motor de precios (standalone, sin npm install).
+      - name: Tests de precios
+        run: node tests/precios.test.mjs
+
+      # Chequeo de sintaxis del <script type="module"> de index.html
+      # (mismo patrón que docs/START SESSION.md).
+      - name: Sintaxis de index.html
+        run: |
+          node --input-type=module << 'EOF'
+          import { readFileSync, writeFileSync } from 'fs';
+          const c = readFileSync('index.html', 'utf8');
+          const s = c.indexOf('<script type="module">');
+          const e = c.lastIndexOf('</script>');
+          writeFileSync('/tmp/t.mjs', c.slice(s + 22, e));
+          EOF
+          node --check /tmp/t.mjs
