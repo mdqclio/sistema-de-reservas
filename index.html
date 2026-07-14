@@ -2751,7 +2751,17 @@ function fmtMoney(m, mon='ARS') {
   if(mon==='USD') return 'USD '+Number(m).toLocaleString('es-AR');
   return '$'+Number(m).toLocaleString('es-AR');
 }
-function today() { return new Date().toISOString().split('T')[0]; }
+function today() {
+  // Fecha LOCAL del dispositivo (NO UTC): toISOString() adelanta el día entre las
+  // 21:00 y las 00:00 hora argentina, metiendo cobros nocturnos en la caja de mañana.
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+// Estados canónicos de una RESERVA (única fuente de verdad para comparaciones).
+// No aplica a usuarios ('activo'/'inactivo'), beds ('maintenance'/'dirty'/'free')
+// ni pipeline/mensajes ('pendiente', 'consulta', …).
+const ESTADO_RESERVA = Object.freeze({ CONFIRMADA:'confirmada', CHECKIN:'checkin', CHECKOUT:'checkout', CANCELADA:'cancelada' });
 function fmtFecha(iso) {
   if (!iso) return '';
   const [y, m, d] = iso.substring(0, 10).split('-');
@@ -2796,7 +2806,7 @@ function pagoBadge(r) {
 function renderDashboard() {
   const reservas = getReservas();
   const tod = today();
-  const occupied = reservas.filter(r=>r.estado==='checkin').length;
+  const occupied = reservas.filter(r=>r.estado===ESTADO_RESERVA.CHECKIN).length;
   document.getElementById('stat-occ').textContent = `${occupied}/12`;
   document.getElementById('stat-occ-pct').textContent = Math.round(occupied/12*100)+'% ocupación';
 
@@ -2806,13 +2816,13 @@ function renderDashboard() {
   document.getElementById('stat-today-income').textContent = fmtMoney(ingARS);
   document.getElementById('stat-today-income-usd').textContent = 'USD '+ingUSD.toLocaleString('es-AR');
 
-  const checkinHoy = reservas.filter(r=>r.entrada===tod&&r.estado==='confirmada').length;
-  const checkoutHoy = reservas.filter(r=>r.salida===tod&&r.estado==='checkin').length;
+  const checkinHoy = reservas.filter(r=>r.entrada===tod&&r.estado===ESTADO_RESERVA.CONFIRMADA).length;
+  const checkoutHoy = reservas.filter(r=>r.salida===tod&&r.estado===ESTADO_RESERVA.CHECKIN).length;
   document.getElementById('stat-checkin-today').textContent = checkinHoy;
   document.getElementById('stat-checkout-today').textContent = checkoutHoy;
 
-  const proxCheckins = reservas.filter(r=>r.estado==='confirmada').sort((a,b)=>a.entrada>b.entrada?1:-1).slice(0,5);
-  const proxCheckouts = reservas.filter(r=>r.estado==='checkin').sort((a,b)=>a.salida>b.salida?1:-1).slice(0,5);
+  const proxCheckins = reservas.filter(r=>r.estado===ESTADO_RESERVA.CONFIRMADA).sort((a,b)=>a.entrada>b.entrada?1:-1).slice(0,5);
+  const proxCheckouts = reservas.filter(r=>r.estado===ESTADO_RESERVA.CHECKIN).sort((a,b)=>a.salida>b.salida?1:-1).slice(0,5);
 
   document.getElementById('dash-checkins').innerHTML = proxCheckins.length
     ? proxCheckins.map(r=>`<tr>
@@ -2926,7 +2936,7 @@ function renderDashboardCharts() {
     let nightsOcup = 0;
     for (let day = 1; day <= diasMes; day++) {
       const ds = `${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-      const ocup = reservas.filter(r => r.estado !== 'checkout' && r.entrada <= ds && r.salida > ds).length;
+      const ocup = reservas.filter(r => r.estado !== ESTADO_RESERVA.CHECKOUT && r.entrada <= ds && r.salida > ds).length;
       nightsOcup += ocup;
     }
     ocupPct.push(Math.round(nightsOcup / (diasMes * 12) * 100));
@@ -3024,7 +3034,7 @@ function renderMapa(fechaVer) {
     const allBedIds = beds.map(b => b.id);
     const occupiedBeds = reservas.filter(r =>
       allBedIds.includes(r.cabaña) &&
-      (r.estado === 'checkin' || r.estado === 'confirmada') &&
+      (r.estado === ESTADO_RESERVA.CHECKIN || r.estado === ESTADO_RESERVA.CONFIRMADA) &&
       r.entrada.substring(0,10) <= fechaConsulta && r.salida.substring(0,10) > fechaConsulta
     ).map(r => r.cabaña);
 
@@ -3054,10 +3064,10 @@ function renderMapa(fechaVer) {
             if(isOccupied) {
               const resActiva = reservas.find(r =>
                 r.cabaña === b.id &&
-                (r.estado === 'checkin' || r.estado === 'confirmada') &&
+                (r.estado === ESTADO_RESERVA.CHECKIN || r.estado === ESTADO_RESERVA.CONFIRMADA) &&
                 r.entrada.substring(0,10) <= fechaConsulta && r.salida.substring(0,10) > fechaConsulta
               );
-              state = (resActiva && resActiva.estado === 'checkin') ? 'occupied' : 'occupied-confirmed';
+              state = (resActiva && resActiva.estado === ESTADO_RESERVA.CHECKIN) ? 'occupied' : 'occupied-confirmed';
             } else {
               // Sin reserva activa: el color solo refleja overlays manuales (sucia/mantenimiento).
               // Cualquier otro valor en beds (ej. 'occupied' viejo de un check-in sin checkout) se ignora
@@ -3068,7 +3078,7 @@ function renderMapa(fechaVer) {
           }
           const res = reservas.find(r =>
             r.cabaña === b.id &&
-            (r.estado === 'checkin' || r.estado === 'confirmada') &&
+            (r.estado === ESTADO_RESERVA.CHECKIN || r.estado === ESTADO_RESERVA.CONFIRMADA) &&
             r.entrada.substring(0,10) <= fechaConsulta && r.salida.substring(0,10) > fechaConsulta
           );
           const guestName = res ? escapeHtml(getHuespedNombre(res.huespedId).split(' ')[0]) : '';
@@ -3094,7 +3104,7 @@ function renderMapa(fechaVer) {
 
   // Mostrar resumen de ocupación para la fecha consultada
   const totalOcc = reservas.filter(r =>
-    (r.estado==='checkin'||r.estado==='confirmada') &&
+    (r.estado===ESTADO_RESERVA.CHECKIN||r.estado===ESTADO_RESERVA.CONFIRMADA) &&
     r.entrada.substring(0,10) <= fechaConsulta && r.salida.substring(0,10) > fechaConsulta
   ).length;
   const pct = Math.round(totalOcc/12*100);
@@ -3119,7 +3129,7 @@ function cycleBed(bedId) {
   const reservas = getReservas();
   const resOcupada = reservas.find(r =>
     r.cabaña === bedId &&
-    (r.estado === 'checkin' || r.estado === 'confirmada') &&
+    (r.estado === ESTADO_RESERVA.CHECKIN || r.estado === ESTADO_RESERVA.CONFIRMADA) &&
     r.entrada.substring(0,10) <= today() && r.salida.substring(0,10) > today()
   );
   if(resOcupada) {
@@ -3210,8 +3220,8 @@ function renderReservas() {
     const total = `${fmtMoney(totalNum, r.moneda)}`
       + `<div style="font-size:10px;color:#34d399;line-height:1.4">✓ fact ${fmtMoney(fact.facturado, r.moneda)}</div>`
       + `<div style="font-size:10px;color:var(--text3);line-height:1.4">s/fact ${fmtMoney(fact.sinFacturar, r.moneda)}</div>`;
-    const canCheckin = r.estado==='confirmada';
-    const canCheckout = r.estado==='checkin';
+    const canCheckin = r.estado===ESTADO_RESERVA.CONFIRMADA;
+    const canCheckout = r.estado===ESTADO_RESERVA.CHECKIN;
     const hasSaldo = Number(r.saldo||0) > 0;
     return `<tr>
       <td>${escapeHtml(getHuespedNombre(r.huespedId, r))}</td>
@@ -3324,7 +3334,7 @@ function tramoOcupacion(fecha, din) {
   if (!Array.isArray(din.ocupacion) || !din.ocupacion.length) return null;
   const totalCab = (DB.get('precios', {}).habitaciones || []).length || 12;
   const ocupadas = getReservas().filter(r =>
-    (r.estado === 'confirmada' || r.estado === 'checkin') &&
+    (r.estado === ESTADO_RESERVA.CONFIRMADA || r.estado === ESTADO_RESERVA.CHECKIN) &&
     r.entrada <= fecha && r.salida > fecha).length;
   const ocPct = totalCab ? (ocupadas / totalCab * 100) : 0;
   return din.ocupacion
@@ -3412,8 +3422,12 @@ function totalReserva(r) {
 
 // Resumen de facturación de una reserva a partir de sus movimientos de ingreso
 // (linkeados por reservaId): cuánto se cobró, cuánto de eso se facturó y cuánto no.
+// Se filtra por la MONEDA de la reserva (default ARS): sumar ARS + USD daría un total
+// sin sentido. La UI muestra un único total en r.moneda.
 function resumenFacturacionReserva(rid) {
-  const ingresos = getMovimientos().filter(m => m.reservaId === rid && m.tipo === 'ingreso');
+  const r = getReservas().find(x => x.id === rid);
+  const moneda = (r && r.moneda) || 'ARS';
+  const ingresos = getMovimientos().filter(m => m.reservaId === rid && m.tipo === 'ingreso' && (m.moneda || 'ARS') === moneda);
   const cobrado = ingresos.reduce((s, m) => s + (Number(m.monto) || 0), 0);
   const facturado = ingresos.filter(m => m.facturado).reduce((s, m) => s + (Number(m.monto) || 0), 0);
   return { cobrado, facturado, sinFacturar: cobrado - facturado };
@@ -3453,8 +3467,8 @@ function updateBedsSelect() {
     // Cama bloqueada si tiene checkin activo O reserva confirmada que se superpone con las fechas elegidas
     const blocked = reservas.some(r => {
       if(r.cabaña !== b.id) return false;
-      if(r.estado === 'checkin') return true;
-      if(r.estado === 'confirmada' && entrada && salida) {
+      if(r.estado === ESTADO_RESERVA.CHECKIN) return true;
+      if(r.estado === ESTADO_RESERVA.CONFIRMADA && entrada && salida) {
         // superposición de fechas
         return r.entrada < salida && r.salida > entrada;
       }
@@ -3552,8 +3566,7 @@ function openNuevaReserva() {
   document.getElementById('res-huesped-lista').style.display = 'none';
   document.getElementById('res-hab').value = '';
   document.getElementById('res-entrada').value = today();
-  const manana = new Date(); manana.setDate(manana.getDate()+1);
-  document.getElementById('res-salida').value = manana.toISOString().split('T')[0];
+  document.getElementById('res-salida').value = addDaysStr(today(), 1);
   document.getElementById('res-precio').value = '';
   document.getElementById('res-pagado').value = '';
   document.getElementById('res-notas').value = '';
@@ -3614,6 +3627,12 @@ async function saveReserva() {
     if(btnGuardar) { btnGuardar.disabled = false; btnGuardar.textContent = 'Guardar Reserva'; }
     showNotif('Completá todos los campos obligatorios','error'); return;
   }
+  // Rango de fechas válido: la salida debe ser POSTERIOR a la entrada (≥ 1 noche).
+  // Evita guardar 0 o noches negativas (total NaN/negativo, arqueo roto).
+  if(nightsBetween(entrada, salida) < 1) {
+    if(btnGuardar) { btnGuardar.disabled = false; btnGuardar.textContent = 'Guardar Reserva'; }
+    showNotif('La salida debe ser posterior a la entrada (mínimo 1 noche)','error'); return;
+  }
   // Huésped nuevo: obligatorios nombre, apellido, tel. El resto opcional (completable luego).
   let nuevoHuespedData = null;
   if (modoHuesped === 'nuevo') {
@@ -3638,7 +3657,7 @@ async function saveReserva() {
   const conflicto = reservasExist.some(r =>
     r.id !== editId &&
     r.cabaña === cabaña &&
-    (r.estado === 'checkin' || r.estado === 'confirmada') &&
+    (r.estado === ESTADO_RESERVA.CHECKIN || r.estado === ESTADO_RESERVA.CONFIRMADA) &&
     r.entrada < salida && r.salida > entrada
   );
   if(conflicto) { 
@@ -3905,9 +3924,9 @@ async function doCheckout(rid) {
 function renderCheckin() {
   const reservas = getReservas();
   const tod = today();
-  const pendCheckin = reservas.filter(r=>r.estado==='confirmada'&&r.entrada<=tod);
-  const pendCheckout = reservas.filter(r=>r.estado==='checkin'&&r.salida<=tod);
-  const enHostel = reservas.filter(r=>r.estado==='checkin');
+  const pendCheckin = reservas.filter(r=>r.estado===ESTADO_RESERVA.CONFIRMADA&&r.entrada<=tod);
+  const pendCheckout = reservas.filter(r=>r.estado===ESTADO_RESERVA.CHECKIN&&r.salida<=tod);
+  const enHostel = reservas.filter(r=>r.estado===ESTADO_RESERVA.CHECKIN);
 
   document.getElementById('tablaCheckin').innerHTML = pendCheckin.length
     ? pendCheckin.map(r=>`<tr>
@@ -3986,7 +4005,7 @@ function showGuestDetail(id) {
   const h = getHuespedes().find(x=>x.id===id);
   if(!h) return;
   const reservas = getReservas().filter(r=>r.huespedId===id);
-  const completadas = reservas.filter(r=>r.estado==='checkout'||r.estado==='checkin');
+  const completadas = reservas.filter(r=>r.estado===ESTADO_RESERVA.CHECKOUT||r.estado===ESTADO_RESERVA.CHECKIN);
   const totalGastado = completadas.reduce((a,r)=>a+Number(r.precio||0)*nightsBetween(r.entrada,r.salida),0);
   const ultimaRes = completadas.sort((a,b)=>b.salida>a.salida?1:-1)[0];
   const diasDesde = ultimaRes ? Math.round((new Date()-new Date(ultimaRes.salida))/(1000*60*60*24)) : null;
@@ -4833,7 +4852,7 @@ function renderCuentasPorCobrar(c) {
   const pendientes = reservas.filter(r => {
     const total = totalReserva(r);
     const pagado = Number(r.pagado || 0);
-    return pagado < total && r.estado !== 'cancelada';
+    return pagado < total && r.estado !== ESTADO_RESERVA.CANCELADA;
   }).map(r => {
     const total = totalReserva(r);
     const pagado = Number(r.pagado || 0);
@@ -5638,7 +5657,7 @@ function updateCambioCamaSelect() {
     if(b.id === r.cabaña) return ''; // cabaña actual, no mostrar
     const blocked = reservas.some(x =>
       x.id !== rid && x.cabaña === b.id &&
-      (x.estado === 'checkin' || x.estado === 'confirmada') &&
+      (x.estado === ESTADO_RESERVA.CHECKIN || x.estado === ESTADO_RESERVA.CONFIRMADA) &&
       x.entrada < r.salida && x.salida > r.entrada
     );
     return `<option value="${b.id}" ${blocked?'disabled':''}>Cabaña ${b.label}${blocked?' (ocupada)':''}</option>`;
@@ -6050,7 +6069,7 @@ function renderGrilla() {
       // Reserva que cubre la fecha f en esta cabaña (mismo criterio de estados).
       const resEnFecha = (f) => reservas.find(r =>
         r.cabaña === b.id &&
-        (r.estado === 'checkin' || r.estado === 'confirmada' || r.estado === 'checkout') &&
+        (r.estado === ESTADO_RESERVA.CHECKIN || r.estado === ESTADO_RESERVA.CONFIRMADA || r.estado === ESTADO_RESERVA.CHECKOUT) &&
         r.entrada.substring(0,10) <= f && r.salida.substring(0,10) > f
       );
 
@@ -6066,7 +6085,7 @@ function renderGrilla() {
             const r2 = resEnFecha(fechas[i + span]);
             if (r2 && r2.id === res.id) span++; else break;
           }
-          const cls = res.estado === 'checkin' ? 'gc-occupied' : res.estado === 'confirmada' ? 'gc-confirmed' : 'gc-checkout';
+          const cls = res.estado === ESTADO_RESERVA.CHECKIN ? 'gc-occupied' : res.estado === ESTADO_RESERVA.CONFIRMADA ? 'gc-confirmed' : 'gc-checkout';
           const nombre = escapeHtml(getHuespedNombre(res.huespedId, res));
           const saldo = (Number(res.total) || Number(res.precio) || 0) - (Number(res.pagado) || 0);
           const debe = saldo > 0 ? ` · <span style="color:#fca5a5;font-weight:600">debe ${fmtPrecioCorto(saldo)}</span>` : '';
@@ -6096,7 +6115,7 @@ let grillaSel = null; // { cab, hab, fecha, el }
 function grillaCeldaOcupada(cabId, fecha) {
   return getReservas().some(r =>
     r.cabaña === cabId &&
-    (r.estado === 'checkin' || r.estado === 'confirmada' || r.estado === 'checkout') &&
+    (r.estado === ESTADO_RESERVA.CHECKIN || r.estado === ESTADO_RESERVA.CONFIRMADA || r.estado === ESTADO_RESERVA.CHECKOUT) &&
     r.entrada.substring(0,10) <= fecha && r.salida.substring(0,10) > fecha
   );
 }
@@ -6239,17 +6258,16 @@ function buildSystemPrompt() {
 
   // Ocupación hoy
   const reservasHoy = reservas.filter(r =>
-    r.estado !== 'checkout' && r.entrada <= todayStr && r.salida > todayStr
+    r.estado !== ESTADO_RESERVA.CHECKOUT && r.entrada <= todayStr && r.salida > todayStr
   );
   const ocupadasHoy = reservasHoy.length;
   const libresHoy = Math.max(0, cabañasDisponibles - ocupadasHoy);
 
   // Próximos check-ins (hoy y mañana)
-  const manana = new Date(); manana.setDate(manana.getDate() + 1);
-  const mananaStr = manana.toISOString().slice(0,10);
-  const checkinsHoy = reservas.filter(r => r.entrada === todayStr && r.estado !== 'checkout').length;
-  const checkinsMañana = reservas.filter(r => r.entrada === mananaStr && r.estado !== 'checkout').length;
-  const checkoutsHoy = reservas.filter(r => r.salida === todayStr && r.estado !== 'checkout').length;
+  const mananaStr = addDaysStr(today(), 1);
+  const checkinsHoy = reservas.filter(r => r.entrada === todayStr && r.estado !== ESTADO_RESERVA.CHECKOUT).length;
+  const checkinsMañana = reservas.filter(r => r.entrada === mananaStr && r.estado !== ESTADO_RESERVA.CHECKOUT).length;
+  const checkoutsHoy = reservas.filter(r => r.salida === todayStr && r.estado !== ESTADO_RESERVA.CHECKOUT).length;
 
   // Precios actuales desde Firebase
   let preciosTexto = '';
@@ -6273,7 +6291,7 @@ function buildSystemPrompt() {
   // Función para calcular disponibilidad en una fecha
   function disponibilidadEnFecha(fechaStr) {
     const ocupadas = reservas.filter(r =>
-      r.estado !== 'checkout' && r.entrada <= fechaStr && r.salida > fechaStr
+      r.estado !== ESTADO_RESERVA.CHECKOUT && r.entrada <= fechaStr && r.salida > fechaStr
     ).length;
     return Math.max(0, cabañasDisponibles - ocupadas);
   }
@@ -6281,8 +6299,7 @@ function buildSystemPrompt() {
   // Próximas 4 semanas de disponibilidad resumida
   let dispProximas = '';
   for (let i = 0; i <= 28; i++) {
-    const d = new Date(); d.setDate(d.getDate() + i);
-    const ds = d.toISOString().slice(0,10);
+    const ds = addDaysStr(today(), i);
     const libres = disponibilidadEnFecha(ds);
     const label = i === 0 ? 'Hoy' : i === 1 ? 'Mañana' : ds;
     dispProximas += `- ${label}: ${libres} cabaña${libres !== 1 ? 's' : ''} libre${libres !== 1 ? 's' : ''}\n`;
@@ -6293,7 +6310,7 @@ function buildSystemPrompt() {
     const num = String(i+1);
     const res = reservas.find(r =>
       r.hab === num &&
-      r.estado !== 'checkout' &&
+      r.estado !== ESTADO_RESERVA.CHECKOUT &&
       r.entrada <= todayStr && r.salida > todayStr
     );
     if (res) return `  Cabaña ${num}: OCUPADA hasta ${res.salida} (dato interno, no revelar al cliente)`;
@@ -6635,10 +6652,10 @@ async function sendMessage(text) {
 // ===================== MAPA FECHA WRAPPER =====================
 function mapaNavegar(dias) {
   const input = document.getElementById('mapaFecha');
-  const base = input.value || new Date().toISOString().split('T')[0];
+  const base = input.value || today();
   let fecha;
   if (dias === 0) {
-    fecha = new Date().toISOString().split('T')[0];
+    fecha = today();
   } else {
     const d = new Date(base + 'T12:00:00');
     d.setDate(d.getDate() + dias);
@@ -6652,7 +6669,7 @@ function mapaNavegar(dias) {
 }
 
 function renderMapaFecha(val) {
-  const f = val || new Date().toISOString().split('T')[0];
+  const f = val || today();
   const input = document.getElementById('mapaFecha');
   if (input) input.value = f;
   const label = document.getElementById('mapaFechaLabel');

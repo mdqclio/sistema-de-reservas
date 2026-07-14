@@ -42,8 +42,12 @@ function precioDefaultCabana(hab, fecha) {
   return alta ? (Number(h.precio_alta) || Number(h.precio_base) || 0) : (Number(h.precio_base) || 0);
 }
 
+// Constante real de estados de reserva (la usa tramoOcupacion); se extrae de index.html.
+const estadoConst = src.match(/const ESTADO_RESERVA = Object\.freeze\([^;]*\);/)[0];
+
 const factory = new Function(
   'DB', 'getReservas', 'nightsBetween', 'today', 'precioDefaultCabana',
+  estadoConst + '\n' +
   [grab('addDaysStr'), grab('getTipoTemporada'), grab('promoVigente'), grab('promosVigentesRango'),
    grab('tramoUltimoMomento'), grab('tramoOcupacion'), grab('precioNocheCascada'),
    grab('cargosReservaTotal'), grab('calcularPrecioReserva')].join('\n') +

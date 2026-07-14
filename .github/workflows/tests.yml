@@ -20,6 +20,10 @@ jobs:
       - name: Tests de precios
         run: node tests/precios.test.mjs
 
+      # Verifica que today() use fecha local (no UTC) — bug de caja nocturna.
+      - name: Test today() local
+        run: node tests/today.test.mjs
+
       # Chequeo de sintaxis del <script type="module"> de index.html
       # (mismo patrón que docs/START SESSION.md).
       - name: Sintaxis de index.html
