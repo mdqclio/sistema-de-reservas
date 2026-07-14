@@ -206,6 +206,15 @@ sin DOM) y las corre con mocks. Cubre los tres desvíos corregidos: fecha especi
 precio noche por noche (cruce de finde), promo manual y exclusividad promo > último momento >
 ocupación.
 
+Los casos borde 12-20 agregan: cruce de dos temporadas (cada noche con su base),
+borde exacto de inicio de rango (fecha especial pisa finde, finde en 1 sola noche),
+temporada **anual con wrap dic→ene** (verificado contra `getTipoTemporada` real — el
+motor **sí** soporta el cruce de año vía comparación MM-DD), promo que cubre solo
+parte de la estadía (apaga dinámicos en toda la reserva), promo aplicada **sobre** el
+override de fecha especial (§1: encima cae el ajuste exclusivo), toggle de dinámicos
+apagado (base puro), cargos únicos fijos por reserva (1 vs 5 noches) y estadía de
+0 noches (entrada=salida → total 0, sin NaN ni negativos).
+
 ```
-node tests/precios.test.mjs      # 13 casos
+node tests/precios.test.mjs      # casos 1-20 · 33 asserts
 ```
