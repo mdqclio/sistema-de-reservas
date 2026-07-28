@@ -6,6 +6,7 @@
   "//4": "NUNCA al revés: con las reglas viejas (auth != null) un anónimo tendría acceso total.",
   "//5": "Como desplegar: Firebase Console -> Realtime Database -> Reglas -> pegar -> Publicar.",
   "//publicado": "2026-07-10 en consola, con estos fixes",
+  "//pendiente": "2026-07-28: se agregaron /cabanas/emisores y /cabanas/facturas (Facturación). REPUBLICAR en consola.",
   "rules": {
     ".read": false,
     ".write": false,
@@ -35,6 +36,18 @@
         "$token": {
           ".read": "auth != null"
         }
+      },
+      "emisores": {
+        "//": "Catálogo de CUITs emisores (Facturación). SOLO staff: sin carve-out público.",
+        "//1": "Explícito aunque herede del padre, para que un carve-out futuro no lo afloje.",
+        ".read": "auth != null && auth.provider !== 'anonymous'",
+        ".write": "auth != null && auth.provider !== 'anonymous'"
+      },
+      "facturas": {
+        "//": "Solicitudes de emisión ARCA (Facturación). SOLO staff.",
+        "//1": "El procesador externo (n8n) escribe con credencial de servicio, no anónima.",
+        ".read": "auth != null && auth.provider !== 'anonymous'",
+        ".write": "auth != null && auth.provider !== 'anonymous'"
       },
       "acl": {
         "$uid": {

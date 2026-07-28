@@ -115,6 +115,32 @@ colRoles.nuevoId();     // push key de Firebase
   //   facturado      = bool; el IVA en el resumen se calcula SOLO sobre movimientos facturados
   //   nroComprobante = nº de factura/comprobante (se carga en el check-in y en movimientos)
   cierres:     [...]            ← cierres / arqueos de caja
+
+  ── Facturación (ARCA / AFIP) ──
+  emisores: {                   ← catálogo de CUITs emisores (claves FIJAS, no push key)
+    "leo":    { nombre:"Fernández Leonardo", cuit:"20215049613", ptoVta:5, tipoFactura:"C", habilitado:true },
+    "franco": { nombre:"Latorre Franco",     cuit:"20375601665", ptoVta:6, tipoFactura:"C", habilitado:true },
+    "nomad":  { nombre:"Nomad Point S.A.",   cuit:"30719239095", ptoVta:2, tipoFactura:"B", habilitado:false }
+  }
+  //   habilitado:false → aparece en el selector en gris con "(próximamente)" y NO se
+  //   puede elegir. nomad exige Factura B/A con IVA discriminado, aún no implementado.
+  //   Se siembra UNA sola vez con seedEmisores() (flag cabanas/_migrado/emisores, update() merge).
+  facturas: {                   ← SOLICITUDES de emisión (la app NO emite: solo pide)
+    "{pushKey}": {              //   push key de Firebase (NUNCA Date.now())
+      emisorId,                 //   clave de /cabanas/emisores
+      movimientoIds: [...],     //   ids de movimientos facturados ([] si es importe manual)
+      importe, desde, hasta,    //   total ARS + período del servicio
+      descripcion,
+      dni,                      //   DNI del receptor ('' si no se cargó)
+      estado,                   //   'pendiente'|'procesando'|'emitida'|'error'
+      cae, nroComprobante, vencimientoCae, cbteFch, errorMsg,   ← los escribe n8n/ARCA
+      ambiente,                 //   'homologacion' | 'produccion' (constante FACTURACION_AMBIENTE)
+      creado, creadoPor, actualizado
+    }
+  }
+  //   Flujo: la UI crea el registro en 'pendiente' → n8n lo toma, emite en ARCA y
+  //   escribe cae/nroComprobante/estado → el listener onValue de la app concilia y
+  //   marca los movimientos asociados con facturado=true + nroComprobante ("0005-00000001").
   categorias:  [ { id, nombre, tipo: 'ingreso'|'egreso'|'devolucion'|'ambos' } ]
   proveedores: [...]
   recurrentes: [...]            ← gastos recurrentes (se aplican en login)
@@ -162,7 +188,10 @@ colRoles.nuevoId();     // push key de Firebase
 |`rol-limpieza` |`limpieza` |Limpieza      |
 
 - Los permisos son **granulares por módulo** (`rw` / `r` / `n`):
-  dashboard, mapa, reservas, checkin, huespedes, precios, contabilidad, caja, roles.
+  dashboard, mapa, reservas, checkin, huespedes, precios, contabilidad, **facturacion**, caja, roles.
+- `facturacion`: admin `rw`, recepción `rw`, ventas/limpieza `n`. Como los roles ya sembrados
+  en la DB no traen la clave nueva, `puedeFacturar()`/`puedeSolicitarFactura()` caen por
+  defecto al `rolKey === 'recepcion'` cuando el permiso no existe.
 - `rolToKey()` mapea el id del rol a la key corta.
 - `applyRoleUI()` muestra/oculta elementos `.admin-only` y el nav de Lista Negra.
 - Los roles viven en los nodos `roles`/`usuarios`. (NO se usan custom claims de Firebase Auth.)
@@ -198,6 +227,7 @@ Agrupación del nav (`sidebarNav`):
 
 - **Principal**: Dashboard, Mapa, Reservas, Grilla
 - **Operaciones**: Check-in/out, Pipeline, Conversaciones, Huéspedes, **Pendientes** (admin + recepción)
+- **Operaciones** (cont.): **Facturación** (admin + recepción, `nav-facturacion`)
 - **Administración** (`admin-only`): Contabilidad, Caja, Lista Negra
 - **Configuración**: Precios (todos) · Usuarios, Roles, **Log de Actividad** (`admin-only`)
 
@@ -230,6 +260,12 @@ con filtro por entidad (`setAuditFiltro` / `currentAuditFiltro`).
 |`renderHuespedes()` / `renderListaNegra()` / `getScoreBadge()`           |Huéspedes + score                                      |
 |`renderPrecios()` / `addTemporada()` / `addPromo()`                      |Precios                                                |
 |`renderAcct()` / `renderCaja()` / `cerrarCaja()` / `aplicarRecurrentes()`|Contabilidad y caja                                    |
+|`renderFacturacion(c)` / `irAFacturacion()`                              |Sub-sección **Facturación** (tab `facturacion` de Contabilidad). `irAFacturacion()` es la entrada desde el nav propio: recepción NO ve el resto de Contabilidad (`.acct-admin-only`) |
+|`crearSolicitudFactura()`                                                |Crea `/cabanas/facturas/{pushKey}` en estado `pendiente` (+`auditLog`). **No toca ARCA** |
+|`movimientosFacturables()` / `toggleFacMov(id)` / `facSeleccionarTodos(b)`|Ingresos ARS sin `facturado`, filtrados por rango; selección múltiple |
+|`seedEmisores()` / `attachFacturacionLive()`                             |Seed una-sola-vez del catálogo + listeners `onValue` de `emisores`/`facturas` |
+|`conciliarFacturasEmitidas()` / `nroComprobanteFmt(f)`                   |Factura `emitida` → marca sus movimientos `facturado=true` + `nroComprobante` (`0005-00000001`). Idempotente: no reescribe si ya coincide |
+|`puedeFacturar()` / `puedeSolicitarFactura()`                            |Gate de lectura / de alta del módulo `facturacion`     |
 |`renderRoles()` / `renderUsuarios()` / `saveUsuario()`                   |Roles y usuarios                                       |
 |`renderLog()` / `setAuditFiltro(v)`                                      |Visor del log de auditoría (sección propia) + filtro por entidad |
 |`renderKnowledge()` / `renderBotConfig()`                                |KB y config del bot                                    |
@@ -281,6 +317,14 @@ llaman `renderMapa()`.
    `auth.provider !== 'anonymous'` salvo el carve-out create-only de `pendientes` y la lectura
    puntual de `checkin_tokens/$token`.
 1. **Admin no hardcodeado** — usuarios se crean en Firebase Auth y se cargan en el nodo `usuarios`.
+1. **Reglas de staging pendientes de republicar (2026-07-28)** — `security/database.rules.staging.json`
+   agregó `/cabanas/emisores` y `/cabanas/facturas` (staff, `auth.provider !== 'anonymous'`).
+   **Hay que volver a pegarlas y publicarlas en la consola**: hasta entonces los nodos nuevos
+   quedan cubiertos solo por la regla heredada de `/cabanas` (que ya es staff-only, así que no
+   hay agujero — pero el archivo del repo y la consola están desincronizados).
+1. **Facturación NO emite** — la UI solo escribe la solicitud en `/cabanas/facturas` con
+   estado `pendiente`. `FACTURACION_AMBIENTE` está fijo en `'homologacion'`; cambiar esa
+   constante (y nada más) el día que ARCA pase a producción.
 1. **Handlers inline → `Object.assign(window, {...})`** — toda función usada desde un
    `onclick`/`onchange`/`oninput` inline DEBE estar registrada en el bloque `Object.assign(window, …)`
    (el script es `type="module"`, así que su scope no es global). `node --check` **NO** detecta si falta;

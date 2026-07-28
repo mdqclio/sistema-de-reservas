@@ -604,6 +604,11 @@ td.acciones .btn:last-child { margin-right: 0; }
       <div class="nav-item" onclick="showSection('pendientes');closeSidebar()" id="nav-pendientes" style="display:none;">
         <span class="icon">📥</span> Pendientes <span id="pendientesBadge" style="display:none;background:#f59e0b;color:#1a1a1a;font-size:11px;font-weight:700;border-radius:10px;padding:1px 7px;margin-left:6px;"></span>
       </div>
+      <!-- Facturación: sub-sección de Contabilidad, pero con nav propio porque
+           recepción NO tiene acceso al resto de Contabilidad (admin-only). -->
+      <div class="nav-item" onclick="irAFacturacion();closeSidebar()" id="nav-facturacion" style="display:none;">
+        <span class="icon">🧾</span> Facturación
+      </div>
       <div class="nav-section admin-only" style="display:none;">Administración</div>
       <div class="nav-item admin-only" onclick="showSection('contabilidad');closeSidebar()" id="nav-contabilidad" style="display:none;">
         <span class="icon">📒</span> Contabilidad
@@ -818,17 +823,19 @@ td.acciones .btn:last-child { margin-right: 0; }
     <div id="section-contabilidad" class="section">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
         <div class="tabs" style="margin-bottom:0;flex-wrap:wrap;">
-          <div class="tab active" onclick="switchAcctTab('ingresos',this)">Ingresos</div>
-          <div class="tab" onclick="switchAcctTab('egresos',this)">Egresos</div>
-          <div class="tab" onclick="switchAcctTab('devoluciones',this)">Devoluciones</div>
-          <div class="tab" onclick="switchAcctTab('sueldos',this)">Sueldos</div>
-          <div class="tab" onclick="switchAcctTab('servicios',this)">Servicios</div>
-          <div class="tab" onclick="switchAcctTab('cobrar',this)">💳 Cobrar</div>
-          <div class="tab" onclick="switchAcctTab('presupuesto',this)">📊 Presupuesto</div>
-          <div class="tab" onclick="switchAcctTab('recurrentes',this)">🔄 Recurrentes</div>
-          <div class="tab" onclick="switchAcctTab('resumen',this)">Resumen</div>
+          <div class="tab active acct-admin-only" onclick="switchAcctTab('ingresos',this)">Ingresos</div>
+          <div class="tab acct-admin-only" onclick="switchAcctTab('egresos',this)">Egresos</div>
+          <div class="tab acct-admin-only" onclick="switchAcctTab('devoluciones',this)">Devoluciones</div>
+          <div class="tab acct-admin-only" onclick="switchAcctTab('sueldos',this)">Sueldos</div>
+          <div class="tab acct-admin-only" onclick="switchAcctTab('servicios',this)">Servicios</div>
+          <div class="tab acct-admin-only" onclick="switchAcctTab('cobrar',this)">💳 Cobrar</div>
+          <div class="tab acct-admin-only" onclick="switchAcctTab('presupuesto',this)">📊 Presupuesto</div>
+          <div class="tab acct-admin-only" onclick="switchAcctTab('recurrentes',this)">🔄 Recurrentes</div>
+          <div class="tab acct-admin-only" onclick="switchAcctTab('resumen',this)">Resumen</div>
+          <!-- Facturación: único tab visible para recepción (ver applyRoleUI). -->
+          <div class="tab" id="tab-facturacion" onclick="switchAcctTab('facturacion',this)">🧾 Facturación</div>
         </div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+        <div class="acct-admin-only" data-disp="flex" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
           <button class="btn btn-ghost btn-sm" onclick="openCategoriasModal()">📂 Categorías</button>
           <button class="btn btn-ghost btn-sm" onclick="openProveedorModal(null)">🏢 Proveedores</button>
           <button class="btn btn-blue btn-sm" onclick="exportarCSV()">📥 CSV</button>
@@ -2457,6 +2464,9 @@ async function loadAllData() {
     try { await initMovimientosLive(); } catch(e) { console.error('movimientos live init error:', e); }
     try { await initBedsLive(); } catch(e) { console.error('beds live init error:', e); }
     try { attachPendientesLive(); } catch(e) { console.error('pendientes live init error:', e); }
+    // Facturación: catálogo de emisores (seed una sola vez) + listeners de emisores/facturas.
+    try { await seedEmisores(); } catch(e) { console.error('emisores seed error:', e); }
+    try { attachFacturacionLive(); } catch(e) { console.error('facturacion live init error:', e); }
     // Corrige tipo/mts2/capacidad de las cabañas ya cargadas (una sola vez, aislada).
     try { await migrateHabitacionesConfig(); } catch(e) { console.error('habitaciones_config migration error:', e); }
     // Migración + sync en vivo del resto de las colecciones (cada una aislada).
@@ -2528,10 +2538,10 @@ async function initData() {
     ]
   });
   await DB.set('roles', [
-    { id:'rol-admin', nombre:'Administración', permisos: { dashboard:'rw', mapa:'rw', reservas:'rw', checkin:'rw', huespedes:'rw', precios:'rw', contabilidad:'rw', caja:'rw', roles:'rw' } },
-    { id:'rol-recepcion', nombre:'Recepción', permisos: { dashboard:'r', mapa:'r', reservas:'rw', checkin:'rw', huespedes:'rw', precios:'r', contabilidad:'n', caja:'n', roles:'n' } },
-    { id:'rol-ventas', nombre:'Ventas', permisos: { dashboard:'r', mapa:'r', reservas:'rw', checkin:'r', huespedes:'r', precios:'r', contabilidad:'n', caja:'n', roles:'n' } },
-    { id:'rol-limpieza', nombre:'Limpieza', permisos: { dashboard:'n', mapa:'rw', reservas:'n', checkin:'r', huespedes:'n', precios:'n', contabilidad:'n', caja:'n', roles:'n' } },
+    { id:'rol-admin', nombre:'Administración', permisos: { dashboard:'rw', mapa:'rw', reservas:'rw', checkin:'rw', huespedes:'rw', precios:'rw', contabilidad:'rw', facturacion:'rw', caja:'rw', roles:'rw' } },
+    { id:'rol-recepcion', nombre:'Recepción', permisos: { dashboard:'r', mapa:'r', reservas:'rw', checkin:'rw', huespedes:'rw', precios:'r', contabilidad:'n', facturacion:'rw', caja:'n', roles:'n' } },
+    { id:'rol-ventas', nombre:'Ventas', permisos: { dashboard:'r', mapa:'r', reservas:'rw', checkin:'r', huespedes:'r', precios:'r', contabilidad:'n', facturacion:'n', caja:'n', roles:'n' } },
+    { id:'rol-limpieza', nombre:'Limpieza', permisos: { dashboard:'n', mapa:'rw', reservas:'n', checkin:'r', huespedes:'n', precios:'n', contabilidad:'n', facturacion:'n', caja:'n', roles:'n' } },
   ]);
   // El usuario administrador debe crearse manualmente en Firebase Console → Authentication
   // y luego agregarse aquí con su email real. No guardar contraseñas en el código.
@@ -2674,12 +2684,40 @@ async function doLogout() {
 
 function applyRoleUI(rolKey, rolObj) {
   const isAdmin = rolKey === 'admin' || (rolObj && rolObj.permisos && rolObj.permisos.roles === 'rw');
+  currentIsAdmin = isAdmin;
+  currentRolObj = rolObj || null;
   document.getElementById('nav-listanegra')?.style && (document.getElementById('nav-listanegra').style.display = isAdmin ? '' : 'none');
   const adminEls = document.querySelectorAll('.admin-only');
   adminEls.forEach(el => el.style.display = isAdmin ? '' : 'none');
   // Bandeja de Pendientes: visible para admin y recepción (no admin-only).
   const canPend = isAdmin || rolKey === 'recepcion';
   const np = document.getElementById('nav-pendientes'); if (np) np.style.display = canPend ? '' : 'none';
+  // Facturación: admin + recepción. Los demás tabs de Contabilidad (.acct-admin-only)
+  // quedan ocultos para el no-admin, así recepción entra solo a Facturación.
+  const nf = document.getElementById('nav-facturacion'); if (nf) nf.style.display = puedeFacturar() ? '' : 'none';
+  // data-disp: restaura el display original (la barra de botones es flex; '' la rompería).
+  document.querySelectorAll('.acct-admin-only').forEach(el => el.style.display = isAdmin ? (el.dataset.disp || '') : 'none');
+}
+
+// Rol vigente (lo setea applyRoleUI). Se usa para los gates de Facturación.
+let currentIsAdmin = false;
+let currentRolObj = null;
+
+// Permiso del módulo 'facturacion'. Admin siempre; recepción por defecto (los roles
+// ya sembrados en la DB no traen la clave nueva, de ahí el fallback por rolKey).
+function puedeFacturar() {
+  if (currentIsAdmin) return true;
+  const p = currentRolObj?.permisos?.facturacion;
+  if (p === 'rw' || p === 'r') return true;
+  if (p === 'n') return false;
+  return currentUser?.rolKey === 'recepcion';
+}
+// Alta de solicitudes: exige 'rw' (o admin). Con 'r' solo se mira el listado.
+function puedeSolicitarFactura() {
+  if (currentIsAdmin) return true;
+  const p = currentRolObj?.permisos?.facturacion;
+  if (p) return p === 'rw';
+  return currentUser?.rolKey === 'recepcion';
 }
 
 // ===================== NAVIGATION =====================
@@ -4754,10 +4792,15 @@ function auditLog(accion, entidad, detalle) {
 let currentAcctTab = 'ingresos'; // tab activo de contabilidad (para re-render en vivo)
 let currentAuditFiltro = 'Todos'; // filtro por entidad del visor de auditoría
 function renderAcct(tab) {
+  // Recepción entra a Contabilidad SOLO para facturar: cualquier otro tab se
+  // redirige (los tabs .acct-admin-only ya están ocultos por applyRoleUI).
+  if (!currentIsAdmin && tab !== 'facturacion') tab = 'facturacion';
   currentAcctTab = tab;
   const movs = getMovimientos();
   const c = document.getElementById('acctContent');
   if (!c) return;
+
+  if (tab === 'facturacion') { renderFacturacion(c); return; }
 
   if (tab === 'resumen') {
     const mes = new Date().getMonth();
@@ -5217,6 +5260,389 @@ function switchAcctTab(tab, el) {
   renderAcct(tab);
 }
 
+// ============================================================================
+// FACTURACIÓN — SOLO UI + escritura de la SOLICITUD en Firebase.
+// Acá NO se emite nada en ARCA: se crea un registro en /cabanas/facturas con
+// estado 'pendiente' y el procesamiento (n8n + ARCA/WSFEv1) lo hace otro proceso,
+// que después escribe cae / nroComprobante / vencimientoCae / cbteFch / estado.
+// ============================================================================
+
+// Ambiente de emisión. FIJO en homologación por ahora: cambiar esta constante
+// (y republicar) el día que ARCA pase a producción.
+const FACTURACION_AMBIENTE = 'homologacion'; // 'homologacion' | 'produccion'
+
+const FACTURA_ESTADOS = Object.freeze({ PENDIENTE:'pendiente', PROCESANDO:'procesando', EMITIDA:'emitida', ERROR:'error' });
+const FACTURA_BADGE   = { pendiente:'amber', procesando:'blue', emitida:'green', error:'red' };
+const FACTURA_LABEL   = { pendiente:'Pendiente', procesando:'Procesando', emitida:'Emitida', error:'Error' };
+
+// Catálogo inicial de CUITs emisores (se siembra una sola vez, ver seedEmisores).
+// nomad queda DESHABILITADO: es Factura B/A con IVA discriminado y el skill de
+// emisión todavía solo hace Factura C.
+const EMISORES_SEED = {
+  leo:    { nombre:'Fernández Leonardo', cuit:'20215049613', ptoVta:5, tipoFactura:'C', habilitado:true  },
+  franco: { nombre:'Latorre Franco',     cuit:'20375601665', ptoVta:6, tipoFactura:'C', habilitado:true  },
+  nomad:  { nombre:'Nomad Point S.A.',   cuit:'30719239095', ptoVta:2, tipoFactura:'B', habilitado:false },
+};
+
+let emisoresData = {};   // espejo de /cabanas/emisores
+let facturasData = {};   // espejo de /cabanas/facturas
+let facturacionLiveReady = false;
+
+// Estado del formulario (vive fuera del DOM: el panel se re-renderiza entero
+// cuando llega un eco del listener y hay que poder restaurar lo tipeado).
+const facSeleccion = new Set();  // ids de movimientos tildados
+let facModo = 'movimientos';     // 'movimientos' | 'manual'
+let facEmisorId = '';
+let facDni = '';
+let facDescripcion = '';         // descripción libre del modo movimientos (opcional)
+const facFiltro = { desde:'', hasta:'' };
+const facManual = { importe:'', desde:'', hasta:'', descripcion:'' };
+
+// Siembra el catálogo de emisores UNA sola vez (flag persistente). Usa update()
+// (merge): nunca pisa un emisor editado a mano en la consola.
+async function seedEmisores() {
+  const flagRef = ref(db, 'cabanas/_migrado/emisores');
+  const flagSnap = await get(flagRef);
+  if (flagSnap.exists() && flagSnap.val()) return;
+  const snap = await get(ref(db, 'cabanas/emisores'));
+  const actual = snap.exists() ? (snap.val() || {}) : {};
+  const faltan = {};
+  Object.entries(EMISORES_SEED).forEach(([id, e]) => { if (!actual[id]) faltan[id] = e; });
+  if (Object.keys(faltan).length) await update(ref(db, 'cabanas/emisores'), faltan);
+  await set(flagRef, true);
+}
+
+// Sync en vivo de emisores + facturas (idempotente: un solo par de listeners).
+function attachFacturacionLive() {
+  if (facturacionLiveReady) return;
+  facturacionLiveReady = true;
+  onValue(ref(db, 'cabanas/emisores'), snap => {
+    emisoresData = snap.exists() ? (snap.val() || {}) : {};
+    rerenderFacturacion();
+  });
+  onValue(ref(db, 'cabanas/facturas'), snap => {
+    facturasData = snap.exists() ? (snap.val() || {}) : {};
+    rerenderFacturacion();
+    // Al pasar a 'emitida', el movimiento asociado queda marcado facturado=true.
+    conciliarFacturasEmitidas().catch(e => console.error('conciliar facturas error:', e));
+  });
+}
+
+function rerenderFacturacion() {
+  if (sectionActive('contabilidad') && currentAcctTab === 'facturacion' && !anyModalOpen()) renderAcct('facturacion');
+}
+
+function facturasEntries() {
+  return Object.entries(facturasData)
+    .filter(([, f]) => f && typeof f === 'object')
+    .sort((a, b) => (b[1].creado || 0) - (a[1].creado || 0));
+}
+
+// "0005-00000001" a partir de ptoVta del emisor + nroComprobante que escribió n8n.
+// Si n8n ya lo mandó formateado (no numérico), se respeta tal cual.
+function nroComprobanteFmt(f) {
+  const nro = String(f?.nroComprobante ?? '').trim();
+  if (!nro) return '';
+  if (!/^\d+$/.test(nro)) return nro;
+  const pv = Number(emisoresData[f?.emisorId]?.ptoVta || 0);
+  return `${String(pv).padStart(4, '0')}-${nro.padStart(8, '0')}`;
+}
+
+// Punto 7: factura 'emitida' → sus movimientos quedan facturado=true + nroComprobante.
+// Idempotente: si el movimiento ya está así, no escribe (no hay loop con el listener).
+async function conciliarFacturasEmitidas() {
+  if (!currentUser) return; // sin sesión de staff no escribimos nada
+  for (const [, f] of facturasEntries()) {
+    if (f.estado !== FACTURA_ESTADOS.EMITIDA) continue;
+    const ids = Array.isArray(f.movimientoIds) ? f.movimientoIds : [];
+    if (!ids.length) continue;
+    const nro = nroComprobanteFmt(f);
+    if (!nro) continue;
+    for (const id of ids) {
+      const m = cache.movimientos?.[id];
+      if (!m) continue;
+      if (m.facturado === true && (m.nroComprobante || '') === nro) continue;
+      await writeMovimiento({ ...m, facturado: true, nroComprobante: nro });
+    }
+  }
+}
+
+// Ingresos NO facturados, en ARS (la Factura C se emite en pesos: no se mezclan
+// monedas en el total — mismo criterio que resumenFacturacionReserva).
+function movimientosFacturables() {
+  return getMovimientos()
+    .filter(m => m && m.tipo === 'ingreso' && !m.facturado && (m.moneda || 'ARS') === 'ARS')
+    .filter(m => !facFiltro.desde || (m.fecha || '') >= facFiltro.desde)
+    .filter(m => !facFiltro.hasta || (m.fecha || '') <= facFiltro.hasta)
+    .sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')));
+}
+
+function facMovsSeleccionados() {
+  return getMovimientos().filter(m => m && facSeleccion.has(m.id) && m.tipo === 'ingreso' && !m.facturado);
+}
+
+function toggleFacMov(id) {
+  if (facSeleccion.has(id)) facSeleccion.delete(id); else facSeleccion.add(id);
+  renderAcct('facturacion');
+}
+function facSetModo(modo) { facModo = modo; renderAcct('facturacion'); }
+function facSetEmisor(v)  { facEmisorId = v; renderAcct('facturacion'); }
+function facSetFiltro(campo, v) {
+  facFiltro[campo] = v || '';
+  // Un movimiento que sale del filtro no debe quedar tildado "a escondidas".
+  const visibles = new Set(movimientosFacturables().map(m => m.id));
+  [...facSeleccion].forEach(id => { if (!visibles.has(id)) facSeleccion.delete(id); });
+  renderAcct('facturacion');
+}
+function facLimpiarFiltro() { facFiltro.desde = ''; facFiltro.hasta = ''; renderAcct('facturacion'); }
+function facSetCampo(campo, v) { if (campo === 'dni') facDni = v; else if (campo === 'descripcion') facDescripcion = v; }
+function facSetManual(campo, v) { facManual[campo] = v; }
+function facSeleccionarTodos(check) {
+  const visibles = movimientosFacturables();
+  if (check) visibles.forEach(m => facSeleccion.add(m.id)); else visibles.forEach(m => facSeleccion.delete(m.id));
+  renderAcct('facturacion');
+}
+
+// Descripción por defecto del modo movimientos (ARCA la usa como detalle).
+function facDescripcionAuto(sel, desde, hasta) {
+  if (sel.length === 1) return String(sel[0].concepto || 'Alojamiento').slice(0, 200);
+  return `Alojamiento — ${sel.length} movimientos (${fmtFecha(desde)} a ${fmtFecha(hasta)})`.slice(0, 200);
+}
+
+function renderFacturacion(c) {
+  const emisores = Object.entries(emisoresData);
+  const movs = movimientosFacturables();
+  const sel = facMovsSeleccionados();
+  const totalSel = sel.reduce((s, m) => s + Number(m.monto || 0), 0);
+  const reservas = getReservas();
+  const puedeRW = puedeSolicitarFactura();
+
+  const emisorOpts = emisores.length
+    ? emisores.map(([id, e]) => {
+        const hab = !!e?.habilitado;
+        const label = `${e?.nombre || id} — CUIT ${e?.cuit || '—'} · PV ${e?.ptoVta ?? '—'} · Fac. ${e?.tipoFactura || '—'}${hab ? '' : ' (próximamente)'}`;
+        return `<option value="${escapeHtml(id)}" ${hab ? '' : 'disabled style="color:var(--text3)"'} ${facEmisorId === id ? 'selected' : ''}>${escapeHtml(label)}</option>`;
+      }).join('')
+    : '<option value="">(sin emisores cargados)</option>';
+
+  const filasMovs = movs.length
+    ? movs.map(m => {
+        const r = m.reservaId ? reservas.find(x => x.id === m.reservaId) : null;
+        const quien = r ? `${getHuespedNombre(r.huespedId, r)} · Cab ${r.hab || '—'}` : '';
+        return `<tr>
+          <td style="width:34px;text-align:center;"><input type="checkbox" ${facSeleccion.has(m.id) ? 'checked' : ''} onchange="toggleFacMov('${escapeHtml(m.id)}')"></td>
+          <td style="font-family:'DM Mono';font-size:12px">${fmtFecha(m.fecha)}</td>
+          <td>${escapeHtml(m.concepto)}</td>
+          <td style="font-size:12px;color:var(--text3)">${escapeHtml(quien)}</td>
+          <td style="font-weight:500;color:#34d399">${fmtMoney(m.monto)}</td>
+        </tr>`;
+      }).join('')
+    : '<tr><td colspan="5" style="text-align:center;color:var(--text3)">Sin ingresos pendientes de facturar en el rango</td></tr>';
+
+  const filasFacturas = facturasEntries().length
+    ? facturasEntries().map(([key, f]) => {
+        const em = emisoresData[f.emisorId];
+        const est = f.estado || 'pendiente';
+        const nro = nroComprobanteFmt(f);
+        const detalle = f.errorMsg
+          ? `<div style="font-size:11px;color:#f87171;margin-top:3px;">${escapeHtml(f.errorMsg)}</div>` : '';
+        return `<tr>
+          <td style="font-family:'DM Mono';font-size:11px">${escapeHtml(f.creado ? new Date(f.creado).toLocaleString('es-AR') : '')}</td>
+          <td>${escapeHtml(em?.nombre || f.emisorId || '—')}<div style="font-size:11px;color:var(--text3)">${escapeHtml(f.descripcion || '')}</div>${detalle}</td>
+          <td style="font-weight:500">${fmtMoney(f.importe)}</td>
+          <td style="font-family:'DM Mono';font-size:11px">${escapeHtml(fmtFecha(f.desde))} → ${escapeHtml(fmtFecha(f.hasta))}</td>
+          <td><span class="badge ${FACTURA_BADGE[est] || 'gray'}">${escapeHtml(FACTURA_LABEL[est] || est)}</span></td>
+          <td style="font-family:'DM Mono';font-size:11px">${escapeHtml(nro || '—')}</td>
+          <td style="font-family:'DM Mono';font-size:11px">${escapeHtml(f.cae || '—')}${f.vencimientoCae ? `<div style="color:var(--text3)">vto ${escapeHtml(fmtFecha(f.vencimientoCae))}</div>` : ''}</td>
+          <td style="font-size:11px;color:var(--text3)">${escapeHtml(f.ambiente || '—')}</td>
+        </tr>`;
+      }).join('')
+    : '<tr><td colspan="8" style="text-align:center;color:var(--text3)">Todavía no se solicitó ninguna factura</td></tr>';
+
+  const panelMovimientos = `
+    <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:10px;">
+      <div class="form-group" style="margin:0;">
+        <label>Desde</label>
+        <input type="date" value="${escapeHtml(facFiltro.desde)}" onchange="facSetFiltro('desde', this.value)">
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label>Hasta</label>
+        <input type="date" value="${escapeHtml(facFiltro.hasta)}" onchange="facSetFiltro('hasta', this.value)">
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="facLimpiarFiltro()">Limpiar</button>
+      <button class="btn btn-ghost btn-sm" onclick="facSeleccionarTodos(true)">Tildar todo</button>
+      <button class="btn btn-ghost btn-sm" onclick="facSeleccionarTodos(false)">Destildar</button>
+    </div>
+    <div class="card" style="margin-bottom:12px;">
+      <table>
+        <thead><tr><th></th><th>Fecha</th><th>Concepto</th><th>Huésped / Reserva</th><th>Monto</th></tr></thead>
+        <tbody>${filasMovs}</tbody>
+      </table>
+    </div>
+    <div class="form-group">
+      <label>Descripción (opcional — si la dejás vacía se arma sola)</label>
+      <input type="text" maxlength="200" value="${escapeHtml(facDescripcion)}" placeholder="Alojamiento…" oninput="facSetCampo('descripcion', this.value)">
+    </div>`;
+
+  const panelManual = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;">
+      <div class="form-group" style="margin:0;">
+        <label>Importe (ARS) *</label>
+        <input type="number" min="0" step="0.01" value="${escapeHtml(facManual.importe)}" oninput="facSetManual('importe', this.value)">
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label>Desde *</label>
+        <input type="date" value="${escapeHtml(facManual.desde)}" onchange="facSetManual('desde', this.value)">
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label>Hasta *</label>
+        <input type="date" value="${escapeHtml(facManual.hasta)}" onchange="facSetManual('hasta', this.value)">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Descripción *</label>
+      <input type="text" maxlength="200" value="${escapeHtml(facManual.descripcion)}" placeholder="Alojamiento del … al …" oninput="facSetManual('descripcion', this.value)">
+    </div>`;
+
+  c.innerHTML = `
+    <div style="padding:9px 12px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.25);border-radius:var(--radius);font-size:12px;color:var(--text2);margin-bottom:14px;">
+      🧪 Ambiente <strong>${escapeHtml(FACTURACION_AMBIENTE)}</strong> — acá se crea la <strong>solicitud</strong>; la emisión en ARCA la hace el proceso externo (n8n).
+    </div>
+
+    <div class="card" style="padding:16px;margin-bottom:16px;">
+      <h3 style="font-size:15px;font-weight:600;margin-bottom:12px;">Nueva solicitud de factura</h3>
+
+      <div class="form-group">
+        <label>Emisor *</label>
+        <select onchange="facSetEmisor(this.value)">
+          <option value="">— Elegí un emisor —</option>
+          ${emisorOpts}
+        </select>
+      </div>
+
+      <div style="display:flex;gap:16px;align-items:center;margin:12px 0;flex-wrap:wrap;">
+        <label style="display:flex;gap:6px;align-items:center;font-size:13px;cursor:pointer;margin:0;">
+          <input type="radio" name="facModo" ${facModo === 'movimientos' ? 'checked' : ''} onchange="facSetModo('movimientos')"> Desde movimientos
+        </label>
+        <label style="display:flex;gap:6px;align-items:center;font-size:13px;cursor:pointer;margin:0;">
+          <input type="radio" name="facModo" ${facModo === 'manual' ? 'checked' : ''} onchange="facSetModo('manual')"> Importe manual
+        </label>
+      </div>
+
+      ${facModo === 'movimientos' ? panelMovimientos : panelManual}
+
+      <div class="form-group">
+        <label>DNI del receptor (opcional — obligatorio en ARCA a partir de cierto monto)</label>
+        <input type="text" inputmode="numeric" maxlength="11" value="${escapeHtml(facDni)}" placeholder="Sin puntos" oninput="facSetCampo('dni', this.value)">
+      </div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:6px;">
+        <div style="font-size:14px;">
+          ${facModo === 'movimientos'
+            ? `Seleccionados: <strong>${sel.length}</strong> · Total: <strong style="color:#34d399">${fmtMoney(totalSel)}</strong>`
+            : `Total: <strong style="color:#34d399">${fmtMoney(Number(facManual.importe || 0))}</strong>`}
+        </div>
+        <button class="btn btn-green" ${puedeRW ? '' : 'disabled'} onclick="crearSolicitudFactura()">🧾 Facturar</button>
+      </div>
+      ${puedeRW ? '' : '<div style="font-size:12px;color:var(--text3);margin-top:6px;">Tu rol puede ver las facturas pero no solicitarlas.</div>'}
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h3>Facturas solicitadas</h3></div>
+      <table>
+        <thead><tr><th>Solicitada</th><th>Emisor / Detalle</th><th>Importe</th><th>Período</th><th>Estado</th><th>Comprobante</th><th>CAE</th><th>Ambiente</th></tr></thead>
+        <tbody>${filasFacturas}</tbody>
+      </table>
+    </div>`;
+}
+
+// Crea la SOLICITUD en /cabanas/facturas con push key y estado 'pendiente'.
+// No toca ARCA ni marca los movimientos: eso pasa cuando n8n devuelve 'emitida'.
+async function crearSolicitudFactura() {
+  if (!puedeSolicitarFactura()) { showNotif('No tenés permiso para solicitar facturas', 'error'); return; }
+  const em = emisoresData[facEmisorId];
+  if (!em) { showNotif('Elegí un emisor', 'error'); return; }
+  if (!em.habilitado) { showNotif('Ese emisor todavía no está habilitado (Factura B/A con IVA, próximamente)', 'error'); return; }
+
+  let importe, desde, hasta, descripcion, movimientoIds;
+  if (facModo === 'manual') {
+    importe = Math.round(Number(facManual.importe || 0) * 100) / 100;
+    desde = facManual.desde; hasta = facManual.hasta;
+    descripcion = String(facManual.descripcion || '').trim().slice(0, 200);
+    movimientoIds = [];
+    if (!(importe > 0)) { showNotif('El importe tiene que ser mayor a 0', 'error'); return; }
+    if (!desde || !hasta) { showNotif('Completá el período (desde / hasta)', 'error'); return; }
+    if (hasta < desde) { showNotif('La fecha "hasta" no puede ser anterior a "desde"', 'error'); return; }
+    if (!descripcion) { showNotif('La descripción es obligatoria', 'error'); return; }
+  } else {
+    const sel = facMovsSeleccionados();
+    if (!sel.length) { showNotif('Tildá al menos un movimiento', 'error'); return; }
+    importe = Math.round(sel.reduce((s, m) => s + Number(m.monto || 0), 0) * 100) / 100;
+    if (!(importe > 0)) { showNotif('El total seleccionado tiene que ser mayor a 0', 'error'); return; }
+    const fechas = sel.map(m => m.fecha).filter(Boolean).sort();
+    desde = fechas[0] || today();
+    hasta = fechas[fechas.length - 1] || desde;
+    descripcion = String(facDescripcion || '').trim().slice(0, 200) || facDescripcionAuto(sel, desde, hasta);
+    movimientoIds = sel.map(m => m.id);
+  }
+
+  const dni = String(facDni || '').replace(/\D/g, '');
+  const detalle = facModo === 'manual' ? 'importe manual' : `${movimientoIds.length} movimiento(s)`;
+  const ok = confirm(
+    `¿Solicitar la emisión de esta factura?\n\n` +
+    `Emisor: ${em.nombre} (CUIT ${em.cuit} · PV ${em.ptoVta} · Factura ${em.tipoFactura})\n` +
+    `Importe: ${fmtMoney(importe)}\n` +
+    `Se factura: ${detalle}\n` +
+    `Período: ${fmtFecha(desde)} → ${fmtFecha(hasta)}\n` +
+    `Descripción: ${descripcion}\n` +
+    (dni ? `DNI receptor: ${dni}\n` : '') +
+    `Ambiente: ${FACTURACION_AMBIENTE}`
+  );
+  if (!ok) return;
+
+  const ahora = Date.now();
+  const key = push(ref(db, 'cabanas/facturas')).key; // push key, NUNCA Date.now()
+  const reg = {
+    emisorId: facEmisorId,
+    movimientoIds,
+    importe,
+    desde, hasta,
+    descripcion,
+    dni,
+    estado: FACTURA_ESTADOS.PENDIENTE,
+    cae: '', nroComprobante: '', vencimientoCae: '', cbteFch: '', errorMsg: '',
+    ambiente: FACTURACION_AMBIENTE,
+    creado: ahora,
+    creadoPor: currentUser?.email || '',
+    actualizado: ahora,
+  };
+  try {
+    await set(ref(db, 'cabanas/facturas/' + key), reg);
+  } catch (e) {
+    console.error('Firebase write error (factura):', e);
+    showNotif('Error al guardar la solicitud: ' + (e?.message || e), 'error');
+    return;
+  }
+  auditLog('solicitar factura', 'Factura', `${em.nombre} · ${fmtMoney(importe)} · ${detalle}`);
+  facSeleccion.clear();
+  facDescripcion = '';
+  facManual.importe = ''; facManual.desde = ''; facManual.hasta = ''; facManual.descripcion = '';
+  facDni = '';
+  showNotif('🧾 Solicitud creada — queda pendiente de emisión');
+  renderAcct('facturacion');
+}
+
+// Entrada directa a Facturación desde el nav (recepción no ve el resto de Contabilidad).
+function irAFacturacion() {
+  showSection('contabilidad');
+  document.getElementById('pageTitle').textContent = 'Facturación';
+  document.querySelectorAll('#section-contabilidad .tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-facturacion')?.classList.add('active');
+  document.getElementById('nav-contabilidad')?.classList.remove('active');
+  document.getElementById('nav-facturacion')?.classList.add('active');
+  renderAcct('facturacion');
+}
+
 // ===================== CAJA DIARIA =====================
 function renderCaja() {
   const tod = today();
@@ -5332,7 +5758,7 @@ function cerrarCaja() {
 
 // ===================== ROLES =====================
 const MODULES = ['dashboard','mapa','reservas','checkin','huespedes','precios','contabilidad','caja'];
-const MODULE_LABELS = { dashboard:'Dashboard', mapa:'Mapa Cabañas', reservas:'Reservas', checkin:'Check-in/out', huespedes:'Huéspedes', precios:'Precios', contabilidad:'Contabilidad', caja:'Caja' };
+const MODULE_LABELS = { dashboard:'Dashboard', mapa:'Mapa Cabañas', reservas:'Reservas', checkin:'Check-in/out', huespedes:'Huéspedes', precios:'Precios', contabilidad:'Contabilidad', facturacion:'Facturación', caja:'Caja' };
 
 function renderRoles() {
   const roles = colRoles.list();
@@ -7520,6 +7946,8 @@ Object.assign(window, {
   grillaCellClick, setHuespedMode, filtrarHuespedes, seleccionarHuesped, openReservaDesdeGrilla,
   renderConversaciones, abrirConversacion, togglePausaBot, enviarMensajeConv, convInputKey,
   renderPendientes, togglePendiente, promoverPendiente, rechazarPendiente, generarLinkPrecheckin,
+  irAFacturacion, renderFacturacion, crearSolicitudFactura, toggleFacMov, facSetModo, facSetEmisor,
+  facSetFiltro, facLimpiarFiltro, facSetCampo, facSetManual, facSeleccionarTodos,
 });
 </script>
 </body>
