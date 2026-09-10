@@ -4866,7 +4866,7 @@ function renderAcct(tab) {
     </div>
     <div class="card">
       <table>
-        <thead><tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Monto</th><th>Método</th><th>Proveedor</th></tr></thead>
+        <thead><tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Monto</th><th>Método</th><th>Proveedor</th><th></th></tr></thead>
         <tbody>${filtered.length
           ? filtered.sort((a,b)=>b.fecha>a.fecha?1:-1).map(m => {
               const prov = m.proveedorId ? (colProveedores.list().find(p=>p.id===m.proveedorId)?.nombre||'') : '';
@@ -4874,16 +4874,26 @@ function renderAcct(tab) {
               const signo = m.tipo==='ingreso' ? '+' : '-';
               const tcInfo = m.moneda==='USD'&&m.tc ? ` <span style="font-size:10px;color:var(--text3)">(TC $${m.tc})</span>` : '';
               const impInfo = m.impuesto ? ` <span style="font-size:10px;color:var(--amber)">IMP ${m.impuestoPct}%</span>` : '';
-              return `<tr>
+              // Contraasiento: el revertido se atenúa, la reversa se marca. Ninguno
+              // de los dos vuelve a ofrecer el botón (ver puedeRevertirMovimiento).
+              const revertido = m.revertido === true;
+              const revInfo = revertido
+                ? ' <span class="badge red" style="font-size:10px">Revertido</span>'
+                : (m.reversaDe ? ' <span class="badge blue" style="font-size:10px">Reversa</span>' : '');
+              const accion = puedeRevertirMovimiento(m)
+                ? `<button class="btn btn-red btn-sm" title="Crear contraasiento" onclick="revertirMovimiento('${escapeHtml(m.id)}')">Revertir</button>`
+                : '';
+              return `<tr${revertido ? ' style="opacity:.55"' : ''}>
                 <td style="font-family:'DM Mono';font-size:12px">${fmtFecha(m.fecha)}</td>
-                <td>${escapeHtml(m.concepto)}${impInfo}</td>
+                <td${revertido ? ' style="text-decoration:line-through"' : ''}>${escapeHtml(m.concepto)}${impInfo}${revInfo}</td>
                 <td><span class="badge ${m.tipo==='ingreso'?'green':'red'}">${m.cat||'—'}</span></td>
                 <td style="font-weight:500;color:${color}">${signo}${fmtMoney(m.monto,m.moneda)}${tcInfo}</td>
                 <td>${m.metodo||'—'}</td>
                 <td style="font-size:12px;color:var(--text3)">${prov}</td>
+                <td style="text-align:right;white-space:nowrap">${accion}</td>
               </tr>`;
             }).join('')
-          : '<tr><td colspan="6" style="text-align:center;color:var(--text3)">Sin movimientos</td></tr>'
+          : '<tr><td colspan="7" style="text-align:center;color:var(--text3)">Sin movimientos</td></tr>'
         }</tbody>
       </table>
     </div>`;
@@ -5367,18 +5377,47 @@ async function conciliarFacturasEmitidas() {
   }
 }
 
-// Ingresos NO facturados, en ARS (la Factura C se emite en pesos: no se mezclan
-// monedas en el total — mismo criterio que resumenFacturacionReserva).
+// R-05 — Ids de movimientos ya "tomados" por una factura viva (pendiente,
+// procesando o emitida). El flag m.facturado NO alcanza como barrera: se escribe
+// recién cuando la factura vuelve 'emitida' y conciliarFacturasEmitidas() corre
+// en algún cliente, así que entre "solicité" y "emitida" el mismo ingreso quedaba
+// tildable de nuevo → dos facturas fiscales por el mismo cobro.
+// Las facturas en 'error' SÍ liberan sus movimientos: hay que poder reintentar.
+// Una factura sin `estado` cuenta como comprometida (mismo default que la tabla).
+function movimientosComprometidos() {
+  const ids = new Set();
+  for (const [, f] of facturasEntries()) {
+    if (!f || f.estado === FACTURA_ESTADOS.ERROR) continue;
+    const arr = Array.isArray(f.movimientoIds) ? f.movimientoIds : [];
+    arr.forEach(id => { if (id) ids.add(id); });
+  }
+  return ids;
+}
+
+// Un movimiento revertido por contraasiento ya no es facturable (el cobro quedó
+// anulado), y una reversa tampoco lo es: la reversa de un egreso es un ingreso,
+// pero es un asiento de corrección, no plata cobrada.
+function movimientoAnulado(m) {
+  return !!m && (m.revertido === true || !!m.reversaDe);
+}
+
+// Ingresos NO facturados, NO comprometidos y NO anulados, en ARS (la Factura C
+// se emite en pesos: no se mezclan monedas en el total — mismo criterio que
+// resumenFacturacionReserva).
 function movimientosFacturables() {
+  const comprometidos = movimientosComprometidos();
   return getMovimientos()
-    .filter(m => m && m.tipo === 'ingreso' && !m.facturado && (m.moneda || 'ARS') === 'ARS')
+    .filter(m => m && m.tipo === 'ingreso' && !m.facturado && !comprometidos.has(m.id) && !movimientoAnulado(m) && (m.moneda || 'ARS') === 'ARS')
     .filter(m => !facFiltro.desde || (m.fecha || '') >= facFiltro.desde)
     .filter(m => !facFiltro.hasta || (m.fecha || '') <= facFiltro.hasta)
     .sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')));
 }
 
+// Última barrera antes de armar la solicitud: mismo filtro de comprometidos que
+// el listado, por si un id quedó en facSeleccion y la factura se creó después.
 function facMovsSeleccionados() {
-  return getMovimientos().filter(m => m && facSeleccion.has(m.id) && m.tipo === 'ingreso' && !m.facturado);
+  const comprometidos = movimientosComprometidos();
+  return getMovimientos().filter(m => m && facSeleccion.has(m.id) && m.tipo === 'ingreso' && !m.facturado && !comprometidos.has(m.id) && !movimientoAnulado(m));
 }
 
 function toggleFacMov(id) {
@@ -5600,6 +5639,20 @@ async function crearSolicitudFactura() {
   );
   if (!ok) return;
 
+  // R-05 — Revalidación final contra el estado vivo de /cabanas/facturas: entre
+  // que se tildaron los movimientos y se confirmó este diálogo, otro usuario pudo
+  // haber pedido factura por los mismos (el listener ya actualizó facturasData).
+  if (facModo !== 'manual') {
+    const comprometidos = movimientosComprometidos();
+    const chocan = movimientoIds.filter(id => comprometidos.has(id));
+    if (chocan.length) {
+      chocan.forEach(id => facSeleccion.delete(id));
+      showNotif(`${chocan.length} movimiento(s) ya tienen una factura en curso — se quitaron de la selección`, 'error');
+      renderAcct('facturacion');
+      return;
+    }
+  }
+
   const ahora = Date.now();
   const key = push(ref(db, 'cabanas/facturas')).key; // push key, NUNCA Date.now()
   const reg = {
@@ -5706,6 +5759,87 @@ function saveMovimiento() {
   closeModal('modalMovimiento');
   renderCaja();
   showNotif('Movimiento registrado');
+}
+
+// ===================== CONTRAASIENTO (REVERSA) =====================
+// Contabilidad es append-only: no hay borrado ni edición de movimientos (ver
+// docs/reportes/2026-09-10-borrado-contabilidad.md). Para corregir un movimiento
+// mal cargado se crea un movimiento NUEVO de signo opuesto; el original queda
+// intacto y solo se le marca `revertido: true`.
+// NO toca reserva.pagado ni ningún otro desnormalizado: la reversa es contable.
+
+// Un movimiento con factura EMITIDA (CAE de ARCA) no se revierte acá: eso se
+// anula con nota de crédito en ARCA. `facturado === true` implica emitida
+// conciliada, y además se chequea la referencia directa por si la conciliación
+// todavía no corrió en este cliente.
+function movimientoFacturadoEmitido(m) {
+  if (!m) return false;
+  if (m.facturado === true) return true;
+  for (const [, f] of facturasEntries()) {
+    if (!f || f.estado !== FACTURA_ESTADOS.EMITIDA) continue;
+    const arr = Array.isArray(f.movimientoIds) ? f.movimientoIds : [];
+    if (arr.includes(m.id)) return true;
+  }
+  return false;
+}
+
+// Reglas para mostrar el botón: no se revierte dos veces, una reversa no se
+// revierte, y lo que tiene CAE queda fuera.
+function puedeRevertirMovimiento(m) {
+  if (!m || !m.id) return false;
+  if (m.revertido === true) return false;
+  if (m.reversaDe) return false;
+  if (movimientoFacturadoEmitido(m)) return false;
+  return true;
+}
+
+async function revertirMovimiento(id) {
+  const orig = getMovimientos().find(m => m.id === id);
+  if (!orig) { showNotif('No se encontró el movimiento', 'error'); return; }
+  // Mismas guardas que puedeRevertirMovimiento, revalidadas al ejecutar: el
+  // listener pudo haber cambiado el estado entre el render y el click.
+  if (orig.revertido === true) { showNotif('Ese movimiento ya fue revertido', 'error'); return; }
+  if (orig.reversaDe) { showNotif('Una reversa no se puede revertir', 'error'); return; }
+  if (movimientoFacturadoEmitido(orig)) {
+    showNotif('Tiene factura emitida con CAE: se anula con nota de crédito en ARCA, no acá', 'error');
+    return;
+  }
+
+  const tipoRev = orig.tipo === 'ingreso' ? 'egreso' : 'ingreso';
+  const ok = confirm(
+    `¿Revertir este movimiento?\n\n` +
+    `${orig.concepto || ''}\n` +
+    `${orig.tipo === 'ingreso' ? '+' : '-'}${fmtMoney(orig.monto, orig.moneda)} · ${fmtFecha(orig.fecha)}\n\n` +
+    `Se crea un ${tipoRev} por el mismo importe con fecha de HOY.\n` +
+    `El movimiento original NO se borra: queda marcado como revertido.`
+  );
+  if (!ok) return;
+
+  const reversa = {
+    id: nuevoMovimientoId(),
+    tipo: tipoRev,
+    cat: orig.cat || '',
+    moneda: orig.moneda || 'ARS',
+    monto: Number(orig.monto) || 0,
+    metodo: orig.metodo || '',
+    fecha: today(), // today() es fecha LOCAL (no UTC), ver su comentario
+    concepto: `Reversa de: ${orig.concepto || ''}`.slice(0, 200),
+    reversaDe: orig.id,
+    facturado: false,
+    nroComprobante: '',
+  };
+  if (orig.proveedorId) reversa.proveedorId = orig.proveedorId;
+  if (orig.tc) reversa.tc = orig.tc;
+
+  await writeMovimiento(reversa);
+  // El original se reescribe IGUAL salvo el flag: mismo patrón que
+  // conciliarFacturasEmitidas. No se borra ni se edita ningún otro campo.
+  await writeMovimiento({ ...orig, revertido: true });
+  facSeleccion.delete(orig.id); // que no quede tildado en Facturación
+
+  auditLog('revertir', 'Movimiento', `${orig.tipo} ${fmtMoney(orig.monto, orig.moneda)} — ${orig.concepto || ''}`);
+  renderAcct(currentAcctTab);
+  showNotif('Movimiento revertido — se creó el contraasiento');
 }
 
 function calcArqueo() {
@@ -7926,6 +8060,7 @@ Object.assign(window, {
   saveRecurrente, deleteRecurrente, openRecurrenteModal, aplicarRecurrentes,
   savePresupuesto, exportarCSV, calcArqueo,
   openMovimientoModal, onMovTipoChange, onMovMonedaChange, onMovImpuestoChange, onMovFacturadoChange, onCiFacturadoChange,
+  revertirMovimiento,
   renderCuentasPorCobrar, renderPresupuesto, renderRecurrentes, renderAuditoria, setAuditFiltro, renderProveedores,
   editReserva,
   openEditHuesped, saveEditHuesped, confirmDelete, deleteHuesped, deleteReserva,
