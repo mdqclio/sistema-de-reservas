@@ -24,6 +24,11 @@ jobs:
       - name: Test today() local
         run: node tests/today.test.mjs
 
+      # Barreras de contabilidad: R-05 (doble emisión de facturas) y las guardas
+      # del contraasiento (qué movimiento se puede revertir).
+      - name: Tests de contabilidad
+        run: node tests/contabilidad.test.mjs
+
       # Chequeo de sintaxis del <script type="module"> de index.html
       # (mismo patrón que docs/START SESSION.md).
       - name: Sintaxis de index.html
