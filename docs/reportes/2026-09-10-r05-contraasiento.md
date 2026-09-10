@@ -2,7 +2,7 @@
 
 **Fecha:** 2026-09-10
 **Branch:** `fix/contabilidad-r05` (desde `main` @ `6954a8f`)
-**Archivos tocados:** `index.html` únicamente — +143 / −8 líneas.
+**Archivos tocados:** `index.html` únicamente — +152 / −8 líneas.
 **No se tocó:** `security/*.json`, `firebase.json`, ni Firebase (sesión del CLI cerrada a propósito).
 
 Antecedente: `docs/reportes/2026-09-10-borrado-contabilidad.md`.
@@ -17,6 +17,9 @@ Antecedente: `docs/reportes/2026-09-10-borrado-contabilidad.md`.
 - **Contraasiento agregado:** botón "Revertir" en la tabla de movimientos. Crea un
   movimiento nuevo de signo opuesto. El original no se borra ni se edita: solo se le
   marca `revertido: true`.
+- **Un movimiento comprometido por una factura viva no se puede revertir**, en ninguno
+  de los tres estados (`pendiente`, `procesando`, `emitida`). El mensaje distingue el
+  caso con CAE del caso con solicitud en curso.
 - **Append-only intacto:** no se habilitó borrado ni edición. `removeMovimiento`
   (`index.html:2176`) sigue sin un solo call site.
 - **Ningún desnormalizado tocado:** `reserva.pagado`, `saldo` y `estadoPago` quedan
@@ -32,7 +35,7 @@ Antecedente: `docs/reportes/2026-09-10-borrado-contabilidad.md`.
 
 `movimientosFacturables()` filtraba solo por `!m.facturado`. Ese flag se escribe
 recién cuando la factura vuelve en estado `emitida` y `conciliarFacturasEmitidas()`
-corre en algún cliente (`index.html:5352-5367`).
+corre en algún cliente (`index.html:5363-5378`).
 
 La ventana entre "solicité la factura" y "la factura volvió emitida" dejaba el mismo
 ingreso disponible para tildar otra vez → **dos facturas fiscales por el mismo cobro**.
@@ -55,7 +58,7 @@ function movimientosComprometidos() {
 }
 ```
 
-Usa las constantes `FACTURA_ESTADOS` existentes (`index.html:5274`), sin strings sueltos.
+Usa las constantes `FACTURA_ESTADOS` existentes (`index.html:5284`), sin strings sueltos.
 
 **Las facturas en `error` sí liberan sus movimientos**, tal como se pidió: un fallo de
 ARCA tiene que poder reintentarse.
@@ -64,15 +67,15 @@ ARCA tiene que poder reintentarse.
 `f.estado === ERROR`, no `f.estado !== ERROR` invertida sobre un default. Es el lado
 conservador — una factura legacy sin estado no libera el movimiento — y coincide con
 el default que ya usa la tabla de facturas (`const est = f.estado || 'pendiente'`,
-`index.html:5445`).
+`index.html:5484`).
 
 ### Las tres barreras
 
 | Punto | Línea | Qué hace |
 |---|---|---|
-| `movimientosFacturables()` | `index.html:5405` | El movimiento comprometido no se lista, así que no se puede tildar. |
+| `movimientosFacturables()` | `index.html:5407` | El movimiento comprometido no se lista, así que no se puede tildar. |
 | `facMovsSeleccionados()` | `index.html:5418` | Mismo filtro. Cubre el id que quedó en `facSeleccion` de un render anterior. |
-| `crearSolicitudFactura()` | `index.html:5645` | Revalidación final justo antes del `set()`. |
+| `crearSolicitudFactura()` | `index.html:5642` | Revalidación final justo antes del `set()`. |
 
 La tercera es la que cubre la concurrencia real. El `confirm()` es bloqueante, pero el
 listener de `/cabanas/facturas` actualiza `facturasData` en cuanto otro usuario escribe:
@@ -108,7 +111,7 @@ borrado ni edición, sino el mecanismo contable estándar: un asiento de signo o
 
 ### Cómo funciona
 
-`revertirMovimiento(id)` (`index.html:5796`):
+`revertirMovimiento(id)` (`index.html:5800`):
 
 1. Revalida las guardas (el listener pudo cambiar el estado entre el render y el click).
 2. Pide `confirm()` mostrando concepto, importe y fecha del original.
@@ -126,19 +129,46 @@ borrado ni edición, sino el mecanismo contable estándar: un asiento de signo o
 
 ### Cuándo NO aparece el botón
 
-`puedeRevertirMovimiento(m)` (`index.html:5788`) devuelve `false` si:
+`puedeRevertirMovimiento(m)` devuelve `false` si:
 
 - `m.revertido === true` — no se revierte dos veces.
 - `m.reversaDe` — una reversa no se revierte.
-- `movimientoFacturadoEmitido(m)` — tiene CAE.
+- `motivoBloqueoReversa(m)` devuelve un motivo — está ligado a una factura viva.
 
-`movimientoFacturadoEmitido(m)` (`index.html:5775`) chequea **dos vías**: el flag
-`m.facturado === true`, y además la referencia directa desde una factura en estado
-`emitida`, por si la conciliación todavía no corrió en ese cliente.
+`motivoBloqueoReversa(m)` **reusa el `Set` de `movimientosComprometidos()`** del Cambio 1,
+con la misma semántica: las facturas en `error` no cuentan, porque se reintentan o se
+descartan. Devuelve el motivo en lugar de un booleano, para que el mensaje sea el correcto:
 
-Las tres guardas se revalidan dentro de `revertirMovimiento`, no solo en el render: si
-alguien intenta ejecutarla igual, aborta con `showNotif`. Para el caso del CAE el
-mensaje es explícito: *"se anula con nota de crédito en ARCA, no acá"*.
+```js
+function motivoBloqueoReversa(m) {
+  if (!m || !m.id) return null;
+  if (m.facturado === true) return 'emitida';
+  if (!movimientosComprometidos().has(m.id)) return null;
+  for (const [, f] of facturasEntries()) {
+    if (!f || f.estado !== FACTURA_ESTADOS.EMITIDA) continue;
+    const arr = Array.isArray(f.movimientoIds) ? f.movimientoIds : [];
+    if (arr.includes(m.id)) return 'emitida';
+  }
+  return 'en_curso'; // pendiente / procesando / sin estado
+}
+```
+
+El `Set` resuelve primero si hay bloqueo; solo cuando lo hay se recorren las facturas
+para distinguir el caso. `facturado === true` implica emitida ya conciliada, y la
+referencia directa se chequea igual por si la conciliación todavía no corrió en ese
+cliente.
+
+Las guardas se revalidan dentro de `revertirMovimiento`, no solo en el render: si alguien
+intenta ejecutarla igual, aborta con `showNotif` y el mensaje según el motivo.
+
+| Motivo | Mensaje |
+|---|---|
+| `emitida` | *"Tiene factura emitida con CAE: se anula con nota de crédito en ARCA, no acá"* |
+| `en_curso` | *"Tiene una solicitud de factura en curso: resolvé o cancelá esa solicitud antes de revertir"* |
+
+Bloquear `pendiente` y `procesando`, y no solo `emitida`, cierra el agujero de revertir
+un ingreso cuya solicitud sigue viva: n8n podría emitirla igual contra un movimiento ya
+anulado.
 
 ### Presentación
 
@@ -182,7 +212,7 @@ parte de entregar bien el Cambio 2, no como agregado propio.
 |---|---|---|
 | 1 | No habilitar borrado ni edición | ✅ Solo reversa. `removeMovimiento` (`index.html:2176`) sigue con 0 call sites. |
 | 2 | No tocar `reserva.pagado` ni desnormalizados | ✅ Ninguna escritura sobre `cabanas/reservas`. La reversa es puramente contable. |
-| 3 | Movimiento con factura EMITIDA no se revierte | ✅ Botón oculto + aborto con `showNotif` si se fuerza. Doble chequeo (flag + referencia). |
+| 3 | Movimiento con factura EMITIDA no se revierte | ✅ Botón oculto + aborto con `showNotif` si se fuerza. Doble chequeo (flag + referencia). Extendido a `pendiente` y `procesando`, con mensaje propio. |
 | 4 | No tocar Firebase | ✅ Ningún comando de CLI ni MCP ejecutado. |
 | 5 | No tocar reglas ni `firebase.json` | ✅ `git diff -- security/ firebase.json` vacío. |
 
@@ -192,28 +222,24 @@ parte de entregar bien el Cambio 2, no como agregado propio.
 
 | Chequeo | Resultado |
 |---|---|
-| `node --check` sobre el `<script type="module">` extraído (6299 líneas) | ✅ sin errores |
+| `node --check` sobre el `<script type="module">` extraído (6316 líneas) | ✅ sin errores |
 | `node tests/precios.test.mjs` | ✅ **33 passed, 0 failed** |
 | `node tests/today.test.mjs` | ✅ **4 passed, 0 failed** |
 | `revertirMovimiento` en `Object.assign(window, {...})` | ✅ presente |
 | Handlers inline (`onclick`/`onchange`/`oninput`) sin exportar | ✅ ninguno — 146 handlers contra 194 exports |
 | Llamadas a `remove()` sobre movimientos | ✅ ninguna (solo la definición muerta de `removeMovimiento`) |
-| `git status` | ✅ solo `index.html` modificado |
+| Sin referencias colgando a la función reemplazada (`movimientoFacturadoEmitido`) | ✅ eliminada por completo |
+| `git diff -- security/ firebase.json` | ✅ vacío — intactos |
+| `git status` | ✅ solo `index.html` y el reporte |
 
 ---
 
 ## Pendientes señalados, no implementados
 
-1. **Movimiento con factura `pendiente` o `procesando`: hoy se puede revertir.** La
-   regla 3 nombra solo `emitida`, y me atuve a eso. Pero revertir un ingreso que tiene
-   una solicitud de factura en curso deja a esa factura apuntando a un movimiento
-   anulado, y n8n podría emitirla igual. Conviene decidir si esos estados también
-   bloquean la reversa, o si la reversa debería cancelar la solicitud pendiente.
-
-2. **La reserva ligada queda desalineada, por diseño.** Si se revierte un ingreso con
+1. **La reserva ligada queda desalineada, por diseño.** Si se revierte un ingreso con
    `reservaId`, `reserva.pagado` sigue contando esa plata. Es lo que se pidió
    ("lo resolvemos aparte"), pero mientras tanto Cuentas por Cobrar no refleja la reversa.
 
-3. **Sin tests automatizados para lo nuevo.** `movimientosComprometidos`,
-   `movimientoAnulado` y `puedeRevertirMovimiento` son funciones puras y testeables;
-   hoy no hay cobertura. La suite existente no las toca.
+2. **Sin tests automatizados para lo nuevo.** `movimientosComprometidos`,
+   `movimientoAnulado`, `motivoBloqueoReversa` y `puedeRevertirMovimiento` son funciones
+   puras y testeables; hoy no hay cobertura. La suite existente no las toca.

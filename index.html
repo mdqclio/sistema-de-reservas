@@ -5768,28 +5768,32 @@ function saveMovimiento() {
 // intacto y solo se le marca `revertido: true`.
 // NO toca reserva.pagado ni ningún otro desnormalizado: la reversa es contable.
 
-// Un movimiento con factura EMITIDA (CAE de ARCA) no se revierte acá: eso se
-// anula con nota de crédito en ARCA. `facturado === true` implica emitida
-// conciliada, y además se chequea la referencia directa por si la conciliación
-// todavía no corrió en este cliente.
-function movimientoFacturadoEmitido(m) {
-  if (!m) return false;
-  if (m.facturado === true) return true;
+// Un movimiento ligado a una factura no se revierte acá. Devuelve el MOTIVO
+// ('emitida' | 'en_curso') para que el mensaje sea el correcto, o null si no hay
+// bloqueo. Reusa el mismo Set que la barrera de R-05 —misma semántica: las
+// facturas en 'error' no cuentan, se reintentan o se descartan—, y solo cuando
+// hay bloqueo recorre las facturas para distinguir el caso.
+// `facturado === true` implica emitida ya conciliada; la referencia directa se
+// chequea igual por si la conciliación todavía no corrió en este cliente.
+function motivoBloqueoReversa(m) {
+  if (!m || !m.id) return null;
+  if (m.facturado === true) return 'emitida';
+  if (!movimientosComprometidos().has(m.id)) return null;
   for (const [, f] of facturasEntries()) {
     if (!f || f.estado !== FACTURA_ESTADOS.EMITIDA) continue;
     const arr = Array.isArray(f.movimientoIds) ? f.movimientoIds : [];
-    if (arr.includes(m.id)) return true;
+    if (arr.includes(m.id)) return 'emitida';
   }
-  return false;
+  return 'en_curso'; // pendiente / procesando / sin estado
 }
 
 // Reglas para mostrar el botón: no se revierte dos veces, una reversa no se
-// revierte, y lo que tiene CAE queda fuera.
+// revierte, y lo comprometido por una factura viva queda fuera.
 function puedeRevertirMovimiento(m) {
   if (!m || !m.id) return false;
   if (m.revertido === true) return false;
   if (m.reversaDe) return false;
-  if (movimientoFacturadoEmitido(m)) return false;
+  if (motivoBloqueoReversa(m)) return false;
   return true;
 }
 
@@ -5800,8 +5804,13 @@ async function revertirMovimiento(id) {
   // listener pudo haber cambiado el estado entre el render y el click.
   if (orig.revertido === true) { showNotif('Ese movimiento ya fue revertido', 'error'); return; }
   if (orig.reversaDe) { showNotif('Una reversa no se puede revertir', 'error'); return; }
-  if (movimientoFacturadoEmitido(orig)) {
+  const bloqueo = motivoBloqueoReversa(orig);
+  if (bloqueo === 'emitida') {
     showNotif('Tiene factura emitida con CAE: se anula con nota de crédito en ARCA, no acá', 'error');
+    return;
+  }
+  if (bloqueo === 'en_curso') {
+    showNotif('Tiene una solicitud de factura en curso: resolvé o cancelá esa solicitud antes de revertir', 'error');
     return;
   }
 
