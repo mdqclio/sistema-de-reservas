@@ -2,7 +2,8 @@
 
 **Fecha:** 2026-09-10
 **Branch:** `fix/contabilidad-r05` (desde `main` @ `6954a8f`)
-**Archivos tocados:** `index.html` únicamente — +152 / −8 líneas.
+**Archivos tocados:** `index.html` (+152 / −8), `tests/contabilidad.test.mjs` (nuevo),
+`.github/workflows/tests.yml` (un step más).
 **No se tocó:** `security/*.json`, `firebase.json`, ni Firebase (sesión del CLI cerrada a propósito).
 
 Antecedente: `docs/reportes/2026-09-10-borrado-contabilidad.md`.
@@ -24,7 +25,9 @@ Antecedente: `docs/reportes/2026-09-10-borrado-contabilidad.md`.
   (`index.html:2176`) sigue sin un solo call site.
 - **Ningún desnormalizado tocado:** `reserva.pagado`, `saldo` y `estadoPago` quedan
   como estaban, según lo pedido.
-- Verificación completa en la sección final: sintaxis, 37 tests, exports y ausencia
+- **40 tests nuevos** en `tests/contabilidad.test.mjs`, sumados al CI. Extraen las
+  funciones reales de `index.html`; validados por mutación.
+- Verificación completa en la sección final: sintaxis, 77 tests, exports y ausencia
   de `remove()`.
 
 ---
@@ -229,8 +232,53 @@ parte de entregar bien el Cambio 2, no como agregado propio.
 | Handlers inline (`onclick`/`onchange`/`oninput`) sin exportar | ✅ ninguno — 146 handlers contra 194 exports |
 | Llamadas a `remove()` sobre movimientos | ✅ ninguna (solo la definición muerta de `removeMovimiento`) |
 | Sin referencias colgando a la función reemplazada (`movimientoFacturadoEmitido`) | ✅ eliminada por completo |
+| `node tests/contabilidad.test.mjs` (nuevo) | ✅ **40 passed, 0 failed** |
+| Mutaciones sobre `index.html` para validar la suite | ✅ 4/4 detectadas; archivo restaurado con `sha256sum` idéntico |
+| `.github/workflows/tests.yml` parseable, con el step nuevo | ✅ 4 steps |
 | `git diff -- security/ firebase.json` | ✅ vacío — intactos |
-| `git status` | ✅ solo `index.html` y el reporte |
+
+---
+
+## Tests
+
+`tests/contabilidad.test.mjs` — **40 casos, 40 passed**. Sumado al CI como step
+"Tests de contabilidad" en `.github/workflows/tests.yml`.
+
+Mismo patrón que `tests/precios.test.mjs`: **se extraen las funciones reales del
+`<script type="module">` de `index.html`** con el helper `grab(nombre)` y se corren en
+Node, sin DOM ni Firebase. Nada se reimplementa en el test — si el código de producción
+cambia, el test lo ve.
+
+También se extrae del archivo real la constante `FACTURA_ESTADOS`, así el test no
+compara contra strings sueltos que puedan divergir de la fuente.
+
+La única dependencia mockeada es `facturasData` (el espejo de `/cabanas/facturas`).
+`facturasEntries()` se extrae real y se pasa el objeto una sola vez al factory,
+mutándolo en el lugar entre casos, para que la cadena
+`puedeRevertirMovimiento → motivoBloqueoReversa → movimientosComprometidos → facturasEntries`
+corra completa y de verdad.
+
+### Cobertura
+
+| Bloque | Casos | Qué cubre |
+|---|---|---|
+| `movimientosComprometidos()` | 13 | `error` **no** compromete; `pendiente` / `procesando` / `emitida` sí; factura sin `estado` también; acumulación entre facturas; id repetido una sola vez. Datos rotos: `movimientoIds` ausente, `null`, no-array (string / objeto / número), array con huecos, y entradas basura en el nodo. |
+| `movimientoAnulado()` | 6 | `true` para revertido y para reversa; `revertido:false` no anula; `null` / `undefined` no rompen. |
+| `motivoBloqueoReversa()` | 10 | `'emitida'` por flag `facturado` y por referencia directa sin flag; `'en_curso'` para pendiente y procesando; `null` para `error` y sin factura; emitida gana sobre en curso; la factura de otro movimiento no bloquea. |
+| `puedeRevertirMovimiento()` | 11 | `false` si revertido, si es reversa, y con factura emitida / pendiente / procesando; `true` en el caso normal (ingreso y egreso) y con factura en `error`; defensivos. |
+
+### Verificación de que los tests sirven
+
+Se corrieron cuatro mutaciones sobre `index.html` para confirmar que la suite falla
+cuando el código se rompe (no que pasa por casualidad). `index.html` se restauró desde
+backup y se verificó por `sha256sum` idéntico al original.
+
+| Mutación | Resultado |
+|---|---|
+| Quitar la exclusión de `error` en `movimientosComprometidos` | ❌ 4 casos (1b, 1g, 3f, 4i) |
+| `motivoBloqueoReversa` devuelve `null` en vez de `'en_curso'` | ❌ 4 casos (3d, 3e, 4g, 4h) |
+| `movimientoAnulado` ignora `reversaDe` | ❌ 1 caso (2c) |
+| `puedeRevertirMovimiento` ignora el bloqueo por factura | ❌ 4 casos (4e, 4f, 4g, 4h) |
 
 ---
 
@@ -240,6 +288,8 @@ parte de entregar bien el Cambio 2, no como agregado propio.
    `reservaId`, `reserva.pagado` sigue contando esa plata. Es lo que se pidió
    ("lo resolvemos aparte"), pero mientras tanto Cuentas por Cobrar no refleja la reversa.
 
-2. **Sin tests automatizados para lo nuevo.** `movimientosComprometidos`,
-   `movimientoAnulado`, `motivoBloqueoReversa` y `puedeRevertirMovimiento` son funciones
-   puras y testeables; hoy no hay cobertura. La suite existente no las toca.
+2. **`revertirMovimiento()` en sí no tiene test.** Es `async` y escribe en Firebase
+   (`writeMovimiento`, `auditLog`), así que queda fuera del patrón `grab()` — que solo
+   toma declaraciones `function` sin `async` y corre sin mocks de red. Lo testeado son
+   sus guardas, que es donde está la lógica de decisión; la construcción del objeto
+   reversa (tipo invertido, `today()`, `reversaDe`) no está cubierta.
