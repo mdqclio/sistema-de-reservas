@@ -676,9 +676,11 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
       <div class="nav-item admin-only" onclick="showSection('log');closeSidebar()" id="nav-log" style="display:none;">
         <span class="icon">📋</span> Log de Actividad
       </div>
-      <!-- <div class="nav-item admin-only" onclick="showSection('botconfig');closeSidebar()" id="nav-botconfig" style="display:none;">
+      <!-- Reactivado aunque el chatbot siga apagado: bot_config lo usa el voucher
+           (horarios de check-in/out y datos de transferencia). Solo admin (.admin-only). -->
+      <div class="nav-item admin-only" onclick="showSection('botconfig');closeSidebar()" id="nav-botconfig" style="display:none;">
         <span class="icon">⚙️</span> Config. del Bot
-      </div> -->
+      </div>
     </nav>
     <div class="sidebar-footer">
       <button class="btn-logout" onclick="doLogout()">← Cerrar sesión</button>
