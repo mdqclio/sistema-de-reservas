@@ -52,6 +52,11 @@ jobs:
       - name: Tests de voucher
         run: node tests/voucher.test.mjs
 
+      # Accesos del modal de reserva: guardar → enviar comprobante solo si guardó,
+      # visibilidad de 📄/💰/🔗 igual que el listado.
+      - name: Tests de accesos del modal
+        run: node tests/modal.test.mjs
+
       # Chequeo de sintaxis del <script type="module"> de index.html
       # (mismo patrón que docs/START SESSION.md).
       - name: Sintaxis de index.html
