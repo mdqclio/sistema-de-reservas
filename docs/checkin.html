@@ -193,11 +193,12 @@ html, body { min-height: 100vh; background: var(--bg); color: var(--text);
 
 /* HEADER */
 .header { text-align: center; margin-bottom: 28px; }
-.logo { width: 60px; height: 60px; border-radius: 16px;
-  background: linear-gradient(135deg, var(--accent2), var(--accent));
-  display: flex; align-items: center; justify-content: center;
-  font-family: 'DM Serif Display', serif; font-size: 22px; color: #fff;
-  margin: 0 auto 14px; }
+/* Logo: <use> del SVG del repo (docs/logo-puerto-delfin.svg#logo). Con <img> el
+   fill="currentColor" del archivo cae a negro; con <use> hereda `color` de acá. */
+/* Ancho explícito = alto × 1176/896 (proporción del viewBox): <svg> con width:auto no es confiable en Safari. */
+.brand-logo { display: block; height: 64px; width: 84px; margin: 0 auto 12px; color: #6B7C8C; }
+@media (max-width: 360px) { .brand-logo { height: 52px; width: 68px; } }
+@media print { .brand-logo { height: 48px; width: 63px; margin-bottom: 8px; } }
 .header h1 { font-family: 'DM Serif Display', serif; font-size: 24px; }
 .header p  { color: var(--muted); font-size: 14px; margin-top: 4px; }
 
@@ -267,7 +268,7 @@ html, body { min-height: 100vh; background: var(--bg); color: var(--text);
 
   <!-- HEADER -->
   <div class="header">
-    <div class="logo">PD</div>
+    <svg class="brand-logo" viewBox="0 0 1176 896" role="img" aria-label="Puerto Delfín"><use href="logo-puerto-delfin.svg#logo"></use></svg>
     <h1>Puerto Delfín</h1>
     <p>Pre check-in de huéspedes</p>
   </div>

@@ -146,6 +146,12 @@
 html, body { background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 16px; line-height: 1.45; }
 .wrap { max-width: 560px; margin: 0 auto; padding: 20px 16px 48px; }
 .header { text-align: center; margin-bottom: 18px; }
+/* Logo: <use> del SVG del repo (docs/logo-puerto-delfin.svg#logo). Con <img> el
+   fill="currentColor" del archivo cae a negro; con <use> hereda `color` de acá. */
+/* Ancho explícito = alto × 1176/896 (proporción del viewBox): <svg> con width:auto no es confiable en Safari. */
+.brand-logo { display: block; height: 64px; width: 84px; margin: 0 auto 12px; color: #6B7C8C; }
+@media (max-width: 360px) { .brand-logo { height: 52px; width: 68px; } }
+@media print { .brand-logo { height: 48px; width: 63px; margin-bottom: 8px; } }
 .header h1 { font-size: 22px; }
 .header p { color: var(--muted); font-size: 14px; }
 .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
@@ -180,6 +186,7 @@ html, body { background: var(--bg); color: var(--text); font-family: system-ui, 
 <body>
   <div class="wrap">
     <div class="header">
+      <svg class="brand-logo" viewBox="0 0 1176 896" role="img" aria-label="Puerto Delfín"><use href="logo-puerto-delfin.svg#logo"></use></svg>
       <h1>Cabañas Puerto Delfín</h1>
       <p>Comprobante de reserva</p>
     </div>
