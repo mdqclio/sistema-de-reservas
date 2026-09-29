@@ -322,7 +322,8 @@ td.acciones .btn:last-child { margin-right: 0; }
 .star:hover { transform:scale(1.2); }
 
 /* ===== GRILLA ===== */
-.grilla-table { border-collapse: collapse; font-size: 12px; width: 100%; table-layout: fixed; }
+.grilla-table { border-collapse: collapse; font-size: 12px; width: 100%; min-width: 820px; table-layout: fixed; }
+.grilla-table th.grilla-corner { position: sticky; left: 0; z-index: 3; background: var(--surface2); width: 180px; }
 .grilla-table th {
   background: var(--surface2); color: var(--text3); font-size: 10px;
   text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 4px;
@@ -343,6 +344,34 @@ td.acciones .btn:last-child { margin-right: 0; }
 .grilla-cell.gc-free { background: transparent; }
 .grilla-cell .grilla-precio { font-size: 9px; color: #fff; text-align: center; opacity: .9; pointer-events: none; }
 .grilla-cell.gc-sel { background: var(--accent2); outline: 2px solid var(--accent2); outline-offset: -2px; }
+/* Fila de días: una celda de fondo por día (grid) + barras absolutas encima. */
+.grilla-table td.grilla-row { padding: 0; border: 1px solid var(--border); }
+.grilla-track { position: relative; display: grid; height: 32px; }
+.grilla-track .grilla-cell { border-left: 1px solid var(--border); position: relative; display: flex; align-items: center; }
+.grilla-track .grilla-cell:first-child { border-left: none; }
+.grilla-track .gc-free { cursor: pointer; }
+.grilla-track .gc-busy { cursor: default; }
+/* El precio es de la noche que arranca ese día: se muestra en la mitad derecha,
+   que es donde empezaría una reserva que entre ese día. */
+.grilla-track .grilla-precio { width: 50%; margin-left: 50%; }
+.grilla-barra {
+  position: absolute; top: 3px; bottom: 3px; z-index: 1;
+  border-radius: 4px; display: flex; align-items: center; gap: 2px; padding: 0 6px;
+  font-size: 9px; font-weight: 600; white-space: nowrap; overflow: hidden;
+  cursor: pointer; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.15);
+}
+.grilla-barra.checkin { background: rgba(59,130,246,0.75); color: white; }
+.grilla-barra.confirmada { background: rgba(13,148,136,0.75); color: white; }
+.grilla-barra.checkout { background: rgba(100,116,139,0.45); color: var(--text2); }
+.grilla-barra .grilla-debe { color: #fecaca; font-weight: 700; }
+.grilla-barra .gb-flecha { flex: none; font-size: 12px; line-height: 1; opacity: .9; }
+/* Recortada por el borde del rango visible: borde recto + línea punteada = "sigue". */
+.grilla-barra.gb-cont-izq { border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: 2px dashed rgba(255,255,255,0.7); }
+.grilla-barra.gb-cont-der { border-top-right-radius: 0; border-bottom-right-radius: 0; border-right: 2px dashed rgba(255,255,255,0.7); }
+@media (max-width: 768px) {
+  .grilla-table { min-width: 720px; }
+  .grilla-table th.grilla-corner, .grilla-table td.cabaña-label { width: 96px; padding-left: 6px; padding-right: 6px; }
+}
 /* Conversaciones (inbox omnicanal) */
 .conv-layout { display:grid; grid-template-columns:300px 1fr; gap:12px; height:calc(100vh - 150px); min-height:420px; }
 .conv-list-pane { background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); overflow:auto; }
@@ -361,29 +390,17 @@ td.acciones .btn:last-child { margin-right: 0; }
 .conv-msg-hora { font-size:10px; opacity:.7; align-self:flex-end; }
 .conv-input-box { display:flex; gap:8px; padding:10px; border-top:1px solid var(--border); }
 .conv-input-box textarea { flex:1; resize:none; }
-.grilla-cell.gc-occupied { background: rgba(59,130,246,0.25); }
-.grilla-cell.gc-confirmed { background: rgba(13,148,136,0.2); }
-.grilla-cell.gc-checkout { background: rgba(100,116,139,0.12); }
 .grilla-cell.gc-today { border-left: 2px solid var(--accent) !important; }
 .grilla-cell-label {
   font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   max-width: 100%; padding: 0 2px; color: var(--text); font-weight: 500;
 }
-.grilla-span {
-  position: absolute; top: 2px; left: 0; right: 0; bottom: 2px;
-  border-radius: 3px; display: flex; align-items: center; justify-content: center; padding: 0 4px;
-  font-size: 9px; font-weight: 600; white-space: nowrap; overflow: hidden;
-  text-overflow: ellipsis; cursor: pointer; z-index: 1;
-}
 .grilla-span-txt {
-  /* Contenedor flex centrado: sin este wrapper el texto desborda por ambos lados
+  /* Texto de la barra (flex): sin este wrapper con min-width:0 el texto desborda
      y se corta a la mitad ("go · debe") en vez de mostrar la elipsis al final. */
-  display: block; min-width: 0; max-width: 100%;
+  flex: 1 1 auto; display: block; min-width: 0; max-width: 100%;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.grilla-span.checkin { background: rgba(59,130,246,0.5); color: white; }
-.grilla-span.confirmada { background: rgba(13,148,136,0.5); color: white; }
-.grilla-span.checkout { background: rgba(100,116,139,0.3); color: var(--text2); }
 .grilla-hab-header td { background: var(--surface3) !important; color: var(--text); font-weight: 600; font-size: 11px; padding: 5px 10px; border: 1px solid var(--border2); }
 
 /* ===== TOOLTIP ===== */
@@ -2845,7 +2862,7 @@ document.querySelectorAll('.modal-overlay').forEach(el => {
 
 function pagoBadge(r) {
   const ep = r.estadoPago || 'total';
-  const saldo = Number(r.saldo || 0);
+  const saldo = saldoReserva(r);
   if(ep === 'pendiente') return `<span class="badge red">Sin pago</span>`;
   if(ep === 'senia' || saldo > 0) return `<span class="badge amber">Debe ${fmtMoney(saldo, r.moneda)}</span>`;
   return `<span class="badge green">Pagado</span>`;
@@ -3184,7 +3201,7 @@ function cycleBed(bedId) {
   if(resOcupada) {
     // Mostrar info del huésped en lugar de ciclar estado
     const h = getHuespedes().find(x=>x.id===resOcupada.huespedId);
-    const saldo = Number(resOcupada.saldo||0);
+    const saldo = saldoReserva(resOcupada);
     const nights = nightsBetween(resOcupada.entrada, resOcupada.salida);
     document.getElementById('guestDetailContent').innerHTML = `
       <div class="guest-detail" style="margin-bottom:20px">
@@ -3271,7 +3288,7 @@ function renderReservas() {
       + `<div style="font-size:10px;color:var(--text3);line-height:1.4">s/fact ${fmtMoney(fact.sinFacturar, r.moneda)}</div>`;
     const canCheckin = r.estado===ESTADO_RESERVA.CONFIRMADA;
     const canCheckout = r.estado===ESTADO_RESERVA.CHECKIN;
-    const hasSaldo = Number(r.saldo||0) > 0;
+    const hasSaldo = saldoReserva(r) > 0;
     return `<tr>
       <td>${escapeHtml(getHuespedNombre(r.huespedId, r))}</td>
       <td>Cabaña ${r.hab}</td>
@@ -3467,6 +3484,20 @@ function calcularPrecioReserva(hab, entrada, salida, opts = {}) {
 // sin `total`, recalculado con la cascada respetando precio/noche, cargos y promo guardados.
 function totalReserva(r) {
   return Number(r.total) || calcularPrecioReserva(r.hab, r.entrada, r.salida, { precioOverride: r.precio, cargos: r.cargos, promo: r.promo }).total;
+}
+
+// Saldo pendiente de una reserva, en r.moneda. Única fuente para listado, grilla,
+// mapa y dashboard. Fuente de verdad: r.saldo, que mantienen todos los caminos de
+// escritura (saveReserva, openPago, extender sin cobrar, check-in). Recalcular
+// total − pagado NO sirve: extender suma a r.saldo / r.pagado sin tocar r.total.
+// Fallback (reservas viejas sin r.saldo): total − pagado. Nunca negativo, a centavos.
+function saldoReserva(r) {
+  if (!r) return 0;
+  const guardado = Number(r.saldo);
+  const s = (r.saldo != null && r.saldo !== '' && Number.isFinite(guardado))
+    ? guardado
+    : totalReserva(r) - (Number(r.pagado) || 0);
+  return Math.max(Math.round(s * 100) / 100, 0);
 }
 
 // Resumen de facturación de una reserva a partir de sus movimientos de ingreso
@@ -4009,7 +4040,7 @@ function renderCheckin() {
   document.getElementById('tablaEnHostel').innerHTML = enHostel.length
     ? enHostel.map(r=>{
         const h = getHuespedes().find(x=>x.id===r.huespedId);
-        const saldo = Number(r.saldo||0);
+        const saldo = saldoReserva(r);
         return `<tr>
           <td>${escapeHtml(getHuespedNombre(r.huespedId, r))}</td>
           <td>${escapeHtml(h?.nac||'—')}</td>
@@ -6599,6 +6630,25 @@ function grillaNavegar(dias) {
   renderGrilla();
 }
 
+// Posición (en % del ancho de la fila) de la barra de una reserva en la grilla.
+// Barra de medio día: de la mitad de la celda de entrada a la mitad de la de salida.
+//   left = (díasDesdeInicio + 0.5) / dias * 100
+// Se recorta a los bordes del rango visible y avisa de qué lado sigue.
+// Devuelve null si no se ve ninguna parte. Solo presentación: no decide ocupación.
+function grillaBarraPos(entrada, salida, inicio, dias) {
+  const ini = nightsBetween(inicio, entrada) + 0.5;
+  const fin = nightsBetween(inicio, salida) + 0.5;
+  const desde = Math.max(ini, 0);
+  const hasta = Math.min(fin, dias);
+  if (!(hasta > desde)) return null;
+  return {
+    left: desde / dias * 100,
+    width: (hasta - desde) / dias * 100,
+    cortaIzq: ini < 0,
+    cortaDer: fin > dias,
+  };
+}
+
 function renderGrilla() {
   if (!grillaFechaInicio) grillaFechaInicio = today();
   const reservas = getReservas();
@@ -6624,7 +6674,7 @@ function renderGrilla() {
   let html = '<table class="grilla-table">';
 
   // Header fechas
-  html += '<thead><tr><th style="position:sticky;left:0;z-index:3;background:var(--surface2);width:180px">Cabaña</th>';
+  html += '<thead><tr><th class="grilla-corner">Cabaña</th>';
   fechas.forEach(f => {
     const d = new Date(f + 'T12:00:00');
     const isToday = f === tod;
@@ -6653,42 +6703,47 @@ function renderGrilla() {
       ].filter(Boolean).join(' · ');
       html += `<tr><td class="cabaña-label"><div class="cabaña-nombre">Cabaña ${b.label}</div>${meta ? `<div class="cabaña-config">${meta}</div>` : ''}</td>`;
 
-      // Reserva que cubre la fecha f en esta cabaña (mismo criterio de estados).
-      const resEnFecha = (f) => reservas.find(r =>
-        r.cabaña === b.id &&
-        (r.estado === ESTADO_RESERVA.CHECKIN || r.estado === ESTADO_RESERVA.CONFIRMADA || r.estado === ESTADO_RESERVA.CHECKOUT) &&
+      // Reserva que cubre la NOCHE f en esta cabaña (mismo criterio de estados y el
+      // mismo intervalo semiabierto entrada <= f < salida que la disponibilidad).
+      const estadosVisibles = [ESTADO_RESERVA.CHECKIN, ESTADO_RESERVA.CONFIRMADA, ESTADO_RESERVA.CHECKOUT];
+      const resCab = reservas.filter(r => r.cabaña === b.id && estadosVisibles.includes(r.estado));
+      const resEnFecha = (f) => resCab.find(r =>
         r.entrada.substring(0,10) <= f && r.salida.substring(0,10) > f
       );
 
-      for (let i = 0; i < fechas.length; i++) {
-        const f = fechas[i];
+      // Fondo: una celda por día. Libre → precio de la noche + selección de rango.
+      // Noche ocupada → sin click (no se puede cargar una reserva encima).
+      html += `<td class="grilla-row" colspan="${fechas.length}"><div class="grilla-track" style="grid-template-columns:repeat(${fechas.length},1fr)">`;
+      for (const f of fechas) {
         const isToday = f === tod;
-        const res = resEnFecha(f);
-
-        if (res) {
-          // Fusionar los días consecutivos visibles de la MISMA reserva en una sola celda
-          let span = 1;
-          while (i + span < fechas.length) {
-            const r2 = resEnFecha(fechas[i + span]);
-            if (r2 && r2.id === res.id) span++; else break;
-          }
-          const cls = res.estado === ESTADO_RESERVA.CHECKIN ? 'gc-occupied' : res.estado === ESTADO_RESERVA.CONFIRMADA ? 'gc-confirmed' : 'gc-checkout';
-          const nombre = escapeHtml(getHuespedNombre(res.huespedId, res));
-          const saldo = (Number(res.total) || Number(res.precio) || 0) - (Number(res.pagado) || 0);
-          // Saldo en la moneda de ESTA reserva (sin convertir).
-          const saldoTxt = saldo > 0 ? `debe ${fmtPrecioCorto(saldo, res.moneda || 'ARS')}` : '';
-          const debe = saldoTxt ? ` · <span style="color:#fca5a5;font-weight:600">${saldoTxt}</span>` : '';
-          const titulo = saldoTxt ? `${nombre} · ${saldoTxt}` : nombre;
-          html += `<td class="grilla-cell ${cls}${isToday ? ' gc-today' : ''}" colspan="${span}" onclick="editReserva('${res.id}')" style="cursor:pointer"><div class="grilla-span ${res.estado}" title="${titulo}"><span class="grilla-span-txt">${nombre}${debe}</span></div></td>`;
-          i += span - 1;
+        if (resEnFecha(f)) {
+          html += `<div class="grilla-cell gc-busy${isToday ? ' gc-today' : ''}"></div>`;
         } else {
           const pr = precioNocheCascada(hs, f);
           // Precio libre en la moneda configurada para la cabaña (sin convertir).
           const inner = pr > 0 ? `<div class="grilla-precio">${fmtPrecioCorto(pr, cfg.moneda || 'ARS')}</div>` : '';
-          html += `<td class="grilla-cell gc-free${isToday ? ' gc-today' : ''}" data-cab="${b.id}" data-fecha="${f}" onclick="grillaCellClick(this,'${b.id}','${hs}','${f}')" style="cursor:pointer">${inner}</td>`;
+          html += `<div class="grilla-cell gc-free${isToday ? ' gc-today' : ''}" data-cab="${b.id}" data-fecha="${f}" onclick="grillaCellClick(this,'${b.id}','${hs}','${f}')">${inner}</div>`;
         }
       }
 
+      // Barras de medio día: arrancan a la mitad del día de entrada y terminan a la
+      // mitad del día de salida. En un recambio (sale el 19, entra el 19) la celda
+      // del 19 queda partida: mitad izquierda la que se va, mitad derecha la que llega.
+      for (const res of resCab) {
+        const pos = grillaBarraPos(res.entrada.substring(0,10), res.salida.substring(0,10), fechas[0], fechas.length);
+        if (!pos) continue; // fuera del rango visible
+        const nombre = escapeHtml(getHuespedNombre(res.huespedId, res));
+        const saldo = saldoReserva(res);
+        // Saldo en la moneda de ESTA reserva (sin convertir).
+        const saldoTxt = saldo > 0 ? `debe ${fmtPrecioCorto(saldo, res.moneda || 'ARS')}` : '';
+        const debe = saldoTxt ? ` · <span class="grilla-debe">${saldoTxt}</span>` : '';
+        const titulo = `${nombre}${saldoTxt ? ' · ' + saldoTxt : ''} (${fmt(res.entrada.substring(0,10))} → ${fmt(res.salida.substring(0,10))})`;
+        const cont = (pos.cortaIzq ? ' gb-cont-izq' : '') + (pos.cortaDer ? ' gb-cont-der' : '');
+        html += `<div class="grilla-barra ${res.estado}${cont}" style="left:${pos.left}%;width:${pos.width}%" title="${titulo}" onclick="editReserva('${res.id}')">`
+          + `${pos.cortaIzq ? '<span class="gb-flecha">‹</span>' : ''}<span class="grilla-span-txt">${nombre}${debe}</span>${pos.cortaDer ? '<span class="gb-flecha">›</span>' : ''}</div>`;
+      }
+
+      html += '</div></td>';
       html += '</tr>';
     });
   }
