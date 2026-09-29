@@ -520,6 +520,11 @@ td.acciones .btn:last-child { margin-right: 0; }
 .chart-card h4 { font-size: 13px; font-weight: 600; color: var(--text2); margin-bottom: 12px; }
 @media(max-width:900px) { .chart-row { grid-template-columns: 1fr; } .kanban-col { flex: 0 0 220px; } }
 @media(max-width:600px) { .ficha-360-grid { grid-template-columns: 1fr; } }
+
+/* ===== INPUTS NUMÉRICOS: sin spinners (evita cambios accidentales de montos) ===== */
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input[type=number] { -moz-appearance: textfield; appearance: textfield; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
@@ -1048,14 +1053,14 @@ td.acciones .btn:last-child { margin-right: 0; }
   <div class="modal">
     <h2 id="modalReservaTitle">Nueva Reserva</h2>
     <input type="hidden" id="res-edit-id">
-    <input type="hidden" id="res-huesped-mode" value="existente">
+    <input type="hidden" id="res-huesped-mode" value="nuevo">
     <div class="form-group">
       <label>Huésped *</label>
       <div style="display:flex;gap:6px;margin-bottom:8px;">
-        <button type="button" class="btn btn-blue" id="res-modo-existente" onclick="setHuespedMode('existente')" style="flex:1;padding:6px">Existente</button>
-        <button type="button" class="btn btn-ghost" id="res-modo-nuevo" onclick="setHuespedMode('nuevo')" style="flex:1;padding:6px">Nuevo</button>
+        <button type="button" class="btn btn-ghost" id="res-modo-existente" onclick="setHuespedMode('existente')" style="flex:1;padding:6px">Existente</button>
+        <button type="button" class="btn btn-blue" id="res-modo-nuevo" onclick="setHuespedMode('nuevo')" style="flex:1;padding:6px">Nuevo</button>
       </div>
-      <div id="res-huesped-existente" style="position:relative">
+      <div id="res-huesped-existente" style="position:relative;display:none">
         <input type="text" id="res-huesped-buscar" placeholder="Buscar huésped por nombre..." autocomplete="off"
           oninput="document.getElementById('res-huesped').value='';filtrarHuespedes(this.value)"
           onfocus="filtrarHuespedes(this.value)"
@@ -1063,7 +1068,7 @@ td.acciones .btn:last-child { margin-right: 0; }
         <input type="hidden" id="res-huesped" value="">
         <div id="res-huesped-lista" class="autocomplete-lista" style="display:none"></div>
       </div>
-      <div id="res-huesped-nuevo" style="display:none">
+      <div id="res-huesped-nuevo">
         <div class="form-row">
           <div class="form-group"><label>Nombre *</label><input type="text" id="hn-nombre"></div>
           <div class="form-group"><label>Apellido *</label><input type="text" id="hn-apellido"></div>
@@ -3598,7 +3603,7 @@ function openNuevaReserva() {
   document.getElementById('res-edit-id').value = '';
   document.getElementById('btnGuardarReserva').textContent = 'Guardar Reserva';
   clearHuespedNuevo();
-  setHuespedMode('existente');
+  setHuespedMode('nuevo'); // reserva nueva: casi siempre huésped nuevo
   document.getElementById('res-huesped').value = '';
   document.getElementById('res-huesped-buscar').value = '';
   document.getElementById('res-huesped-lista').style.display = 'none';
@@ -6658,7 +6663,7 @@ function renderGrilla() {
           const nombre = escapeHtml(getHuespedNombre(res.huespedId, res));
           const saldo = (Number(res.total) || Number(res.precio) || 0) - (Number(res.pagado) || 0);
           const debe = saldo > 0 ? ` · <span style="color:#fca5a5;font-weight:600">debe ${fmtPrecioCorto(saldo)}</span>` : '';
-          html += `<td class="grilla-cell ${cls}${isToday ? ' gc-today' : ''}" colspan="${span}" onclick="cycleBed('${b.id}')"><div class="grilla-span ${res.estado}" title="${nombre}">${nombre}${debe}</div></td>`;
+          html += `<td class="grilla-cell ${cls}${isToday ? ' gc-today' : ''}" colspan="${span}" onclick="editReserva('${res.id}')" style="cursor:pointer"><div class="grilla-span ${res.estado}" title="${nombre}">${nombre}${debe}</div></td>`;
           i += span - 1;
         } else {
           const pr = precioNocheCascada(hs, f);
@@ -6739,7 +6744,7 @@ function openReservaDesdeGrilla(hab, cabId, entrada, salida) {
   document.getElementById('res-edit-id').value = '';
   document.getElementById('btnGuardarReserva').textContent = 'Guardar Reserva';
   clearHuespedNuevo();
-  setHuespedMode('existente');
+  setHuespedMode('nuevo'); // reserva nueva: casi siempre huésped nuevo
   document.getElementById('res-huesped').value = '';
   document.getElementById('res-huesped-buscar').value = '';
   document.getElementById('res-huesped-lista').style.display = 'none';
@@ -8047,6 +8052,15 @@ async function generarLinkPrecheckin(rid) {
   catch(e) { prompt('Link de pre check-in:', url); }
   auditLog('link pre check-in', 'Reserva', `${getHuespedNombre(r.huespedId, r)} · Cab ${r.hab}`);
 }
+
+// La rueda del mouse / trackpad sobre un input[type=number] enfocado cambia el
+// valor sin que se note (se perdían precios al scrollear). Se saca el foco antes
+// de la acción por defecto: el valor queda intacto y la página scrollea normal.
+// Delegado en document: cubre también los inputs creados dinámicamente.
+document.addEventListener('wheel', (e) => {
+  const t = e.target;
+  if (t instanceof HTMLInputElement && t.type === 'number' && document.activeElement === t) t.blur();
+}, { passive: false, capture: true });
 
 Object.assign(window, {
   doLogin, doLogout, renderKnowledge, saveKnowledgeEntry, deleteKnowledgeEntry, editKnowledgeEntry, cancelEditKnowledge, saveEditKnowledge, showSection, closeSidebar, toggleSidebar, openNuevaReserva, onHabChange,
