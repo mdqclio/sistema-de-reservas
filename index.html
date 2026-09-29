@@ -166,6 +166,10 @@ tr:hover td { background: rgba(59,130,246,0.04); color: var(--text); }
 .badge.amber { background: rgba(217,119,6,0.15); color: #fbbf24; }
 .badge.red { background: rgba(220,12,12,0.15); color: #f87171; }
 .badge.gray { background: rgba(100,116,139,0.2); color: #94a3b8; }
+.badge.grupo { background: rgba(168,85,247,0.18); color: #c084fc; cursor: pointer; margin-left: 6px; }
+.grupo-chip { display: inline-flex; align-items: center; gap: 4px; background: var(--surface3); border: 1px solid var(--border); border-radius: 12px; padding: 2px 8px; font-size: 12px; margin: 0 6px 6px 0; }
+.grupo-chip button { background: none; border: none; color: var(--text3); cursor: pointer; padding: 0 2px; }
+.grupo-libres label { display: inline-flex; align-items: center; gap: 6px; margin: 0 14px 6px 0; font-size: 13px; color: var(--text2); text-transform: none; cursor: pointer; }
 
 /* ===== BUTTONS ===== */
 .btn { padding: 8px 16px; border-radius: var(--radius); font-size: 13px; font-weight: 500; transition: all 0.2s; cursor: pointer; }
@@ -1141,6 +1145,18 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
         <select id="res-cabaña"><option value="">auto</option></select>
       </div>
     </div>
+    <!-- Reserva de grupo: cabañas adicionales con las mismas fechas (1 reserva por cabaña). -->
+    <div class="form-group" id="res-grupo-block" style="margin-bottom:12px;">
+      <button type="button" class="btn btn-ghost btn-sm" onclick="toggleGrupoPanel()">👥 Agregar cabañas (grupo)</button>
+      <div id="res-grupo-panel" style="display:none;margin-top:8px;padding:10px;border:1px dashed var(--border);border-radius:var(--radius);">
+        <div style="font-size:12px;color:var(--text3);margin-bottom:8px;">Se crea una reserva por cabaña, con las mismas fechas y el mismo titular (editable después). Cada una se cotiza sola.</div>
+        <div class="form-group"><label>Tipo de cabaña</label>
+          <select id="res-grupo-tipo" onchange="renderGrupoCabanas()"></select>
+        </div>
+        <div id="res-grupo-libres" class="grupo-libres"></div>
+        <div id="res-grupo-sel" style="margin-top:6px;"></div>
+      </div>
+    </div>
     <div class="form-row">
       <div class="form-group"><label>Fecha Entrada *</label><input type="date" id="res-entrada" onchange="onEntradaChange()"></div>
       <div class="form-group"><label>Fecha Salida *</label><input type="date" id="res-salida" onchange="updateBedsSelect();renderResPromos();calcTotalReserva()"></div>
@@ -1303,6 +1319,17 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
   </div>
 </div>
 
+<!-- MODAL GRUPO (vista consolidada) -->
+<div class="modal-overlay" id="modalGrupo">
+  <div class="modal" style="max-width:820px;">
+    <h2>👥 Reserva de grupo</h2>
+    <div id="grupoContenido"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalGrupo')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL CONFIRMAR BORRADO -->
 <div class="modal-overlay" id="modalConfirmDelete">
   <div class="modal" style="max-width:400px;">
@@ -1387,6 +1414,12 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
       </div>
     </div>
     <div class="form-group"><label>Concepto</label><input type="text" id="pago-concepto" placeholder="Ej: Saldo restante estadía"></div>
+    <!-- Solo si la reserva es de un grupo: aplicar a esta sola o repartir entre varias. -->
+    <div id="pago-grupo" style="display:none;background:var(--surface2);border-radius:var(--radius);padding:12px;margin-bottom:12px;font-size:13px;">
+      <label style="display:flex;align-items:center;gap:6px;text-transform:none;"><input type="radio" name="pago-modo" value="solo" checked onchange="onPagoModoChange()"> Aplicar solo a esta reserva</label>
+      <label style="display:flex;align-items:center;gap:6px;text-transform:none;"><input type="radio" name="pago-modo" value="grupo" onchange="onPagoModoChange()"> Repartir entre reservas del grupo</label>
+      <div id="pago-grupo-lista" style="display:none;margin-top:8px;"></div>
+    </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modalPago')">Cancelar</button>
       <button class="btn btn-green" onclick="savePago()">Registrar Pago</button>
@@ -3297,7 +3330,7 @@ function renderReservas() {
     const canCheckout = r.estado===ESTADO_RESERVA.CHECKIN;
     const hasSaldo = saldoReserva(r) > 0;
     return `<tr>
-      <td>${escapeHtml(getHuespedNombre(r.huespedId, r))}</td>
+      <td>${escapeHtml(getHuespedNombre(r.huespedId, r))}${grupoBadge(r)}</td>
       <td>Cabaña ${r.hab}</td>
       <td>${fmtFecha(r.entrada)}</td><td>${fmtFecha(r.salida)}</td>
       <td style="text-align:center">${nights}</td>
@@ -3507,6 +3540,59 @@ function saldoReserva(r) {
   return Math.max(Math.round(s * 100) / 100, 0);
 }
 
+// ===================== GRUPOS =====================
+// Un grupo = N reservas independientes (una por cabaña) vinculadas por r.grupoId, más
+// r.grupoContactoId (huésped que coordinó). Cada reserva conserva su total, saldo,
+// check-in y facturación. Nada acá borra ni modifica una reserva por pertenecer a un grupo.
+
+function reservasDelGrupo(grupoId) {
+  if (!grupoId) return [];
+  return getReservas().filter(r => r.grupoId === grupoId);
+}
+
+// Reparte un cobro entre reservas, proporcional al saldo de cada una, a centavos.
+// Método del mayor resto: la suma de las partes cierra EXACTO con el monto.
+// items: [{ id, saldo }]. No admite repartir más que la suma de saldos (el excedente
+// no tendría a qué reserva ir): en ese caso se cobra por reserva.
+function repartirPago(monto, items) {
+  const cents = Math.round(Number(monto) * 100);
+  if (!Number.isFinite(cents) || cents <= 0) return { ok: false, error: 'Ingresá un monto válido' };
+  const conSaldo = (items || []).map(it => ({ id: it.id, sc: Math.round((Number(it.saldo) || 0) * 100) }))
+    .filter(it => it.sc > 0);
+  if (!conSaldo.length) return { ok: false, error: 'Elegí al menos una reserva con saldo' };
+  const totalSc = conSaldo.reduce((s, it) => s + it.sc, 0);
+  if (cents > totalSc) return { ok: false, error: 'El monto supera el saldo de las reservas elegidas' };
+  const base = conSaldo.map(it => {
+    const exacto = cents * it.sc / totalSc;
+    const piso = Math.floor(exacto);
+    return { id: it.id, c: piso, resto: exacto - piso };
+  });
+  let falta = cents - base.reduce((s, b) => s + b.c, 0);
+  [...base].sort((a, b) => b.resto - a.resto).forEach(b => { if (falta > 0) { b.c++; falta--; } });
+  return { ok: true, partes: base.filter(b => b.c > 0).map(b => ({ id: b.id, monto: b.c / 100 })) };
+}
+
+// Totales del grupo por moneda (no se suman ARS con USD). Las canceladas se listan
+// aparte y no cuentan en los totales.
+function resumenGrupo(reservas) {
+  const activas = (reservas || []).filter(r => r.estado !== ESTADO_RESERVA.CANCELADA);
+  const canceladas = (reservas || []).filter(r => r.estado === ESTADO_RESERVA.CANCELADA);
+  const porMoneda = {};
+  activas.forEach(r => {
+    const m = r.moneda || 'ARS';
+    const t = porMoneda[m] ||= { total: 0, pagado: 0, saldo: 0 };
+    t.total += Number(totalReserva(r)) || 0;
+    t.pagado += Number(r.pagado) || 0;
+    t.saldo += saldoReserva(r);
+  });
+  Object.values(porMoneda).forEach(t => {
+    t.total = Math.round(t.total * 100) / 100;
+    t.pagado = Math.round(t.pagado * 100) / 100;
+    t.saldo = Math.round(t.saldo * 100) / 100;
+  });
+  return { activas, canceladas, porMoneda };
+}
+
 // Resumen de facturación de una reserva a partir de sus movimientos de ingreso
 // (linkeados por reservaId): cuánto se cobró, cuánto de eso se facturó y cuánto no.
 // Se filtra por la MONEDA de la reserva (default ARS): sumar ARS + USD daría un total
@@ -3706,12 +3792,127 @@ function calcTotalReserva() {
   }
 }
 
+// ---- Carga de grupo en el modal de reserva ----
+let grupoExtras = []; // habs adicionales elegidas (strings)
+
+// Misma condición que bloquea el guardado en saveReserva (CHECKIN/CONFIRMADA que se
+// superpone). Solo lectura: no reemplaza ni cambia la validación de disponibilidad.
+function cabanaLibreParaGrupo(cabId, entrada, salida) {
+  return !getReservas().some(r =>
+    r.cabaña === cabId &&
+    (r.estado === ESTADO_RESERVA.CHECKIN || r.estado === ESTADO_RESERVA.CONFIRMADA) &&
+    r.entrada < salida && r.salida > entrada
+  );
+}
+
+function resetGrupoCarga(visible) {
+  grupoExtras = [];
+  const block = document.getElementById('res-grupo-block');
+  if (block) block.style.display = visible ? '' : 'none';
+  const panel = document.getElementById('res-grupo-panel');
+  if (panel) panel.style.display = 'none';
+  const sel = document.getElementById('res-grupo-sel');
+  if (sel) sel.innerHTML = '';
+}
+
+function toggleGrupoPanel() {
+  const panel = document.getElementById('res-grupo-panel');
+  const abrir = panel.style.display === 'none';
+  panel.style.display = abrir ? '' : 'none';
+  if (!abrir) return;
+  // Nivel 1: tipos de cabaña según la config de precios.habitaciones.
+  const habs = (DB.get('precios', {}).habitaciones) || [];
+  const tipos = [...new Set(habs.map(h => h.tipo).filter(Boolean))];
+  const tipoSel = document.getElementById('res-grupo-tipo');
+  const prev = tipoSel.value;
+  tipoSel.innerHTML = '<option value="">Elegí el tipo...</option>' + tipos.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+  if (tipos.includes(prev)) tipoSel.value = prev;
+  renderGrupoCabanas();
+}
+
+// Nivel 2: cabañas del tipo elegido LIBRES para las fechas del modal.
+function renderGrupoCabanas() {
+  const cont = document.getElementById('res-grupo-libres');
+  const tipo = document.getElementById('res-grupo-tipo').value;
+  const entrada = document.getElementById('res-entrada').value;
+  const salida = document.getElementById('res-salida').value;
+  const habPrincipal = document.getElementById('res-hab').value;
+  renderGrupoSeleccion();
+  if (!entrada || !salida) { cont.innerHTML = '<span style="color:var(--text3);font-size:12px">Elegí primero las fechas.</span>'; return; }
+  if (!tipo) { cont.innerHTML = ''; return; }
+  const habs = ((DB.get('precios', {}).habitaciones) || []).filter(h => h.tipo === tipo && h.hab !== habPrincipal);
+  const libres = habs.filter(h => cabanaLibreParaGrupo(h.hab + '-1', entrada, salida));
+  cont.innerHTML = libres.length
+    ? libres.map(h => `<label><input type="checkbox" ${grupoExtras.includes(h.hab) ? 'checked' : ''} onchange="toggleGrupoExtra('${h.hab}')"> Cabaña ${escapeHtml(h.hab)}${h.capacidad ? ` (${h.capacidad} pax)` : ''}</label>`).join('')
+    : '<span style="color:var(--text3);font-size:12px">No hay cabañas de ese tipo libres para esas fechas.</span>';
+}
+
+function toggleGrupoExtra(hab) {
+  hab = String(hab);
+  grupoExtras = grupoExtras.includes(hab) ? grupoExtras.filter(x => x !== hab) : [...grupoExtras, hab];
+  renderGrupoCabanas();
+}
+
+function renderGrupoSeleccion() {
+  const sel = document.getElementById('res-grupo-sel');
+  if (!sel) return;
+  const principal = document.getElementById('res-hab').value;
+  sel.innerHTML = grupoExtras.length
+    ? `<div style="font-size:12px;color:var(--text2);margin-bottom:4px;">Se van a crear ${grupoExtras.length + 1} reservas: Cabaña ${escapeHtml(principal || '?')} (esta) +</div>`
+      + grupoExtras.map(h => `<span class="grupo-chip">Cabaña ${escapeHtml(h)} <button type="button" title="Quitar" onclick="toggleGrupoExtra('${h}')">✕</button></span>`).join('')
+    : '';
+}
+
+// ---- Vista consolidada del grupo ----
+function grupoBadge(r) {
+  if (!r || !r.grupoId) return '';
+  const n = reservasDelGrupo(r.grupoId).length;
+  return `<span class="badge grupo" title="Ver grupo" onclick="event.stopPropagation();openGrupo('${r.grupoId}')">👥 Grupo · ${n}</span>`;
+}
+
+function openGrupo(grupoId) {
+  const reservas = reservasDelGrupo(grupoId).sort((a, b) => Number(a.hab) - Number(b.hab));
+  if (!reservas.length) { showNotif('El grupo ya no tiene reservas', 'error'); return; }
+  const { canceladas, porMoneda } = resumenGrupo(reservas);
+  const contacto = reservas.find(r => r.grupoContactoId)?.grupoContactoId;
+  const fila = r => {
+    const cancelada = r.estado === ESTADO_RESERVA.CANCELADA;
+    const saldo = saldoReserva(r);
+    return `<tr style="${cancelada ? 'opacity:.5' : ''}">
+      <td>Cabaña ${escapeHtml(String(r.hab))}</td>
+      <td>${escapeHtml(getHuespedNombre(r.huespedId, r))}</td>
+      <td>${fmtFecha(r.entrada)} → ${fmtFecha(r.salida)}</td>
+      <td>${estadoBadge(r.estado)}</td>
+      <td>${fmtMoney(totalReserva(r), r.moneda)}</td>
+      <td>${fmtMoney(Number(r.pagado) || 0, r.moneda)}</td>
+      <td>${cancelada ? '—' : saldo > 0 ? `<span class="badge amber">Debe ${fmtMoney(saldo, r.moneda)}</span>` : '<span class="badge green">Al día</span>'}</td>
+      <td class="acciones">
+        <button class="btn btn-ghost btn-icon" title="Editar" onclick="closeModal('modalGrupo');editReserva('${r.id}')">✏️</button>
+        ${!cancelada && saldo > 0 ? `<button class="btn btn-green btn-icon" title="Cobrar" onclick="closeModal('modalGrupo');openPago('${r.id}')">💰</button>` : ''}
+      </td>
+    </tr>`;
+  };
+  const totales = Object.entries(porMoneda).map(([m, t]) => `
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:6px;">
+      <div><span style="color:var(--text3);display:block;font-size:11px">Total grupo (${m})</span><strong style="color:var(--accent2)">${fmtMoney(t.total, m)}</strong></div>
+      <div><span style="color:var(--text3);display:block;font-size:11px">Entró</span><strong style="color:#34d399">${fmtMoney(t.pagado, m)}</strong></div>
+      <div><span style="color:var(--text3);display:block;font-size:11px">Debe</span><strong style="color:#fbbf24">${fmtMoney(t.saldo, m)}</strong></div>
+    </div>`).join('');
+  document.getElementById('grupoContenido').innerHTML = `
+    <div style="font-size:13px;color:var(--text2);margin-bottom:10px;">Contacto: <strong>${escapeHtml(contacto ? getHuespedNombre(contacto) : '—')}</strong> · ${reservas.length} reserva${reservas.length === 1 ? '' : 's'}${canceladas.length ? ` (${canceladas.length} cancelada${canceladas.length === 1 ? '' : 's'}, fuera de los totales)` : ''}</div>
+    <div style="background:var(--surface2);border-radius:var(--radius);padding:12px;margin-bottom:12px;">${totales || '<span style="color:var(--text3)">Sin reservas activas</span>'}</div>
+    <div style="overflow-x:auto"><table><thead><tr><th>Cabaña</th><th>Titular</th><th>Fechas</th><th>Estado</th><th>Total</th><th>Pagado</th><th>Saldo</th><th></th></tr></thead>
+    <tbody>${reservas.map(fila).join('')}</tbody></table></div>`;
+  openModal('modalGrupo');
+}
+
 function openNuevaReserva() {
   document.getElementById('modalReservaTitle').textContent = 'Nueva Reserva';
   document.getElementById('res-edit-id').value = '';
   document.getElementById('btnGuardarReserva').textContent = 'Guardar Reserva';
   clearHuespedNuevo();
   setHuespedMode('nuevo'); // reserva nueva: casi siempre huésped nuevo
+  resetGrupoCarga(true);
   document.getElementById('res-huesped').value = '';
   document.getElementById('res-huesped-buscar').value = '';
   document.getElementById('res-huesped-lista').style.display = 'none';
@@ -3740,6 +3941,7 @@ function editReserva(rid) {
   document.getElementById('btnGuardarReserva').textContent = 'Guardar cambios';
   clearHuespedNuevo();
   setHuespedMode('existente'); // editar siempre usa huésped existente
+  resetGrupoCarga(false); // agregar cabañas: solo al crear
   document.getElementById('res-huesped').value = r.huespedId;
   document.getElementById('res-huesped-buscar').value = getHuespedNombre(r.huespedId);
   document.getElementById('res-huesped-lista').style.display = 'none';
@@ -3822,6 +4024,13 @@ async function saveReserva() {
     if(btnGuardar) { btnGuardar.disabled = false; btnGuardar.textContent = 'Guardar Reserva'; }
     showNotif('Esa cabaña ya está reservada para esas fechas','error'); return; 
   }
+  // Grupo: cabañas adicionales (solo al crear). Se validan TODAS antes de escribir nada.
+  const extrasGrupo = editId ? [] : grupoExtras.filter(x => x !== hab);
+  const extraOcupada = extrasGrupo.find(x => !cabanaLibreParaGrupo(x + '-1', entrada, salida));
+  if (extraOcupada) {
+    if(btnGuardar) { btnGuardar.disabled = false; btnGuardar.textContent = 'Guardar Reserva'; }
+    showNotif(`La Cabaña ${extraOcupada} del grupo ya no está libre para esas fechas`,'error'); return;
+  }
   savingReserva = true;
   const moneda = document.getElementById('res-moneda').value;
   const nights = nightsBetween(entrada, salida);
@@ -3888,9 +4097,33 @@ async function saveReserva() {
     // ordenar la lista (última creada arriba); no afecta la escritura por-hijo.
     reg = { id: nuevaReservaId(), ...newData, createdAt: Date.now() };
   }
+  // Grupo: mismo grupoId y contacto en todas; la principal lleva el pago cargado.
+  const grupoId = extrasGrupo.length ? 'g' + nuevaReservaId() : null;
+  if (grupoId) { reg.grupoId = grupoId; reg.grupoContactoId = h; }
   await writeReserva(reg); // escritura por hijo: no pisa otras reservas
   if(pagado > 0) {
     await writeMovimiento({ id:nuevoMovimientoId(), tipo:'ingreso', cat:'reserva', moneda, monto:pagado, metodo:newData.pago, fecha:today(), concepto:`${estadoPago==='senia'?'Seña':'Pago'} reserva ${getHuespedNombre(h)} - Cabaña ${newData.hab}`, reservaId:reg.id }); // escritura por hijo
+  }
+  // Reservas adicionales del grupo: una por cabaña, cada una cotizada sola por la
+  // cascada (sin precio manual ni cargos: se ajustan editándola), sin pagos.
+  const habsCfgGrupo = (DB.get('precios', {}).habitaciones) || [];
+  for (const hx of extrasGrupo) {
+    const cx = calcularPrecioReserva(hx, entrada, salida, { cargos: [], promo: promoSel });
+    const monedaX = (habsCfgGrupo.find(c => c.hab === hx) || {}).moneda || moneda;
+    await writeReserva({
+      id: nuevaReservaId(), huespedId: h, guestName: newData.guestName,
+      hab: hx, cabaña: hx + '-1', entrada, salida,
+      precio: cx.precioNoche, moneda: monedaX,
+      total: cx.total, totalManual: false, cargos: [], promo: promoSel,
+      pago: newData.pago, plataforma: newData.plataforma, estado: newData.estado,
+      estadoPago: 'pendiente', pagado: 0, saldo: cx.total,
+      pasajeros: null, desayuno: newData.desayuno, notas: '',
+      grupoId, grupoContactoId: h, createdAt: Date.now(),
+    }); // escritura por hijo
+  }
+  if (grupoId) {
+    auditLog('crear', 'Grupo', `${getHuespedNombre(h, reg)} · Cabañas ${[hab, ...extrasGrupo].join(', ')} · ${entrada}→${salida}`);
+    grupoExtras = [];
   }
   savingReserva = false;
   if(btnGuardar) { btnGuardar.disabled = false; btnGuardar.textContent = 'Guardar Reserva'; }
@@ -3985,6 +4218,7 @@ function openPago(rid) {
   const reservas = getReservas();
   const r = reservas.find(x=>x.id===rid);
   if(!r) return;
+  renderPagoGrupo(r);
   const total = Number(r.total) || calcularPrecioReserva(r.hab, r.entrada, r.salida, { precioOverride: r.precio, cargos: r.cargos, promo: r.promo }).total;
   document.getElementById('pago-res-id').value = rid;
   document.getElementById('pago-monto').value = r.saldo || '';
@@ -3998,6 +4232,57 @@ function openPago(rid) {
   openModal('modalPago');
 }
 
+// Reservas del grupo de r a las que se puede repartir un cobro: activas, con saldo
+// y en la MISMA moneda que r (no se mezclan ARS y USD en un mismo cobro).
+function reservasRepartibles(r) {
+  return reservasDelGrupo(r.grupoId).filter(x =>
+    x.estado !== ESTADO_RESERVA.CANCELADA && (x.moneda || 'ARS') === (r.moneda || 'ARS') && saldoReserva(x) > 0);
+}
+
+function renderPagoGrupo(r) {
+  const box = document.getElementById('pago-grupo');
+  const lista = document.getElementById('pago-grupo-lista');
+  document.querySelector('input[name="pago-modo"][value="solo"]').checked = true;
+  lista.style.display = 'none';
+  const otras = r.grupoId ? reservasRepartibles(r).filter(x => x.id !== r.id) : [];
+  if (!otras.length) { box.style.display = 'none'; lista.innerHTML = ''; return; }
+  box.style.display = '';
+  const todas = [r, ...otras];
+  lista.innerHTML = todas.map(x => `
+    <label style="display:flex;align-items:center;gap:6px;text-transform:none;font-size:13px;">
+      <input type="checkbox" class="pago-grupo-chk" value="${x.id}" checked onchange="onPagoModoChange()">
+      Cabaña ${escapeHtml(String(x.hab))} · ${escapeHtml(getHuespedNombre(x.huespedId, x))} · debe ${fmtMoney(saldoReserva(x), x.moneda)}
+    </label>`).join('') + '<div id="pago-grupo-preview" style="margin-top:6px;color:var(--text3);font-size:12px;"></div>';
+}
+
+// Cambia entre "solo esta" y "repartir"; en repartir propone como monto la suma de
+// saldos elegidos y muestra cómo queda el reparto.
+function onPagoModoChange() {
+  const grupo = document.querySelector('input[name="pago-modo"]:checked')?.value === 'grupo';
+  const lista = document.getElementById('pago-grupo-lista');
+  lista.style.display = grupo ? '' : 'none';
+  if (!grupo) return;
+  const ids = Array.from(document.querySelectorAll('.pago-grupo-chk:checked')).map(el => el.value);
+  const rs = getReservas().filter(x => ids.includes(x.id));
+  const suma = Math.round(rs.reduce((s, x) => s + saldoReserva(x), 0) * 100) / 100;
+  document.getElementById('pago-monto').value = suma || '';
+  const rep = repartirPago(suma, rs.map(x => ({ id: x.id, saldo: saldoReserva(x) })));
+  const prev = document.getElementById('pago-grupo-preview');
+  if (prev) prev.innerHTML = rep.ok
+    ? 'Reparto proporcional al saldo: ' + rep.partes.map(p => { const x = rs.find(y => y.id === p.id); return `Cab ${escapeHtml(String(x.hab))} ${fmtMoney(p.monto, x.moneda)}`; }).join(' · ')
+    : escapeHtml(rep.error);
+}
+
+// Aplica un cobro a UNA reserva: actualiza pagado/saldo/estadoPago y registra su
+// movimiento (1 movimiento por reserva; caja y facturación no saben de grupos).
+function aplicarPagoReserva(r, monto, metodo, concepto) {
+  r.pagado = (Number(r.pagado)||0) + monto;
+  r.saldo = Math.max((Number(r.saldo)||0) - monto, 0);
+  r.estadoPago = r.saldo <= 0 ? 'total' : 'senia';
+  writeReserva(r); // escritura por hijo
+  writeMovimiento({ id:nuevoMovimientoId(), tipo:'ingreso', cat:'reserva', moneda:r.moneda, monto, metodo, fecha:today(), concepto, reservaId:r.id }); // escritura por hijo
+}
+
 function savePago() {
   const rid = document.getElementById('pago-res-id').value;
   const monto = Number(document.getElementById('pago-monto').value);
@@ -4007,11 +4292,25 @@ function savePago() {
   const reservas = getReservas();
   const r = reservas.find(x=>x.id===rid);
   if(!r) return;
-  r.pagado = (Number(r.pagado)||0) + monto;
-  r.saldo = Math.max((Number(r.saldo)||0) - monto, 0);
-  r.estadoPago = r.saldo <= 0 ? 'total' : 'senia';
-  writeReserva(r); // escritura por hijo
-  writeMovimiento({ id:nuevoMovimientoId(), tipo:'ingreso', cat:'reserva', moneda:r.moneda, monto, metodo, fecha:today(), concepto, reservaId:rid }); // escritura por hijo
+  const grupo = document.getElementById('pago-grupo').style.display !== 'none'
+    && document.querySelector('input[name="pago-modo"]:checked')?.value === 'grupo';
+  if (grupo) {
+    // Uno paga por todos: se reparte entre las elegidas y queda 1 movimiento por reserva.
+    const ids = Array.from(document.querySelectorAll('.pago-grupo-chk:checked')).map(el => el.value);
+    const elegidas = reservasRepartibles(r).filter(x => ids.includes(x.id));
+    const rep = repartirPago(monto, elegidas.map(x => ({ id: x.id, saldo: saldoReserva(x) })));
+    if (!rep.ok) { showNotif(rep.error, 'error'); return; }
+    const pagador = getHuespedNombre(r.huespedId, r);
+    rep.partes.forEach(p => {
+      const x = elegidas.find(y => y.id === p.id);
+      aplicarPagoReserva(x, p.monto, metodo, `${concepto || 'Pago'} (pago grupal de ${pagador}) - Cab.${x.hab}`);
+    });
+    closeModal('modalPago');
+    renderReservas();
+    showNotif(`💰 Pago grupal registrado: ${fmtMoney(monto, r.moneda)} en ${rep.partes.length} reservas`);
+    return;
+  }
+  aplicarPagoReserva(r, monto, metodo, concepto);
   closeModal('modalPago');
   renderReservas();
   showNotif('💰 Pago registrado: '+fmtMoney(monto, r.moneda));
@@ -6286,6 +6585,8 @@ function confirmDelete(tipo, id) {
   } else {
     const r = getReservas().find(x => x.id === id);
     nombre = r ? 'reserva de ' + getHuespedNombre(r.huespedId, r) : 'reserva';
+    const otras = r && r.grupoId ? reservasDelGrupo(r.grupoId).length - 1 : 0;
+    if (otras > 0) nombre += ` (Cabaña ${r.hab}). Las otras ${otras} reserva${otras === 1 ? '' : 's'} del grupo no se modifican`;
   }
   const safe = escapeHtml(nombre);
   const msgs = {
@@ -6820,10 +7121,11 @@ function renderGrilla() {
         // Saldo en la moneda de ESTA reserva (sin convertir).
         const saldoTxt = saldo > 0 ? `debe ${fmtPrecioCorto(saldo, res.moneda || 'ARS')}` : '';
         const debe = saldoTxt ? ` · <span class="grilla-debe">${saldoTxt}</span>` : '';
-        const titulo = `${nombre}${saldoTxt ? ' · ' + saldoTxt : ''} (${fmt(res.entrada.substring(0,10))} → ${fmt(res.salida.substring(0,10))})`;
+        const grupoTxt = res.grupoId ? ` · Grupo (${reservasDelGrupo(res.grupoId).length} cabañas)` : '';
+        const titulo = `${nombre}${saldoTxt ? ' · ' + saldoTxt : ''}${grupoTxt} (${fmt(res.entrada.substring(0,10))} → ${fmt(res.salida.substring(0,10))})`;
         const cont = (pos.cortaIzq ? ' gb-cont-izq' : '') + (pos.cortaDer ? ' gb-cont-der' : '');
         html += `<div class="grilla-barra ${res.estado}${cont}" style="left:${pos.left}%;width:${pos.width}%" title="${titulo}" onclick="editReserva('${res.id}')">`
-          + `${pos.cortaIzq ? '<span class="gb-flecha">‹</span>' : ''}<span class="grilla-span-txt">${nombre}${debe}</span>${pos.cortaDer ? '<span class="gb-flecha">›</span>' : ''}</div>`;
+          + `${pos.cortaIzq ? '<span class="gb-flecha">‹</span>' : ''}<span class="grilla-span-txt">${res.grupoId ? '👥 ' : ''}${nombre}${debe}</span>${pos.cortaDer ? '<span class="gb-flecha">›</span>' : ''}</div>`;
       }
 
       html += '</div></td>';
@@ -6900,6 +7202,7 @@ function openReservaDesdeGrilla(hab, cabId, entrada, salida) {
   document.getElementById('btnGuardarReserva').textContent = 'Guardar Reserva';
   clearHuespedNuevo();
   setHuespedMode('nuevo'); // reserva nueva: casi siempre huésped nuevo
+  resetGrupoCarga(true);
   document.getElementById('res-huesped').value = '';
   document.getElementById('res-huesped-buscar').value = '';
   document.getElementById('res-huesped-lista').style.display = 'none';
@@ -8247,7 +8550,8 @@ Object.assign(window, {
   openCambioCama, updateCambioCamaSelect, saveCambioCama,
   limpiarDuplicados,
   showPublicFormLink, copyPublicLink, openPublicFormPreview, submitPublicRegistration, previewPubDoc, showPublicRegistrationForm,
-  updateBedsSelect, onEntradaChange, calcTotalReserva, onPrecioReservaInput, onTotalReservaInput, calcExtension, toggleHorarioCobro, toggleHorarioCobroToggle: toggleHorarioCobro,
+  updateBedsSelect, onEntradaChange, calcTotalReserva, onPrecioReservaInput, onTotalReservaInput,
+  toggleGrupoPanel, renderGrupoCabanas, toggleGrupoExtra, openGrupo, onPagoModoChange, calcExtension, toggleHorarioCobro, toggleHorarioCobroToggle: toggleHorarioCobro,
   calcularPrecioReserva, precioNocheCascada, cargosReservaTotal, renderResCargos, reservaCargosSeleccionados, renderResPromos,
   cycleBed, showGuestDetail, previewDoc, populateRolSelect,
   switchPricingTab, switchAcctTab, cerrarCaja,
