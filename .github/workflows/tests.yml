@@ -29,6 +29,11 @@ jobs:
       - name: Tests de contabilidad
         run: node tests/contabilidad.test.mjs
 
+      # Formato de montos de la grilla: fmtPrecioCorto con moneda (ARS/USD),
+      # nunca float crudo ni más de 2 decimales.
+      - name: Tests de formato (fmtPrecioCorto)
+        run: node tests/fmt.test.mjs
+
       # Chequeo de sintaxis del <script type="module"> de index.html
       # (mismo patrón que docs/START SESSION.md).
       - name: Sintaxis de index.html

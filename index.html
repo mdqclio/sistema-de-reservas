@@ -375,6 +375,12 @@ td.acciones .btn:last-child { margin-right: 0; }
   font-size: 9px; font-weight: 600; white-space: nowrap; overflow: hidden;
   text-overflow: ellipsis; cursor: pointer; z-index: 1;
 }
+.grilla-span-txt {
+  /* Contenedor flex centrado: sin este wrapper el texto desborda por ambos lados
+     y se corta a la mitad ("go · debe") en vez de mostrar la elipsis al final. */
+  display: block; min-width: 0; max-width: 100%;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .grilla-span.checkin { background: rgba(59,130,246,0.5); color: white; }
 .grilla-span.confirmada { background: rgba(13,148,136,0.5); color: white; }
 .grilla-span.checkout { background: rgba(100,116,139,0.3); color: var(--text2); }
@@ -3476,13 +3482,20 @@ function resumenFacturacionReserva(rid) {
   return { cobrado, facturado, sinFacturar: cobrado - facturado };
 }
 
-// Precio abreviado en miles para la grilla. 510000 → "$510k"; 637500 → "$637,5k"; <1000 → "$n".
-function fmtPrecioCorto(n) {
-  n = Number(n) || 0;
-  if (n >= 1000) {
+// Precio corto para la grilla, en la moneda del dato (no convierte; sin moneda → ARS).
+// ARS: 510000 → "$510k"; 637500 → "$637,5k"; 241.5 → "$241,5". USD: 241.53 → "US$ 241,53".
+function fmtPrecioCorto(n, moneda = 'ARS') {
+  n = Number(n);
+  if (!Number.isFinite(n)) n = 0;
+  // USD: monto completo, siempre 2 decimales (US$ 241,53). Sin abreviar.
+  if (moneda === 'USD') {
+    return 'US$ ' + n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  // ARS: abreviatura en miles (120k) desde 1000; debajo, formateado (nunca el float crudo).
+  if (Math.abs(n) >= 1000) {
     return '$' + (n / 1000).toLocaleString('es-AR', { maximumFractionDigits: 1 }) + 'k';
   }
-  return '$' + n;
+  return '$' + n.toLocaleString('es-AR', { maximumFractionDigits: 2 });
 }
 
 function onHabChange() {
@@ -6662,12 +6675,16 @@ function renderGrilla() {
           const cls = res.estado === ESTADO_RESERVA.CHECKIN ? 'gc-occupied' : res.estado === ESTADO_RESERVA.CONFIRMADA ? 'gc-confirmed' : 'gc-checkout';
           const nombre = escapeHtml(getHuespedNombre(res.huespedId, res));
           const saldo = (Number(res.total) || Number(res.precio) || 0) - (Number(res.pagado) || 0);
-          const debe = saldo > 0 ? ` · <span style="color:#fca5a5;font-weight:600">debe ${fmtPrecioCorto(saldo)}</span>` : '';
-          html += `<td class="grilla-cell ${cls}${isToday ? ' gc-today' : ''}" colspan="${span}" onclick="editReserva('${res.id}')" style="cursor:pointer"><div class="grilla-span ${res.estado}" title="${nombre}">${nombre}${debe}</div></td>`;
+          // Saldo en la moneda de ESTA reserva (sin convertir).
+          const saldoTxt = saldo > 0 ? `debe ${fmtPrecioCorto(saldo, res.moneda || 'ARS')}` : '';
+          const debe = saldoTxt ? ` · <span style="color:#fca5a5;font-weight:600">${saldoTxt}</span>` : '';
+          const titulo = saldoTxt ? `${nombre} · ${saldoTxt}` : nombre;
+          html += `<td class="grilla-cell ${cls}${isToday ? ' gc-today' : ''}" colspan="${span}" onclick="editReserva('${res.id}')" style="cursor:pointer"><div class="grilla-span ${res.estado}" title="${titulo}"><span class="grilla-span-txt">${nombre}${debe}</span></div></td>`;
           i += span - 1;
         } else {
           const pr = precioNocheCascada(hs, f);
-          const inner = pr > 0 ? `<div class="grilla-precio">${fmtPrecioCorto(pr)}</div>` : '';
+          // Precio libre en la moneda configurada para la cabaña (sin convertir).
+          const inner = pr > 0 ? `<div class="grilla-precio">${fmtPrecioCorto(pr, cfg.moneda || 'ARS')}</div>` : '';
           html += `<td class="grilla-cell gc-free${isToday ? ' gc-today' : ''}" data-cab="${b.id}" data-fecha="${f}" onclick="grillaCellClick(this,'${b.id}','${hs}','${f}')" style="cursor:pointer">${inner}</td>`;
         }
       }
