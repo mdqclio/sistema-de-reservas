@@ -47,6 +47,11 @@ jobs:
       - name: Tests de grupos
         run: node tests/grupos.test.mjs
 
+      # Voucher público: datos del token (sin datos sensibles), saldo al día tras
+      # un pago y render de docs/voucher.html (moneda, filas alineadas).
+      - name: Tests de voucher
+        run: node tests/voucher.test.mjs
+
       # Chequeo de sintaxis del <script type="module"> de index.html
       # (mismo patrón que docs/START SESSION.md).
       - name: Sintaxis de index.html
@@ -59,3 +64,12 @@ jobs:
           writeFileSync('/tmp/t.mjs', c.slice(s + 22, e));
           EOF
           node --check /tmp/t.mjs
+
+      # Mismo chequeo para las páginas públicas de /docs.
+      - name: Sintaxis de docs/voucher.html y docs/checkin.html
+        run: |
+          for f in docs/voucher.html docs/checkin.html; do
+            node -e "const c=require('fs').readFileSync('$f','utf8');const m=c.match(/<script type=\"module\">([\s\S]*?)<\/script>/);require('fs').writeFileSync('/tmp/p.mjs',m[1])"
+            node --check /tmp/p.mjs
+            echo "OK $f"
+          done
