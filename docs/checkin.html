@@ -48,6 +48,9 @@
     if (!snap.exists()) { showError('Link inválido o expirado.'); return; }
 
     tokenData = snap.val();
+    // El mismo token sirve para el voucher: si el pre check-in ya se hizo (o la
+    // estadía ya empezó), no se reabre el formulario.
+    if (tokenData.precheckinHecho) { showDone(); return; }
     renderForm();
   }
 

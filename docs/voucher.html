@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Comprobante de reserva — Puerto Delfín</title>
+
+<script type="module">
+  // Comprobante (voucher) PÚBLICO de una reserva.
+  // Lee SOLO /cabanas/checkin_tokens/{token} (path puntual) con auth anónima: es el
+  // mismo token del pre check-in, otra vista. NO lee /cabanas/reservas (staff-only)
+  // ni escribe nada. El token trae solo datos de ESTA reserva + nombre del titular.
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js';
+  import { getDatabase, ref, get } from 'https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js';
+  import { getAuth, signInAnonymously } from 'https://www.gstatic.com/firebasejs/12.10.0/firebase-auth.js';
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBO6nDGdYWHWd5CQiYnbNojq8Yi7i1YJRc",
+    authDomain: "sistema-de-reservas-d9e54.firebaseapp.com",
+    databaseURL: "https://sistema-de-reservas-d9e54-default-rtdb.firebaseio.com",
+    projectId: "sistema-de-reservas-d9e54",
+    storageBucket: "sistema-de-reservas-d9e54.firebasestorage.app",
+    messagingSenderId: "461330609922",
+    appId: "1:461330609922:web:70c6726069e21cf810341b"
+  };
+
+  const $ = id => document.getElementById(id);
+
+  function escapeHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  // Monto en la moneda de la reserva: ARS → "$ 300.000", USD → "US$ 241,53".
+  function fmtMonto(n, moneda) {
+    n = Number(n);
+    if (!Number.isFinite(n)) n = 0;
+    if (moneda === 'USD') return 'US$ ' + n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return '$ ' + n.toLocaleString('es-AR', { maximumFractionDigits: 2 });
+  }
+
+  function fmtFechaLarga(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso + 'T12:00:00');
+    if (isNaN(d)) return '—';
+    return d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  }
+
+  // HTML del comprobante a partir de los datos del token (pura, sin DOM).
+  function renderVoucher(t) {
+    const fila = (label, valor, cls = '') =>
+      `<div class="row${cls ? ' ' + cls : ''}"><span class="label">${label}</span><span class="value">${valor}</span></div>`;
+    const m = t.moneda || 'ARS';
+    const saldo = Number(t.saldo) || 0;
+    const noches = Number(t.noches) || 0;
+    const cabana = `Cabaña ${escapeHtml(t.hab)}${t.tipoCabana ? ' · ' + escapeHtml(t.tipoCabana) : ''}`;
+    const actualizado = t.actualizado
+      ? new Date(t.actualizado).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+      : '';
+    const sena = t.datosSena
+      ? `<pre class="sena">${escapeHtml(t.datosSena)}</pre>`
+      : `<p class="muted">Pedinos los datos para la transferencia por WhatsApp.</p>`;
+    return `
+      <section class="card">
+        <div class="code">Reserva <strong>#${escapeHtml(t.codigo || '')}</strong></div>
+        <h2>${escapeHtml(t.guestName || 'Huésped')}</h2>
+        ${fila('Cabaña', cabana)}
+        ${fila('Entrada', escapeHtml(fmtFechaLarga(t.entrada)))}
+        ${fila('Salida', escapeHtml(fmtFechaLarga(t.salida)))}
+        ${fila('Noches', String(noches))}
+        ${t.pasajeros ? fila('Pasajeros', String(Number(t.pasajeros))) : ''}
+      </section>
+
+      <section class="card">
+        <h3>Pagos</h3>
+        ${fila('Total de la estadía', escapeHtml(fmtMonto(t.total, m)))}
+        ${fila('Pagado', escapeHtml(fmtMonto(t.pagado, m)))}
+        ${fila('Saldo', escapeHtml(saldo > 0 ? fmtMonto(saldo, m) : 'Sin saldo pendiente'), saldo > 0 ? 'saldo' : 'ok')}
+        ${actualizado ? `<p class="muted small">Montos al ${escapeHtml(actualizado)}.</p>` : ''}
+      </section>
+
+      <section class="card">
+        <h3>Horarios</h3>
+        ${fila('Check-in', 'desde las ' + escapeHtml(t.horaCheckin || '15:00'))}
+        ${fila('Check-out', 'hasta las ' + escapeHtml(t.horaCheckout || '10:00'))}
+      </section>
+
+      <section class="card">
+        <h3>Dirección</h3>
+        <p>Delfín esq. Alfonsina Storni, Mar de las Pampas.</p>
+      </section>
+
+      <section class="card">
+        <h3>Tu estadía incluye</h3>
+        <ul>
+          <li>Desayuno</li>
+          <li>Parrilla individual</li>
+          <li>WiFi</li>
+          <li>TV</li>
+          <li>1 estacionamiento por cabaña</li>
+        </ul>
+      </section>
+
+      ${saldo > 0 ? `<section class="card">
+        <h3>Datos para la seña (transferencia)</h3>
+        ${sena}
+      </section>` : ''}`;
+  }
+
+  function showError(msg) {
+    $('loader').style.display = 'none';
+    $('errorBox').style.display = 'block';
+    $('errorMsg').textContent = msg;
+  }
+
+  async function init() {
+    const token = new URLSearchParams(window.location.search).get('token');
+    if (!token) { showError('Link inválido. Pedinos un nuevo link por WhatsApp.'); return; }
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const auth = getAuth(app);
+    // Auth anónima primero (las reglas exigen auth != null para leer el token).
+    try { await signInAnonymously(auth); }
+    catch (e) { console.error('anon auth error', e); showError('No se pudo conectar. Probá de nuevo en un momento.'); return; }
+    // Lectura de UN SOLO path: el token puntual. No se puede listar el nodo.
+    let snap;
+    try { snap = await get(ref(db, 'cabanas/checkin_tokens/' + token)); }
+    catch (e) { showError('Link inválido o expirado.'); return; }
+    if (!snap.exists()) { showError('Link inválido o expirado. Si ya hiciste el check-in, este comprobante ya no está disponible.'); return; }
+    $('loader').style.display = 'none';
+    $('voucher').innerHTML = renderVoucher(snap.val());
+    $('voucher').style.display = 'block';
+    $('acciones').style.display = 'flex';
+  }
+
+  $('btnPrint')?.addEventListener('click', () => window.print());
+  init();
+</script>
+
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #f4f7f5; --card: #ffffff; --border: #dbe5de; --text: #1c2b22;
+  --muted: #5f7a67; --accent: #2f7d45; --warn: #b45309;
+}
+html, body { background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 16px; line-height: 1.45; }
+.wrap { max-width: 560px; margin: 0 auto; padding: 20px 16px 48px; }
+.header { text-align: center; margin-bottom: 18px; }
+.header h1 { font-size: 22px; }
+.header p { color: var(--muted); font-size: 14px; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
+.card h2 { font-size: 20px; margin: 2px 0 8px; }
+.card h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin-bottom: 6px; }
+.code { font-size: 13px; color: var(--muted); }
+/* Una fila = etiqueta a la izquierda + valor a la derecha, en el MISMO renglón. */
+.row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 7px 0; border-top: 1px solid var(--border); }
+.row:first-of-type { border-top: none; }
+.row .label { color: var(--muted); flex: none; }
+.row .value { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.row.saldo .value { color: var(--warn); }
+.row.ok .value { color: var(--accent); }
+.card ul { padding-left: 20px; }
+.card li { padding: 2px 0; }
+.sena { white-space: pre-wrap; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 14px; background: var(--bg); border-radius: 8px; padding: 10px; }
+.muted { color: var(--muted); }
+.small { font-size: 12px; margin-top: 6px; }
+#voucher, #errorBox, #acciones { display: none; }
+#loader { text-align: center; color: var(--muted); padding: 40px 0; }
+#errorBox { text-align: center; padding: 30px 10px; }
+#acciones { justify-content: center; margin-top: 8px; }
+#acciones button { font: inherit; font-weight: 600; padding: 10px 18px; border-radius: 10px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; }
+@media print {
+  html, body { background: #fff; }
+  .wrap { max-width: none; padding: 0; }
+  .card { border: 1px solid #bbb; break-inside: avoid; }
+  #acciones { display: none !important; }
+}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="header">
+      <h1>Cabañas Puerto Delfín</h1>
+      <p>Comprobante de reserva</p>
+    </div>
+    <div id="loader">Cargando tu reserva…</div>
+    <div id="errorBox"><p id="errorMsg"></p></div>
+    <div id="voucher"></div>
+    <div id="acciones"><button type="button" id="btnPrint">Imprimir / Guardar PDF</button></div>
+  </div>
+</body>
+</html>

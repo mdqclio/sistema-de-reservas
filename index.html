@@ -3345,6 +3345,7 @@ function renderReservas() {
         ${canCheckout ? `<button class="btn btn-blue btn-icon" title="Extender días" onclick="openExtender('${r.id}')">➕</button>` : ''}
         ${(canCheckin||canCheckout) && hasSaldo ? `<button class="btn btn-green btn-icon" title="Cobrar saldo" onclick="openPago('${r.id}')">💰</button>` : ''}
         ${canCheckin ? `<button class="btn btn-ghost btn-icon" title="Link de pre check-in" onclick="generarLinkPrecheckin('${r.id}')">🔗</button>` : ''}
+        ${(canCheckin||canCheckout) ? `<button class="btn btn-ghost btn-icon" title="Enviar comprobante (WhatsApp)" onclick="enviarVoucher('${r.id}')">📄</button>` : ''}
         <button class="btn btn-ghost btn-icon" title="Editar" onclick="editReserva('${r.id}')">✏️</button>
         <button class="btn btn-red btn-icon" title="Eliminar" onclick="confirmDelete('reserva','${r.id}')">🗑</button>
       </td>
@@ -4101,6 +4102,7 @@ async function saveReserva() {
   const grupoId = extrasGrupo.length ? 'g' + nuevaReservaId() : null;
   if (grupoId) { reg.grupoId = grupoId; reg.grupoContactoId = h; }
   await writeReserva(reg); // escritura por hijo: no pisa otras reservas
+  if (editId) refrescarTokenReserva(reg); // voucher al día (total, pagado, fechas)
   if(pagado > 0) {
     await writeMovimiento({ id:nuevoMovimientoId(), tipo:'ingreso', cat:'reserva', moneda, monto:pagado, metodo:newData.pago, fecha:today(), concepto:`${estadoPago==='senia'?'Seña':'Pago'} reserva ${getHuespedNombre(h)} - Cabaña ${newData.hab}`, reservaId:reg.id }); // escritura por hijo
   }
@@ -4281,6 +4283,7 @@ function aplicarPagoReserva(r, monto, metodo, concepto) {
   r.estadoPago = r.saldo <= 0 ? 'total' : 'senia';
   writeReserva(r); // escritura por hijo
   writeMovimiento({ id:nuevoMovimientoId(), tipo:'ingreso', cat:'reserva', moneda:r.moneda, monto, metodo, fecha:today(), concepto, reservaId:r.id }); // escritura por hijo
+  refrescarTokenReserva(r); // saldo del voucher al día
 }
 
 function savePago() {
@@ -4370,6 +4373,7 @@ async function saveExtension() {
     r.estadoPago = 'senia';
   }
   await writeReserva(r); // escritura por hijo
+  refrescarTokenReserva(r); // voucher al día
   closeModal('modalExtender');
   renderReservas();
   showNotif(`📅 Estadía extendida ${extra} noche(s) hasta ${nuevaSalida}`);
@@ -6687,6 +6691,7 @@ async function saveCambioCama() {
   if(nuevaLlave) r.llave = nuevaLlave;
   if(motivo) r.notas = (r.notas ? r.notas+' | ' : '') + 'Cambio de cabaña: '+motivo;
   await writeReserva(r); // escritura por hijo
+  refrescarTokenReserva(r); // voucher al día
   closeModal('modalCambioCama');
   renderReservas();
   renderCheckin();
@@ -6874,6 +6879,7 @@ async function saveHorario() {
       concepto:`${label} ${hora}hs — ${getHuespedNombre(r.huespedId)} Cab.${r.hab}` }); // escritura por hijo
   }
   await writeReserva(r); // escritura por hijo
+  refrescarTokenReserva(r); // voucher al día
   closeModal('modalHorario');
   renderCheckin();
   const label = tipo === 'late' ? 'Late check-out' : 'Early check-in';
@@ -8450,7 +8456,10 @@ async function promoverPrecheckin(key, p, datos) {
   if (datos.pasajeros) r.pasajeros = Number(datos.pasajeros) || r.pasajeros;
   r.guestCheckinDone = true;
   await writeReserva(r); // escritura por hijo
-  await removeCheckinToken(token); // el token ya no se necesita
+  // El token NO se borra: el mismo link sirve para el voucher. Se reescribe con
+  // precheckinHecho=true → checkin.html muestra "ya recibido" y no reabre el form.
+  // Se borra recién en el check-in (confirmCheckin).
+  await escribirTokenReserva(r, token);
   await remove(ref(db, 'cabanas/pendientes/' + key));
   auditLog('promover pre check-in', 'Reserva', `${r.guestName} · Cab ${r.hab}`);
   showNotif('✅ Pre check-in promovido: ' + r.guestName);
@@ -8496,18 +8505,106 @@ async function promoverAutocarga(key, p, datos) {
 async function writeCheckinToken(token, data) { await set(ref(db, 'cabanas/checkin_tokens/' + token), data); }
 async function removeCheckinToken(token) { await remove(ref(db, 'cabanas/checkin_tokens/' + token)); }
 
+// Datos para la seña por transferencia, tomados de la config (NO hardcodeados):
+//  1) bot_config.datos_transferencia si existe;
+//  2) si no, la entrada de knowledge_base que mencione el CBU (solo sus renglones
+//     bancarios: banco, CBU, alias, razón social, CUIT, titular).
+// Sin datos → '' y el voucher muestra un aviso para consultarlos con la recepción.
+function datosSenaDesdeConfig(botCfg, kbList) {
+  const directo = String((botCfg && botCfg.datos_transferencia) || '').trim();
+  if (directo) return directo.slice(0, 600);
+  const textoDe = e => [e && e.texto, e && e.question, e && e.answer].filter(x => typeof x === 'string').join('\n');
+  const entrada = (kbList || []).find(e => /\bCBU\b/i.test(textoDe(e)));
+  if (!entrada) return '';
+  const lineas = textoDe(entrada).split(/\n+/)
+    .filter(l => /(cbu|alias|banco|raz[oó]n social|cuit|titular)/i.test(l))
+    .map(l => l.replace(/^[\s*•-]+/, '').trim()).filter(Boolean);
+  return (lineas.length ? lineas.join('\n') : textoDe(entrada).trim()).slice(0, 600);
+}
+
+// Contenido del nodo público /cabanas/checkin_tokens/{token}: lo leen el form de pre
+// check-in y el voucher. SOLO datos de ESTA reserva y el nombre del titular: nada de
+// DNI, email ni teléfono. Montos en r.moneda; el saldo queda como estaba al escribirlo
+// (se reescribe en cada pago/edición, ver refrescarTokenReserva).
+function datosTokenReserva(r, ctx = {}) {
+  const r2 = n => Math.round((Number(n) || 0) * 100) / 100;
+  return {
+    reservaId: r.id,
+    codigo: String(r.id || '').replace(/[^A-Za-z0-9]/g, '').slice(-6).toUpperCase(),
+    hab: r.hab || '', tipoCabana: ctx.tipoCabana || '',
+    entrada: (r.entrada || '').substring(0, 10), salida: (r.salida || '').substring(0, 10),
+    noches: Math.max(nightsBetween(r.entrada, r.salida) || 0, 0),
+    pasajeros: Number(r.pasajeros) || null,
+    guestName: ctx.guestName || '',
+    moneda: r.moneda || 'ARS',
+    total: r2(totalReserva(r)), pagado: r2(r.pagado), saldo: saldoReserva(r),
+    horaCheckin: ctx.horaCheckin || '15:00', horaCheckout: ctx.horaCheckout || '10:00',
+    datosSena: ctx.datosSena || '',
+    // Form de pre check-in cerrado si ya se hizo o si la estadía ya empezó.
+    precheckinHecho: !!r.guestCheckinDone || (r.estado && r.estado !== ESTADO_RESERVA.CONFIRMADA) || false,
+    actualizado: ctx.ahora || Date.now(),
+  };
+}
+
+// Escribe/reescribe el nodo del token con los datos actuales de la reserva.
+async function escribirTokenReserva(r, token = r.checkinToken) {
+  if (!r || !token) return;
+  const botCfg = DB.get('bot_config', {});
+  const cfgHab = ((DB.get('precios', {}).habitaciones) || []).find(x => x.hab === String(r.hab)) || {};
+  await writeCheckinToken(token, datosTokenReserva(r, {
+    guestName: getHuespedNombre(r.huespedId, r) || '',
+    tipoCabana: cfgHab.tipo || '',
+    horaCheckin: botCfg.checkin, horaCheckout: botCfg.checkout,
+    datosSena: datosSenaDesdeConfig(botCfg, colKnowledge.list()),
+  }));
+}
+
+// Si la reserva ya tiene link público, lo actualiza (pago, edición, extensión...).
+// No crea tokens nuevos. Un error acá no frena la operación principal.
+function refrescarTokenReserva(r) {
+  if (!r || !r.checkinToken) return;
+  escribirTokenReserva(r).catch(e => console.warn('no se pudo refrescar checkin_token', e));
+}
+
+// Token opaco no adivinable; reusa el de la reserva si ya tiene uno.
+async function asegurarTokenReserva(r) {
+  if (!r.checkinToken) {
+    r.checkinToken = self.crypto?.randomUUID ? crypto.randomUUID() : (nuevaReservaId() + nuevaReservaId());
+    await writeReserva(r); // merge por hijo
+  }
+  await escribirTokenReserva(r);
+  return r.checkinToken;
+}
+
+// Link público del voucher (docs/voucher.html) + mensaje de WhatsApp listo para mandar.
+async function enviarVoucher(rid) {
+  const r = getReservas().find(x => x.id === rid);
+  if (!r) { showNotif('Reserva no encontrada', 'error'); return; }
+  const token = await asegurarTokenReserva(r);
+  const url = new URL('docs/voucher.html', location.href).href + '?token=' + token;
+  const nombre = getHuespedNombre(r.huespedId, r);
+  const h = getHuespedes().find(x => x.id === r.huespedId);
+  const tel = String((h && h.tel) || '').replace(/\D/g, '');
+  const noches = nightsBetween(r.entrada, r.salida);
+  const msg = `¡Hola ${nombre.split(' ')[0] || ''}! Te compartimos el comprobante de tu reserva en Puerto Delfín:\n`
+    + `Cabaña ${r.hab} · ${fmtFecha(r.entrada)} al ${fmtFecha(r.salida)} (${noches} noche${noches === 1 ? '' : 's'})\n`
+    + `${url}\n¡Te esperamos! 🌊`;
+  if (tel) {
+    window.open('https://wa.me/' + tel + '?text=' + encodeURIComponent(msg), '_blank');
+    auditLog('enviar voucher (WhatsApp)', 'Reserva', `${nombre} · Cab ${r.hab}`);
+    return;
+  }
+  try { await navigator.clipboard.writeText(url); showNotif('El huésped no tiene teléfono cargado: link del comprobante copiado al portapapeles'); }
+  catch(e) { prompt('El huésped no tiene teléfono. Link del comprobante:', url); }
+  auditLog('copiar link voucher (sin teléfono)', 'Reserva', `${nombre} · Cab ${r.hab}`);
+}
+
 async function generarLinkPrecheckin(rid) {
   const r = getReservas().find(x => x.id === rid);
   if (!r) { showNotif('Reserva no encontrada', 'error'); return; }
-  // Token opaco no adivinable; reusar si la reserva ya tiene uno.
-  const token = r.checkinToken || (self.crypto?.randomUUID ? crypto.randomUUID() : (nuevaReservaId() + nuevaReservaId()));
-  r.checkinToken = token;
-  await writeReserva(r); // merge por hijo
-  await writeCheckinToken(token, {
-    reservaId: r.id, hab: r.hab || '', entrada: r.entrada || '', salida: r.salida || '',
-    guestName: getHuespedNombre(r.huespedId, r) || ''
-  });
-  const url = new URL('checkin.html', location.href).href + '?token=' + token;
+  const token = await asegurarTokenReserva(r);
+  // Las páginas públicas viven en /docs (GitHub Pages sirve la raíz de main).
+  const url = new URL('docs/checkin.html', location.href).href + '?token=' + token;
   try { await navigator.clipboard.writeText(url); showNotif('🔗 Link de pre check-in copiado al portapapeles'); }
   catch(e) { prompt('Link de pre check-in:', url); }
   auditLog('link pre check-in', 'Reserva', `${getHuespedNombre(r.huespedId, r)} · Cab ${r.hab}`);
@@ -8550,7 +8647,7 @@ Object.assign(window, {
   openCambioCama, updateCambioCamaSelect, saveCambioCama,
   limpiarDuplicados,
   showPublicFormLink, copyPublicLink, openPublicFormPreview, submitPublicRegistration, previewPubDoc, showPublicRegistrationForm,
-  updateBedsSelect, onEntradaChange, calcTotalReserva, onPrecioReservaInput, onTotalReservaInput,
+  updateBedsSelect, onEntradaChange, calcTotalReserva, onPrecioReservaInput, onTotalReservaInput, enviarVoucher,
   toggleGrupoPanel, renderGrupoCabanas, toggleGrupoExtra, openGrupo, onPagoModoChange, calcExtension, toggleHorarioCobro, toggleHorarioCobroToggle: toggleHorarioCobro,
   calcularPrecioReserva, precioNocheCascada, cargosReservaTotal, renderResCargos, reservaCargosSeleccionados, renderResPromos,
   cycleBed, showGuestDetail, previewDoc, populateRolSelect,

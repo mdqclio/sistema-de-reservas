@@ -55,6 +55,7 @@ const env = {
   writeMovimiento: async m => { MOVS.push(clone(m)); },
   writeHuesped: async () => {},
   removeReserva: async id => { REMOVED.push(id); RESERVAS = RESERVAS.filter(r => r.id !== id); },
+  refrescarTokenReserva: () => {}, // voucher: se testea en voucher.test.mjs
   auditLog: () => {}, closeModal: () => {}, showNotif: (m, t) => { env.lastNotif = [m, t]; }, renderReservas: () => {},
   renderHuespedes: () => {}, renderGrilla: () => {}, renderMapa: () => {}, fmtMoney: (m) => String(m), escapeHtml: s => String(s),
   ESTADO_RESERVA: Object.freeze({ CONFIRMADA: 'confirmada', CHECKIN: 'checkin', CHECKOUT: 'checkout', CANCELADA: 'cancelada' }),
