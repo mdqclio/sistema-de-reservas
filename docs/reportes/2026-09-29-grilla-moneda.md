@@ -60,3 +60,11 @@ string numérico, y un barrido que verifica que ninguna salida tenga más de 2 d
 - Ver en navegador la reserva USD real en la grilla (no se corrió browser en esta sesión).
 - Nota: el `saldo` de la grilla se calcula como `total || precio − pagado`; el listado usa
   otra ruta (`fmtMoney` sobre sus propios cálculos). No se unificó: fuera de alcance.
+
+## CI
+
+- `.github/workflows/tests.yml`: nuevo paso propio `Tests de formato (fmtPrecioCorto)` →
+  `node tests/fmt.test.mjs`, después de contabilidad y antes del chequeo de sintaxis.
+- El CI usa Node 20 (ICU completo por defecto → `toLocaleString('es-AR')` da el mismo
+  formato que local). Local: Node v22, `es-AR` soportado, 17/0. YAML validado.
+- El workflow corre en push a `main` y PR a `main`: este branch lo va a ejecutar al abrir PR o mergear.
