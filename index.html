@@ -202,6 +202,8 @@ td.acciones .btn:last-child { margin-right: 0; }
 .modal-overlay.open .modal { transform: translateY(0); }
 .modal h2 { font-size: 18px; font-weight: 600; margin-bottom: 20px; color: var(--text); }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+/* Moneda | Precio por noche | Total (modal de reserva). */
+.form-row.form-row-precio { grid-template-columns: 90px 1fr 1fr; }
 .form-group input, .form-group select, .form-group textarea {
   width: 100%; padding: 9px 12px; background: var(--surface2);
   border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 13px;
@@ -286,6 +288,8 @@ td.acciones .btn:last-child { margin-right: 0; }
   .rooms-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
   .roles-grid { grid-template-columns: 1fr; }
   .form-row { grid-template-columns: 1fr; }
+  .form-row.form-row-precio { grid-template-columns: 1fr 1fr; }
+  .form-row.form-row-precio > :first-child { grid-column: 1 / -1; }
   .topbar { flex-direction: column; align-items: flex-start; gap: 8px; }
   .topbar h1 { font-size: 18px; margin-left: 36px; }
   .date-badge { font-size: 11px; }
@@ -1141,12 +1145,15 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
       <div class="form-group"><label>Fecha Entrada *</label><input type="date" id="res-entrada" onchange="onEntradaChange()"></div>
       <div class="form-group"><label>Fecha Salida *</label><input type="date" id="res-salida" onchange="updateBedsSelect();renderResPromos();calcTotalReserva()"></div>
     </div>
-    <div class="form-row">
+    <div class="form-row form-row-precio">
       <div class="form-group"><label>Moneda</label>
         <select id="res-moneda"><option value="ARS">ARS</option><option value="USD">USD</option></select>
       </div>
-      <div class="form-group"><label>Precio por noche</label><input type="number" id="res-precio" placeholder="auto según cabaña/temporada" oninput="calcTotalReserva()"></div>
+      <div class="form-group"><label>Precio por noche</label><input type="number" id="res-precio" placeholder="auto según cabaña/temporada" oninput="onPrecioReservaInput()"></div>
+      <div class="form-group"><label>Total</label><input type="number" id="res-total" placeholder="o escribí el total pactado" oninput="onTotalReservaInput()"></div>
     </div>
+    <!-- Total pactado escrito a mano (vacío = el total sale del precio por noche). -->
+    <input type="hidden" id="res-total-manual" value="">
     <div class="form-group" id="res-promo-group" style="display:none;margin-bottom:12px;">
       <label>Promoción</label>
       <select id="res-promo" onchange="calcTotalReserva()"><option value="">Ninguna</option></select>
@@ -3604,6 +3611,34 @@ function renderResPromos(selectedId) {
   sel.value = promos.some(p => p.id === prev) ? prev : '';
 }
 
+// Cálculo inverso: del total pactado con el huésped al precio manual por noche.
+//   precioNoche = (total − cargos únicos tildados) / noches, redondeado a centavos.
+// El total NO se recalcula desde el precio redondeado: el que se guarda es el escrito.
+// Devuelve { ok:true, precioNoche } o { ok:false, error } (nunca un precio basura).
+function derivarPrecioDesdeTotal(total, noches, cargosTotal) {
+  const t = Number(total);
+  const n = Number(noches);
+  const c = Number(cargosTotal) || 0;
+  if (!Number.isFinite(t) || t <= 0) return { ok: false, error: 'El total tiene que ser mayor a 0' };
+  if (!Number.isFinite(n) || n < 1) return { ok: false, error: 'Elegí fechas válidas (mínimo 1 noche)' };
+  if (t <= c) return { ok: false, error: 'El total no cubre los cargos únicos tildados' };
+  return { ok: true, precioNoche: Math.round((t - c) / n * 100) / 100 };
+}
+
+// El staff escribió en "Precio por noche": manda el precio, el total se calcula (como siempre).
+function onPrecioReservaInput() {
+  document.getElementById('res-total-manual').value = '';
+  calcTotalReserva();
+}
+
+// El staff escribió en "Total": ese total queda fijo y el precio por noche se deriva.
+// Borrar el total vuelve al modo normal (manda el precio).
+function onTotalReservaInput() {
+  const v = document.getElementById('res-total').value;
+  document.getElementById('res-total-manual').value = v === '' ? '' : v;
+  calcTotalReserva();
+}
+
 function calcTotalReserva() {
   const hab = document.getElementById('res-hab').value;
   const precioIn = document.getElementById('res-precio').value;
@@ -3614,13 +3649,42 @@ function calcTotalReserva() {
   const moneda = document.getElementById('res-moneda').value;
   const promo = document.getElementById('res-promo')?.value || '';
   const desg = document.getElementById('res-desglose');
-  if(hab && entrada && salida) {
+  const totalManualIn = document.getElementById('res-total-manual')?.value || '';
+  const totalEl = document.getElementById('res-total');
+  if(hab && entrada && salida && totalManualIn !== '') {
+    // Modo TOTAL PACTADO: el total es el escrito; el precio/noche se deriva y va como
+    // override manual (mismo mecanismo que fijar el precio a mano). No toca la cascada.
+    const cargos = reservaCargosSeleccionados();
+    const cargosTotal = cargosReservaTotal(cargos);
+    const noches = nightsBetween(entrada, salida);
+    const der = derivarPrecioDesdeTotal(totalManualIn, noches, cargosTotal);
+    if (!der.ok) {
+      document.getElementById('res-total-display').value = '—';
+      document.getElementById('res-saldo-display').value = '—';
+      if (desg) desg.innerHTML = `<div style="color:#f87171;font-weight:600">⚠️ ${escapeHtml(der.error)}</div>`;
+      return;
+    }
+    const total = Number(totalManualIn);
+    document.getElementById('res-precio').value = der.precioNoche;
+    const saldo = Math.max(total - pagado, 0);
+    document.getElementById('res-total-display').value = fmtMoney(total, moneda);
+    document.getElementById('res-saldo-display').value = saldo > 0 ? fmtMoney(saldo, moneda) : '✓ Sin saldo';
+    if (desg) {
+      const exacto = Math.round((der.precioNoche * noches + cargosTotal) * 100) === Math.round(total * 100);
+      desg.innerHTML = `<div>Total pactado ${fmtMoney(total, moneda)}`
+        + (cargosTotal > 0 ? ` − cargos ${fmtMoney(cargosTotal, moneda)}` : '')
+        + ` ÷ ${noches} noche${noches===1?'':'s'} = ${fmtMoney(der.precioNoche, moneda)}/noche</div>`
+        + (exacto ? '' : `<div style="color:var(--text3)">(precio/noche redondeado; el total guardado es el pactado)</div>`);
+    }
+  } else if(hab && entrada && salida) {
     // Sin precio manual → cascada noche por noche (con la promo elegida). Con número → override.
     const cargos = reservaCargosSeleccionados();
     const opts = { cargos, promo };
     if (precio > 0) opts.precioOverride = precio;
     const { noches, precioNoche, preciosNoche, subtotal, cargosTotal, total } = calcularPrecioReserva(hab, entrada, salida, opts);
     const saldo = Math.max(total - pagado, 0);
+    // El campo "Total" refleja el total calculado (se actualizan entre sí).
+    if (totalEl) totalEl.value = Math.round(total * 100) / 100;
     document.getElementById('res-total-display').value = fmtMoney(total, moneda);
     document.getElementById('res-saldo-display').value = saldo > 0 ? fmtMoney(saldo, moneda) : '✓ Sin saldo';
     if (desg) {
@@ -3655,6 +3719,8 @@ function openNuevaReserva() {
   document.getElementById('res-entrada').value = today();
   document.getElementById('res-salida').value = addDaysStr(today(), 1);
   document.getElementById('res-precio').value = '';
+  document.getElementById('res-total').value = '';
+  document.getElementById('res-total-manual').value = '';
   document.getElementById('res-pagado').value = '';
   document.getElementById('res-notas').value = '';
   document.getElementById('res-pasajeros').value = '';
@@ -3683,6 +3749,10 @@ function editReserva(rid) {
   document.getElementById('res-entrada').value = r.entrada;
   document.getElementById('res-salida').value = r.salida;
   document.getElementById('res-precio').value = r.precio;
+  // Ambos campos muestran lo guardado. Si se cargó por total pactado, se reabre en
+  // ese modo para que re-guardar no reemplace el total por precio × noches.
+  document.getElementById('res-total').value = r.total ?? '';
+  document.getElementById('res-total-manual').value = r.totalManual ? String(r.total) : '';
   document.getElementById('res-moneda').value = r.moneda || 'ARS';
   document.getElementById('res-pagado').value = r.pagado || '';
   document.getElementById('res-pago').value = r.pago || 'efectivo';
@@ -3759,11 +3829,24 @@ async function saveReserva() {
   const cargosReserva = reservaCargosSeleccionados();
   // Total por la cascada unificada, NOCHE POR NOCHE. Si el staff puso precio/noche manual
   // es override fijo; si no, la cascada de cada noche (con la promo elegida).
-  const precioInput = Number(document.getElementById('res-precio').value) || 0;
+  // Modo total pactado: el precio/noche se deriva del total escrito (override manual) y el
+  // total guardado es EXACTAMENTE el escrito (no se recalcula noches × precio redondeado).
+  const totalManualIn = document.getElementById('res-total-manual')?.value || '';
+  const totalManual = totalManualIn !== '';
+  let precioInput = Number(document.getElementById('res-precio').value) || 0;
+  if (totalManual) {
+    const der = derivarPrecioDesdeTotal(totalManualIn, nights, cargosReservaTotal(cargosReserva));
+    if (!der.ok) {
+      savingReserva = false;
+      if(btnGuardar) { btnGuardar.disabled = false; btnGuardar.textContent = 'Guardar Reserva'; }
+      showNotif(der.error, 'error'); return;
+    }
+    precioInput = der.precioNoche;
+  }
   const opts = { cargos: cargosReserva, promo: promoSel };
   if (precioInput > 0) opts.precioOverride = precioInput;
   const calc = calcularPrecioReserva(hab, entrada, salida, opts);
-  const totalEstadia = calc.total;
+  const totalEstadia = totalManual ? Number(totalManualIn) : calc.total;
   // r.precio = representativo (override manual, o precio de la 1ª noche de la cascada).
   const precio = precioInput > 0 ? precioInput : calc.precioNoche;
   const pagado = Number(document.getElementById('res-pagado').value)||0;
@@ -3786,7 +3869,7 @@ async function saveReserva() {
     guestName: huespedData ? huespedData.nombre+' '+huespedData.apellido : h,
     hab, cabaña, entrada, salida,
     precio, moneda,
-    total: totalEstadia, cargos: cargosReserva, promo: promoSel,
+    total: totalEstadia, totalManual, cargos: cargosReserva, promo: promoSel,
     pago: document.getElementById('res-pago').value,
     plataforma: document.getElementById('res-plat').value,
     estado: document.getElementById('res-estado').value,
@@ -6828,6 +6911,8 @@ function openReservaDesdeGrilla(hab, cabId, entrada, salida) {
   document.getElementById('res-cabaña').value = cabId;
   // Precio por noche con la cascada completa (temporada + finde/promo/dinámicos si hay)
   document.getElementById('res-precio').value = precioNocheCascada(hab, entrada);
+  document.getElementById('res-total').value = '';
+  document.getElementById('res-total-manual').value = '';
   // Reset del resto
   document.getElementById('res-pagado').value = '';
   document.getElementById('res-notas').value = '';
@@ -8162,7 +8247,7 @@ Object.assign(window, {
   openCambioCama, updateCambioCamaSelect, saveCambioCama,
   limpiarDuplicados,
   showPublicFormLink, copyPublicLink, openPublicFormPreview, submitPublicRegistration, previewPubDoc, showPublicRegistrationForm,
-  updateBedsSelect, onEntradaChange, calcTotalReserva, calcExtension, toggleHorarioCobro, toggleHorarioCobroToggle: toggleHorarioCobro,
+  updateBedsSelect, onEntradaChange, calcTotalReserva, onPrecioReservaInput, onTotalReservaInput, calcExtension, toggleHorarioCobro, toggleHorarioCobroToggle: toggleHorarioCobro,
   calcularPrecioReserva, precioNocheCascada, cargosReservaTotal, renderResCargos, reservaCargosSeleccionados, renderResPromos,
   cycleBed, showGuestDetail, previewDoc, populateRolSelect,
   switchPricingTab, switchAcctTab, cerrarCaja,

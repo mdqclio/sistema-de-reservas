@@ -38,6 +38,10 @@ jobs:
       - name: Tests de grilla (saldo + barras)
         run: node tests/grilla.test.mjs
 
+      # Cálculo inverso: total pactado → precio manual por noche (total guardado = escrito).
+      - name: Tests de total pactado
+        run: node tests/total.test.mjs
+
       # Chequeo de sintaxis del <script type="module"> de index.html
       # (mismo patrón que docs/START SESSION.md).
       - name: Sintaxis de index.html
