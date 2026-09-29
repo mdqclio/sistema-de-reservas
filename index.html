@@ -215,6 +215,14 @@ td.acciones .btn:last-child { margin-right: 0; }
 .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--accent); }
 .form-group select option { background: var(--surface2); }
 .modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
+/* Modal de reserva: 3 botones → en pantalla chica bajan de renglón en vez de desbordar. */
+.modal-footer-wrap { flex-wrap: wrap; }
+.res-acciones { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: -6px 0 16px; padding: 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); }
+.res-acciones .res-acciones-nota { flex-basis: 100%; font-size: 11px; color: var(--text3); }
+@media (max-width: 480px) {
+  .modal-footer-wrap .btn { flex: 1 1 100%; }
+  .res-acciones .btn { flex: 1 1 calc(50% - 8px); }
+}
 
 /* ===== ACCOUNTING ===== */
 .tabs { display: flex; gap: 2px; background: var(--surface2); border-radius: var(--radius); padding: 3px; margin-bottom: 20px; width: fit-content; }
@@ -1083,6 +1091,8 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
 <div class="modal-overlay" id="modalReserva">
   <div class="modal">
     <h2 id="modalReservaTitle">Nueva Reserva</h2>
+    <!-- Accesos de una reserva YA guardada (mismos que la fila del listado). -->
+    <div id="res-acciones" class="res-acciones" style="display:none"></div>
     <input type="hidden" id="res-edit-id">
     <input type="hidden" id="res-huesped-mode" value="nuevo">
     <div class="form-group">
@@ -1236,8 +1246,9 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
       </div>
     </div>
     <div class="form-group"><label>Notas</label><textarea id="res-notas" rows="2"></textarea></div>
-    <div class="modal-footer">
+    <div class="modal-footer modal-footer-wrap">
       <button class="btn btn-ghost" onclick="closeModal('modalReserva')">Cancelar</button>
+      <button class="btn btn-green" id="btnGuardarEnviar" onclick="guardarYEnviarVoucher()">Guardar y enviar comprobante</button>
       <button class="btn btn-blue" id="btnGuardarReserva" onclick="saveReserva()">Guardar Reserva</button>
     </div>
   </div>
@@ -3907,6 +3918,55 @@ function openGrupo(grupoId) {
   openModal('modalGrupo');
 }
 
+// Botones del modal de reserva según la reserva abierta (null = nueva). Mismas
+// condiciones que la fila del listado: 📄 canCheckin||canCheckout, 💰 además con
+// saldo, 🔗 canCheckin. Solo llaman a las funciones existentes.
+function renderAccionesModalReserva(r) {
+  const box = document.getElementById('res-acciones');
+  const btnEnviar = document.getElementById('btnGuardarEnviar');
+  if (!r) {
+    // Reserva nueva: el estado sale del form (confirmada / check-in) → admite comprobante.
+    if (btnEnviar) btnEnviar.style.display = '';
+    if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+    return;
+  }
+  const canCheckin = r.estado === ESTADO_RESERVA.CONFIRMADA;
+  const canCheckout = r.estado === ESTADO_RESERVA.CHECKIN;
+  const hasSaldo = saldoReserva(r) > 0;
+  if (btnEnviar) btnEnviar.style.display = (canCheckin || canCheckout) ? '' : 'none';
+  if (!box) return;
+  const btns = [
+    (canCheckin || canCheckout) ? `<button type="button" class="btn btn-ghost btn-sm" onclick="enviarVoucher('${r.id}')">📄 Enviar comprobante</button>` : '',
+    // Cobrar: se cierra el modal de reserva antes de abrir el de pago (mismo patrón que la vista de grupo).
+    (canCheckin || canCheckout) && hasSaldo ? `<button type="button" class="btn btn-green btn-sm" onclick="closeModal('modalReserva');openPago('${r.id}')">💰 Cobrar</button>` : '',
+    canCheckin ? `<button type="button" class="btn btn-ghost btn-sm" onclick="generarLinkPrecheckin('${r.id}')">🔗 Link de pre check-in</button>` : '',
+  ].filter(Boolean);
+  box.innerHTML = btns.join('') + (btns.length ? '<div class="res-acciones-nota">Usan los datos ya guardados de la reserva.</div>' : '');
+  box.style.display = btns.length ? '' : 'none';
+}
+
+// Teléfono del huésped que va a quedar en la reserva, leído del form (para saber
+// antes de guardar si habrá que abrir WhatsApp).
+function telHuespedModalReserva() {
+  const nuevo = document.getElementById('res-huesped-mode')?.value === 'nuevo';
+  const tel = nuevo
+    ? document.getElementById('hn-tel')?.value
+    : (getHuespedes().find(x => x.id === document.getElementById('res-huesped')?.value) || {}).tel;
+  return String(tel || '').replace(/\D/g, '');
+}
+
+// "Guardar y enviar comprobante": primero guarda con saveReserva (sin cambios); SOLO
+// si el guardado fue exitoso, envía el comprobante de la reserva ya creada/actualizada.
+async function guardarYEnviarVoucher() {
+  if (savingReserva) return;
+  // Safari/iPhone bloquea window.open después de un await: la pestaña de WhatsApp se
+  // abre acá, dentro del click, y enviarVoucher le pone la URL al final.
+  const win = telHuespedModalReserva() ? window.open('', '_blank') : null;
+  const reg = await saveReserva();
+  if (!reg || !reg.id) { if (win) win.close(); return; } // falló: no se envía nada
+  await enviarVoucher(reg.id, win);
+}
+
 function openNuevaReserva() {
   document.getElementById('modalReservaTitle').textContent = 'Nueva Reserva';
   document.getElementById('res-edit-id').value = '';
@@ -3914,6 +3974,7 @@ function openNuevaReserva() {
   clearHuespedNuevo();
   setHuespedMode('nuevo'); // reserva nueva: casi siempre huésped nuevo
   resetGrupoCarga(true);
+  renderAccionesModalReserva(null);
   document.getElementById('res-huesped').value = '';
   document.getElementById('res-huesped-buscar').value = '';
   document.getElementById('res-huesped-lista').style.display = 'none';
@@ -3943,6 +4004,7 @@ function editReserva(rid) {
   clearHuespedNuevo();
   setHuespedMode('existente'); // editar siempre usa huésped existente
   resetGrupoCarga(false); // agregar cabañas: solo al crear
+  renderAccionesModalReserva(r);
   document.getElementById('res-huesped').value = r.huespedId;
   document.getElementById('res-huesped-buscar').value = getHuespedNombre(r.huespedId);
   document.getElementById('res-huesped-lista').style.display = 'none';
@@ -4136,6 +4198,7 @@ async function saveReserva() {
   if (document.getElementById('section-mapa')?.classList.contains('active')) renderMapa(document.getElementById('mapaFecha')?.value);
   auditLog(editId ? 'editar' : 'crear', 'Reserva', `${getHuespedNombre(h, reg)} · Cab ${hab} · ${entrada}→${salida}`);
   showNotif('Reserva guardada correctamente');
+  return reg; // guardado exitoso (los returns de error devuelven undefined)
 }
 
 function doCheckin(rid) {
@@ -7209,6 +7272,7 @@ function openReservaDesdeGrilla(hab, cabId, entrada, salida) {
   clearHuespedNuevo();
   setHuespedMode('nuevo'); // reserva nueva: casi siempre huésped nuevo
   resetGrupoCarga(true);
+  renderAccionesModalReserva(null);
   document.getElementById('res-huesped').value = '';
   document.getElementById('res-huesped-buscar').value = '';
   document.getElementById('res-huesped-lista').style.display = 'none';
@@ -8577,20 +8641,28 @@ async function asegurarTokenReserva(r) {
 }
 
 // Link público del voucher (docs/voucher.html) + mensaje de WhatsApp listo para mandar.
-async function enviarVoucher(rid) {
+// `win`: pestaña ya abierta por quien llama (ver guardarYEnviarVoucher). Safari/iPhone
+// bloquea window.open después de un await (se pierde el gesto del click), así que la
+// pestaña se abre ANTES de esperar la escritura del token y al final se le pone la URL.
+async function enviarVoucher(rid, win) {
   const r = getReservas().find(x => x.id === rid);
-  if (!r) { showNotif('Reserva no encontrada', 'error'); return; }
-  const token = await asegurarTokenReserva(r);
-  const url = new URL('docs/voucher.html', location.href).href + '?token=' + token;
+  if (!r) { if (win) win.close(); showNotif('Reserva no encontrada', 'error'); return; }
   const nombre = getHuespedNombre(r.huespedId, r);
   const h = getHuespedes().find(x => x.id === r.huespedId);
   const tel = String((h && h.tel) || '').replace(/\D/g, '');
+  if (tel && !win) win = window.open('', '_blank');
+  if (!tel && win) { win.close(); win = null; }
+  let token;
+  try { token = await asegurarTokenReserva(r); }
+  catch (e) { if (win) win.close(); console.error('voucher: token', e); showNotif('No se pudo generar el comprobante', 'error'); return; }
+  const url = new URL('docs/voucher.html', location.href).href + '?token=' + token;
   const noches = nightsBetween(r.entrada, r.salida);
   const msg = `¡Hola ${nombre.split(' ')[0] || ''}! Te compartimos el comprobante de tu reserva en Puerto Delfín:\n`
     + `Cabaña ${r.hab} · ${fmtFecha(r.entrada)} al ${fmtFecha(r.salida)} (${noches} noche${noches === 1 ? '' : 's'})\n`
     + `${url}\n¡Te esperamos! 🌊`;
   if (tel) {
-    window.open('https://wa.me/' + tel + '?text=' + encodeURIComponent(msg), '_blank');
+    const wa = 'https://wa.me/' + tel + '?text=' + encodeURIComponent(msg);
+    if (win) win.location.href = wa; else window.open(wa, '_blank');
     auditLog('enviar voucher (WhatsApp)', 'Reserva', `${nombre} · Cab ${r.hab}`);
     return;
   }
@@ -8647,7 +8719,7 @@ Object.assign(window, {
   openCambioCama, updateCambioCamaSelect, saveCambioCama,
   limpiarDuplicados,
   showPublicFormLink, copyPublicLink, openPublicFormPreview, submitPublicRegistration, previewPubDoc, showPublicRegistrationForm,
-  updateBedsSelect, onEntradaChange, calcTotalReserva, onPrecioReservaInput, onTotalReservaInput, enviarVoucher,
+  updateBedsSelect, onEntradaChange, calcTotalReserva, onPrecioReservaInput, onTotalReservaInput, enviarVoucher, guardarYEnviarVoucher,
   toggleGrupoPanel, renderGrupoCabanas, toggleGrupoExtra, openGrupo, onPagoModoChange, calcExtension, toggleHorarioCobro, toggleHorarioCobroToggle: toggleHorarioCobro,
   calcularPrecioReserva, precioNocheCascada, cargosReservaTotal, renderResCargos, reservaCargosSeleccionados, renderResPromos,
   cycleBed, showGuestDetail, previewDoc, populateRolSelect,

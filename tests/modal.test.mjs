@@ -1,0 +1,97 @@
+// Tests de los accesos del modal de reserva.
+//  · guardarYEnviarVoucher: el comprobante se envía SOLO después de un guardado exitoso
+//    y con el id de la reserva guardada; si el guardado falla no se envía nada.
+//  · renderAccionesModalReserva: mismas condiciones que la fila del listado.
+//  · enviarVoucher: la pestaña de WhatsApp se abre ANTES del await (iPhone/Safari).
+// Ejecutar:  node tests/modal.test.mjs
+
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+import path from 'path';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+const src = html.match(/<script type="module">([\s\S]*?)<\/script>/)[1];
+function grab(name) {
+  const re = new RegExp('\\n(async )?function ' + name + '\\b[\\s\\S]*?\\n\\}', 'm');
+  const m = src.match(re);
+  if (!m) throw new Error('no se encontró la función: ' + name);
+  return m[0];
+}
+let pass = 0, fail = 0;
+function eq(label, got, exp) {
+  const ok = JSON.stringify(got) === JSON.stringify(exp);
+  console.log(`${ok ? '✅' : '❌'} ${label}  got=${JSON.stringify(got)} exp=${JSON.stringify(exp)}`);
+  ok ? pass++ : fail++;
+}
+
+const LOG = [];
+const EL = {};
+const el = id => (EL[id] ||= { id, value: '', innerHTML: '', style: {} });
+let RESERVAS = [], HUESPEDES = [{ id: 'h1', nombre: 'Ana', apellido: 'P', tel: '+54 9 11 5555-1234' }, { id: 'h2', nombre: 'Beto', apellido: 'Q', tel: '' }];
+let saveResult = null;
+const fakeWin = () => { const w = { closed: false, location: { href: '' }, close() { w.closed = true; LOG.push('win.close'); } }; return w; };
+const env = {
+  document: { getElementById: el },
+  window: { open: (u) => { LOG.push('window.open:' + (u || 'blank')); return fakeWin(); } },
+  location: { href: 'https://x.github.io/sistema-de-reservas/' },
+  navigator: { clipboard: { writeText: async () => { LOG.push('clipboard'); } } },
+  getReservas: () => RESERVAS, getHuespedes: () => HUESPEDES,
+  getHuespedNombre: (id) => (HUESPEDES.find(h => h.id === id) || {}).nombre || id,
+  asegurarTokenReserva: async (r) => { LOG.push('token:' + r.id); return 'TOK'; },
+  nightsBetween: () => 2, fmtFecha: s => s, auditLog: (a) => LOG.push('audit:' + a), showNotif: (m) => LOG.push('notif'),
+  prompt: () => {}, saldoReserva: r => Number(r.saldo) || 0,
+  ESTADO_RESERVA: { CONFIRMADA: 'confirmada', CHECKIN: 'checkin', CHECKOUT: 'checkout', CANCELADA: 'cancelada' },
+  saveReserva: async () => { LOG.push('save'); return saveResult; },
+};
+const keys = Object.keys(env);
+const api = new Function(...keys, 'let savingReserva = false;\n' +
+  ['renderAccionesModalReserva', 'telHuespedModalReserva', 'guardarYEnviarVoucher', 'enviarVoucher'].map(grab).join('\n') +
+  '\nreturn { renderAccionesModalReserva, guardarYEnviarVoucher, enviarVoucher };')(...keys.map(k => env[k]));
+
+// ── Guardar y enviar: guardado falla ──
+el('res-huesped-mode').value = 'nuevo'; el('hn-tel').value = '11 5555';
+saveResult = undefined; LOG.length = 0;
+await api.guardarYEnviarVoucher();
+eq('falla el guardado: no genera token ni abre WhatsApp', LOG.some(x => x.startsWith('token:') || x.startsWith('audit:')), false);
+eq('falla el guardado: la pestaña pre-abierta se cierra', LOG.includes('win.close'), true);
+
+// ── Guardar y enviar: guardado OK (reserva NUEVA, id recién creado) ──
+RESERVAS = [{ id: 'R-NUEVA', huespedId: 'h1', hab: '3', entrada: '2026-10-10', salida: '2026-10-12', estado: 'confirmada' }];
+saveResult = RESERVAS[0]; LOG.length = 0;
+await api.guardarYEnviarVoucher();
+eq('orden: guardar → token de la reserva guardada', LOG.filter(x => x === 'save' || x.startsWith('token:')), ['save', 'token:R-NUEVA']);
+eq('pestaña abierta ANTES de guardar (gesto del click) y una sola', LOG.filter(x => x.startsWith('window.open')), ['window.open:blank']);
+eq('WhatsApp enviado y auditado', LOG.includes('audit:enviar voucher (WhatsApp)'), true);
+
+// ── Guardar y enviar sin teléfono → copia link, no abre pestaña ──
+RESERVAS = [{ id: 'R2', huespedId: 'h2', hab: '4', entrada: '2026-10-10', salida: '2026-10-12', estado: 'confirmada' }];
+el('res-huesped-mode').value = 'existente'; el('res-huesped').value = 'h2';
+saveResult = RESERVAS[0]; LOG.length = 0;
+await api.guardarYEnviarVoucher();
+eq('sin teléfono: no abre pestañas y copia el link', [LOG.some(x => x.startsWith('window.open')), LOG.includes('clipboard')], [false, true]);
+
+// ── enviarVoucher desde el modal/listado: abre la pestaña antes del await ──
+RESERVAS = [{ id: 'R3', huespedId: 'h1', hab: '5', entrada: '2026-10-10', salida: '2026-10-12', estado: 'confirmada' }];
+LOG.length = 0;
+await api.enviarVoucher('R3');
+eq('enviarVoucher: window.open antes de generar el token', LOG.indexOf('window.open:blank') < LOG.indexOf('token:R3'), true);
+
+// ── Visibilidad de accesos ──
+const vis = r => { api.renderAccionesModalReserva(r); return { enviar: el('btnGuardarEnviar').style.display !== 'none', html: el('res-acciones').innerHTML, box: el('res-acciones').style.display !== 'none' }; };
+let v = vis(null);
+eq('nueva: "Guardar y enviar" visible, sin accesos', [v.enviar, v.box], [true, false]);
+v = vis({ id: 'a', estado: 'confirmada', saldo: 100 });
+eq('confirmada con saldo: 📄 💰 🔗', [v.enviar, /enviarVoucher\('a'\)/.test(v.html), /openPago\('a'\)/.test(v.html), /generarLinkPrecheckin\('a'\)/.test(v.html)], [true, true, true, true]);
+eq('cobrar cierra el modal de reserva antes de abrir el de pago', /closeModal\('modalReserva'\);openPago\('a'\)/.test(v.html), true);
+v = vis({ id: 'b', estado: 'confirmada', saldo: 0 });
+eq('confirmada sin saldo: sin 💰', /openPago/.test(v.html), false);
+v = vis({ id: 'c', estado: 'checkin', saldo: 50 });
+eq('check-in: 📄 💰 sin 🔗', [/enviarVoucher/.test(v.html), /openPago/.test(v.html), /generarLinkPrecheckin/.test(v.html)], [true, true, false]);
+v = vis({ id: 'd', estado: 'checkout', saldo: 50 });
+eq('checkout: sin "Guardar y enviar" ni accesos', [v.enviar, v.box], [false, false]);
+v = vis({ id: 'e', estado: 'cancelada', saldo: 0 });
+eq('cancelada: sin "Guardar y enviar" ni accesos', [v.enviar, v.box], [false, false]);
+
+console.log(`\n${pass} passed, ${fail} failed`);
+process.exit(fail ? 1 : 0);
