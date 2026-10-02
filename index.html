@@ -376,10 +376,14 @@ td.acciones .btn:last-child { margin-right: 0; }
   font-size: 9px; font-weight: 600; white-space: nowrap; overflow: hidden;
   cursor: pointer; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.15);
 }
-.grilla-barra.checkin { background: rgba(59,130,246,0.75); color: white; }
-.grilla-barra.confirmada { background: rgba(13,148,136,0.75); color: white; }
-.grilla-barra.checkout { background: rgba(100,116,139,0.45); color: var(--text2); }
-.grilla-barra .grilla-debe { color: #fecaca; font-weight: 700; }
+/* Color = estado de pago (saldoReserva): celeste falta ingresar, verde ya pagaron.
+   El estado de la estadía va aparte: checkin con borde izquierdo marcado,
+   checkout atenuada; confirmada sin marca. */
+.grilla-barra.gb-debe { background: rgba(56,189,248,0.85); color: #0c2a3a; }
+.grilla-barra.gb-pagada { background: rgba(34,197,94,0.85); color: #052e16; }
+.grilla-barra.checkin { box-shadow: inset 4px 0 0 rgba(255,255,255,0.9); }
+.grilla-barra.checkout { opacity: .5; }
+.grilla-barra .grilla-debe { color: #7f1d1d; font-weight: 700; }
 .grilla-barra .gb-flecha { flex: none; font-size: 12px; line-height: 1; opacity: .9; }
 /* Recortada por el borde del rango visible: borde recto + línea punteada = "sigue". */
 .grilla-barra.gb-cont-izq { border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: 2px dashed rgba(255,255,255,0.7); }
@@ -7124,12 +7128,12 @@ function renderGrilla() {
       );
 
       // Fondo: una celda por día. Libre → precio de la noche + selección de rango.
-      // Noche ocupada → sin click (no se puede cargar una reserva encima).
+      // Noche ocupada → solo vale como 2º click (salida el día que entra otra reserva).
       html += `<td class="grilla-row" colspan="${fechas.length}"><div class="grilla-track" style="grid-template-columns:repeat(${fechas.length},1fr)">`;
       for (const f of fechas) {
         const isToday = f === tod;
         if (resEnFecha(f)) {
-          html += `<div class="grilla-cell gc-busy${isToday ? ' gc-today' : ''}"></div>`;
+          html += `<div class="grilla-cell gc-busy${isToday ? ' gc-today' : ''}" onclick="grillaCellClick(this,'${b.id}','${hs}','${f}',true)"></div>`;
         } else {
           const pr = precioNocheCascada(hs, f);
           // Precio libre en la moneda configurada para la cabaña (sin convertir).
@@ -7152,7 +7156,8 @@ function renderGrilla() {
         const grupoTxt = res.grupoId ? ` · Grupo (${reservasDelGrupo(res.grupoId).length} cabañas)` : '';
         const titulo = `${nombre}${saldoTxt ? ' · ' + saldoTxt : ''}${grupoTxt} (${fmt(res.entrada.substring(0,10))} → ${fmt(res.salida.substring(0,10))})`;
         const cont = (pos.cortaIzq ? ' gb-cont-izq' : '') + (pos.cortaDer ? ' gb-cont-der' : '');
-        html += `<div class="grilla-barra ${res.estado}${cont}" style="left:${pos.left}%;width:${pos.width}%" title="${titulo}" onclick="editReserva('${res.id}')">`
+        const pago = saldo > 0 ? ' gb-debe' : ' gb-pagada';
+        html += `<div class="grilla-barra ${res.estado}${pago}${cont}" style="left:${pos.left}%;width:${pos.width}%" title="${titulo}" onclick="editReserva('${res.id}')">`
           + `${pos.cortaIzq ? '<span class="gb-flecha">‹</span>' : ''}<span class="grilla-span-txt">${res.grupoId ? '👥 ' : ''}${nombre}${debe}</span>${pos.cortaDer ? '<span class="gb-flecha">›</span>' : ''}</div>`;
       }
 
@@ -7191,31 +7196,45 @@ function addDaysStr(fecha, n) {
   return d.toISOString().split('T')[0];
 }
 
-// Click sobre celda libre. 1er click = entrada (marca tentativa). 2º click (misma fila) = salida.
-function grillaCellClick(el, cabId, hab, fecha) {
+// Dos clicks → { entrada, salida }. El 2º click ES la fecha de salida (no la última
+// noche): clicks 2 y 4 → entrada 2, salida 4, 2 noches. El orden de los clicks no
+// importa. Misma celda dos veces → 1 noche (salida = día + 1), nunca 0 noches.
+function grillaRangoDesdeClicks(a, b) {
+  const entrada = a <= b ? a : b;
+  const salida = a <= b ? b : a;
+  return { entrada, salida: salida === entrada ? addDaysStr(entrada, 1) : salida };
+}
+
+// Primera noche ocupada en [entrada, salida) o null si están todas libres. La noche
+// de la salida no se valida: ese día puede entrar otra reserva (recambio).
+function grillaPrimeraNocheOcupada(entrada, salida, ocupada) {
+  for (let f = entrada; f < salida; f = addDaysStr(f, 1)) {
+    if (ocupada(f)) return f;
+  }
+  return null;
+}
+
+// Click sobre celda. 1er click = entrada (marca tentativa). 2º click (misma fila) = salida.
+// Las celdas ocupadas (busy=true) solo sirven como 2º click: permiten elegir como
+// salida el día en que entra otra reserva (recambio). Como 1er click no hacen nada.
+function grillaCellClick(el, cabId, hab, fecha, busy) {
   // 2º click en otra cabaña → reinicia la selección en la nueva fila.
   if (grillaSel && grillaSel.cab !== cabId) grillaClearSel();
 
   if (!grillaSel) {
+    if (busy) return;
     grillaSel = { cab: cabId, hab, fecha, el };
     el.classList.add('gc-sel'); // resaltar inicio tentativo
     return;
   }
 
-  // 2º click misma fila: definir rango. La salida es exclusiva, así que la última
-  // noche ocupada es max(a,b) y la fecha de salida es esa noche + 1 día.
-  const a = grillaSel.fecha, b = fecha;
-  const entrada = a <= b ? a : b;
-  const ultimaNoche = a <= b ? b : a;
-  const salida = addDaysStr(ultimaNoche, 1);
+  const { entrada, salida } = grillaRangoDesdeClicks(grillaSel.fecha, fecha);
 
-  // Validar que TODAS las noches entre entrada y ultimaNoche estén libres.
-  for (let f = entrada; f <= ultimaNoche; f = addDaysStr(f, 1)) {
-    if (grillaCeldaOcupada(cabId, f)) {
-      showNotif('Hay una cabaña ocupada dentro del rango. Elegí otras fechas.', 'error');
-      grillaClearSel();
-      return;
-    }
+  // Validar que TODAS las noches [entrada, salida) estén libres.
+  if (grillaPrimeraNocheOcupada(entrada, salida, f => grillaCeldaOcupada(cabId, f))) {
+    showNotif('Hay una cabaña ocupada dentro del rango. Elegí otras fechas.', 'error');
+    grillaClearSel();
+    return;
   }
 
   grillaClearSel();
@@ -8342,23 +8361,6 @@ async function promoverAutocarga(key, p, datos) {
 async function writeCheckinToken(token, data) { await set(ref(db, 'cabanas/checkin_tokens/' + token), data); }
 async function removeCheckinToken(token) { await remove(ref(db, 'cabanas/checkin_tokens/' + token)); }
 
-// Datos para la seña por transferencia, tomados de la config (NO hardcodeados):
-//  1) bot_config.datos_transferencia si existe;
-//  2) si no, la entrada de knowledge_base que mencione el CBU (solo sus renglones
-//     bancarios: banco, CBU, alias, razón social, CUIT, titular).
-// Sin datos → '' y el voucher muestra un aviso para consultarlos con la recepción.
-function datosSenaDesdeConfig(botCfg, kbList) {
-  const directo = String((botCfg && botCfg.datos_transferencia) || '').trim();
-  if (directo) return directo.slice(0, 600);
-  const textoDe = e => [e && e.texto, e && e.question, e && e.answer].filter(x => typeof x === 'string').join('\n');
-  const entrada = (kbList || []).find(e => /\bCBU\b/i.test(textoDe(e)));
-  if (!entrada) return '';
-  const lineas = textoDe(entrada).split(/\n+/)
-    .filter(l => /(cbu|alias|banco|raz[oó]n social|cuit|titular)/i.test(l))
-    .map(l => l.replace(/^[\s*•-]+/, '').trim()).filter(Boolean);
-  return (lineas.length ? lineas.join('\n') : textoDe(entrada).trim()).slice(0, 600);
-}
-
 // Contenido del nodo público /cabanas/checkin_tokens/{token}: lo leen el form de pre
 // check-in y el voucher. SOLO datos de ESTA reserva y el nombre del titular: nada de
 // DNI, email ni teléfono. Montos en r.moneda; el saldo queda como estaba al escribirlo
@@ -8376,7 +8378,6 @@ function datosTokenReserva(r, ctx = {}) {
     moneda: r.moneda || 'ARS',
     total: r2(totalReserva(r)), pagado: r2(r.pagado), saldo: saldoReserva(r),
     horaCheckin: ctx.horaCheckin || '15:00', horaCheckout: ctx.horaCheckout || '10:00',
-    datosSena: ctx.datosSena || '',
     // Form de pre check-in cerrado si ya se hizo o si la estadía ya empezó.
     precheckinHecho: !!r.guestCheckinDone || (r.estado && r.estado !== ESTADO_RESERVA.CONFIRMADA) || false,
     actualizado: ctx.ahora || Date.now(),
@@ -8392,7 +8393,6 @@ async function escribirTokenReserva(r, token = r.checkinToken) {
     guestName: getHuespedNombre(r.huespedId, r) || '',
     tipoCabana: cfgHab.tipo || '',
     horaCheckin: botCfg.checkin, horaCheckout: botCfg.checkout,
-    datosSena: datosSenaDesdeConfig(botCfg, colKnowledge.list()),
   }));
 }
 

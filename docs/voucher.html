@@ -57,9 +57,6 @@
     const actualizado = t.actualizado
       ? new Date(t.actualizado).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
       : '';
-    const sena = t.datosSena
-      ? `<pre class="sena">${escapeHtml(t.datosSena)}</pre>`
-      : `<p class="muted">Pedinos los datos para la transferencia por WhatsApp.</p>`;
     return `
       <section class="card">
         <div class="code">Reserva <strong>#${escapeHtml(t.codigo || '')}</strong></div>
@@ -102,8 +99,7 @@
       </section>
 
       ${saldo > 0 ? `<section class="card">
-        <h3>Datos para la seña (transferencia)</h3>
-        ${sena}
+        <p class="muted">Consultanos por WhatsApp las formas de pago.</p>
       </section>` : ''}`;
   }
 
@@ -167,7 +163,6 @@ html, body { background: var(--bg); color: var(--text); font-family: system-ui, 
 .row.ok .value { color: var(--accent); }
 .card ul { padding-left: 20px; }
 .card li { padding: 2px 0; }
-.sena { white-space: pre-wrap; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 14px; background: var(--bg); border-radius: 8px; padding: 10px; }
 .muted { color: var(--muted); }
 .small { font-size: 12px; margin-top: 6px; }
 #voucher, #errorBox, #acciones { display: none; }
