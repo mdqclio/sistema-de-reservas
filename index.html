@@ -98,6 +98,9 @@ nav { flex: 1; min-height: 0; padding: 12px 0; overflow-y: auto; }
 /* ===== TOPBAR ===== */
 .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
 .topbar h1 { font-size: 22px; font-weight: 600; color: var(--text); }
+/* Mes visible de la grilla, centrado entre el título y la fecha. */
+.grilla-mes-header { flex: 1; text-align: center; font-size: 20px; font-weight: 600; color: var(--accent2); letter-spacing: 0.2px; white-space: nowrap; }
+.grilla-mes-header[hidden] { display: none; }
 .topbar-right { display: flex; gap: 10px; align-items: center; }
 .date-badge { font-size: 12px; color: var(--text3); background: var(--surface); border: 1px solid var(--border); padding: 6px 12px; border-radius: var(--radius); font-family: 'DM Mono', monospace; }
 
@@ -290,20 +293,17 @@ td.acciones .btn:last-child { margin-right: 0; }
   display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5);
   z-index: 149; backdrop-filter: blur(2px);
 }
-/* Sidebar colapsable SOLO en desktop: franja de íconos, se expande al hover (encima del
-   contenido, sin mover la grilla) o fijo con el hamburger. Mobile (≤768) no cambia. */
+/* Sidebar en desktop: colapsado = oculto del todo, solo queda el hamburger flotando.
+   Abierto se superpone al contenido (no reacomoda la grilla) y se cierra al elegir una
+   sección o con click afuera (overlay transparente). Mobile (≤768) no cambia. */
 @media (min-width: 769px) {
-  .hamburger { display: flex; top: 14px; left: 8px; }
-  .sidebar-logo { padding-left: 60px; }
-  .sidebar, .main { transition: width 0.2s ease, margin-left 0.2s ease, box-shadow 0.2s ease; }
-  #app.sb-colapsado .sidebar { width: 56px; }
-  #app.sb-colapsado .main { margin-left: 56px; }
-  #app.sb-colapsado .sidebar:hover { width: 220px; box-shadow: 8px 0 24px rgba(0,0,0,0.35); }
-  .sidebar .nav-item, .sidebar .sidebar-logo, .sidebar .sidebar-user { white-space: nowrap; }
-  .sidebar .nav-section, .sidebar .sidebar-user, .sidebar .sidebar-footer { transition: opacity 0.15s; }
-  #app.sb-colapsado .sidebar:not(:hover) .nav-section,
-  #app.sb-colapsado .sidebar:not(:hover) .sidebar-user,
-  #app.sb-colapsado .sidebar:not(:hover) .sidebar-footer { opacity: 0; pointer-events: none; }
+  .hamburger { display: flex; top: 14px; left: 14px; }
+  .sidebar-logo { padding-left: 64px; }
+  .sidebar { z-index: 200; transition: transform 0.2s ease, box-shadow 0.2s ease; box-shadow: 8px 0 24px rgba(0,0,0,0.35); }
+  #app.sb-colapsado .sidebar { transform: translateX(-100%); box-shadow: none; }
+  .main { margin-left: 0; }
+  .topbar { padding-left: 52px; min-height: 40px; }
+  .sidebar-overlay.open { display: block; background: transparent; backdrop-filter: none; }
 }
 @media (max-width: 1100px) {
   .stats-grid { grid-template-columns: repeat(2,1fr); }
@@ -328,6 +328,7 @@ td.acciones .btn:last-child { margin-right: 0; }
   .form-row.form-row-precio > :first-child { grid-column: 1 / -1; }
   .topbar { flex-direction: column; align-items: flex-start; gap: 8px; }
   .topbar h1 { font-size: 18px; margin-left: 36px; }
+  .grilla-mes-header { font-size: 16px; text-align: left; margin-left: 36px; }
   .date-badge { font-size: 11px; }
   .tabs { flex-wrap: wrap; width: 100%; }
   .tab { flex: 1; text-align: center; font-size: 12px; padding: 6px 10px; }
@@ -379,7 +380,8 @@ td.acciones .btn:last-child { margin-right: 0; }
   text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 4px;
   border: 1px solid var(--border); white-space: nowrap; text-align: center;
 }
-.grilla-table th.today-col { background: rgba(59,130,246,0.2); color: var(--accent2); }
+.grilla-table th.gc-finde { background: #1a2a3c; }
+.grilla-table th.today-col { background: var(--blue2); color: #fff; box-shadow: inset 0 -3px 0 var(--accent2); }
 .grilla-table td.cabaña-label {
   font-size: 11px; color: var(--text2); padding: 4px 10px;
   border: 1px solid var(--border); white-space: nowrap; background: var(--surface2);
@@ -393,7 +395,8 @@ td.acciones .btn:last-child { margin-right: 0; }
   cursor: pointer; position: relative; vertical-align: middle;
 }
 .grilla-cell.gc-free { background: transparent; }
-.grilla-cell .grilla-precio { font-size: 9px; color: #fff; text-align: center; opacity: .9; pointer-events: none; }
+/* Precio de celda libre tenue: lo primero que se lee son las barras de reserva. */
+.grilla-cell .grilla-precio { font-size: 9px; color: var(--text3); text-align: center; opacity: .75; pointer-events: none; }
 .grilla-cell.gc-sel { background: var(--accent2); outline: 2px solid var(--accent2); outline-offset: -2px; }
 /* Fila de días: una celda de fondo por día (grid) + barras absolutas encima. */
 .grilla-table td.grilla-row { padding: 0; border: 1px solid var(--border); }
@@ -427,7 +430,12 @@ td.acciones .btn:last-child { margin-right: 0; }
   .grilla-table { min-width: calc(96px + var(--gd, 14) * 44px); }
   .grilla-table th.grilla-corner, .grilla-table td.cabaña-label { width: 96px; padding-left: 6px; padding-right: 6px; }
 }
-.grilla-cell.gc-today { border-left: 2px solid var(--accent) !important; }
+/* Fin de semana: fondo apenas cálido. Hoy: toda la columna teñida + líneas a los lados
+   (las barras son de medio día, así que una sola línea a la izquierda no marcaba el día). */
+.grilla-track .grilla-cell.gc-finde { background: rgba(245,158,11,0.05); }
+.grilla-track .grilla-cell.gc-today { background: rgba(59,130,246,0.16); box-shadow: inset 2px 0 0 rgba(96,165,250,0.7), inset -2px 0 0 rgba(96,165,250,0.7); }
+.grilla-track .grilla-cell.gc-today .grilla-precio { color: var(--text2); }
+.grilla-track .grilla-cell.gc-sel { background: var(--accent2); }
 .grilla-cell-label {
   font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   max-width: 100%; padding: 0 2px; color: var(--text); font-weight: 500;
@@ -438,6 +446,8 @@ td.acciones .btn:last-child { margin-right: 0; }
   flex: 1 1 auto; display: block; min-width: 0; max-width: 100%;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.grilla-scroll:focus { outline: none; }
+.grilla-scroll:focus-visible { outline: 1px solid var(--border2); outline-offset: 2px; }
 .grilla-nav { display: flex; align-items: center; gap: 8px 10px; margin-bottom: 16px; flex-wrap: wrap; }
 .grilla-fecha-input {
   padding: 5px 8px; background: var(--surface2); border: 1px solid var(--border);
@@ -733,6 +743,7 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
     <!-- TOP BAR -->
     <div class="topbar">
       <h1 id="pageTitle">Dashboard</h1>
+      <div id="grillaMesHeader" class="grilla-mes-header" hidden></div>
       <div class="topbar-right">
         <span class="date-badge" id="topDate"></span>
         <div id="pageActions" class="page-actions"></div>
@@ -1018,7 +1029,7 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
         </span>
         <span id="grillaRangoLabel" style="font-size:13px;color:var(--text2);"></span>
       </div>
-      <div style="overflow-x:auto;">
+      <div id="grillaScroll" class="grilla-scroll" tabindex="0" style="overflow-x:auto;">
         <div id="grillaContainer"></div>
       </div>
     </div>
@@ -2858,6 +2869,7 @@ function showSection(s) {
   document.getElementById('section-'+s)?.classList.add('active');
   document.getElementById('nav-'+s)?.classList.add('active');
   document.getElementById('pageTitle').textContent = sectionTitles[s] || s;
+  document.getElementById('grillaMesHeader').hidden = s !== 'grilla';
   window.scrollTo({ top: 0, behavior: 'instant' });
   if (s === 'dashboard') loadAllData().then(() => renderDashboard());
   if (s === 'mapa') { mapaNavegar(0); loadAllData().then(() => renderMapa(document.getElementById('mapaFecha').value)); }
@@ -6944,13 +6956,14 @@ async function submitPublicRegistration() {
 }
 
 // ===================== SIDEBAR =====================
-// Mobile (≤768): overlay con .open (sin cambios). Desktop: el hamburger alterna entre
-// franja de íconos (colapsado, se expande al hover) y fijo expandido. El estado vive en
-// memoria: se recuerda mientras dure la sesión, no se guarda en ningún lado.
+// Mobile (≤768): overlay con .open (sin cambios). Desktop: colapsado = oculto del todo
+// (solo el hamburger); el hamburger lo abre encima del contenido y se cierra al elegir
+// sección (closeSidebar) o con click afuera (overlay). Estado en memoria de la sesión.
 const SIDEBAR_DESKTOP_MQ = '(min-width: 769px)';
 let sidebarColapsado = true;
 function aplicarSidebarColapsado() {
   document.getElementById('app')?.classList.toggle('sb-colapsado', sidebarColapsado);
+  document.getElementById('sidebarOverlay')?.classList.toggle('open', !sidebarColapsado);
 }
 function toggleSidebar() {
   if (window.matchMedia(SIDEBAR_DESKTOP_MQ).matches) {
@@ -6962,6 +6975,11 @@ function toggleSidebar() {
   document.getElementById('sidebarOverlay').classList.toggle('open');
 }
 function closeSidebar() {
+  if (window.matchMedia(SIDEBAR_DESKTOP_MQ).matches) {
+    sidebarColapsado = true;
+    aplicarSidebarColapsado();
+    return;
+  }
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('sidebarOverlay').classList.remove('open');
 }
@@ -7284,7 +7302,7 @@ function renderGrilla() {
     const isToday = f === tod;
     const dow = diasSemana[d.getDay()];
     const isWE = d.getDay() === 0 || d.getDay() === 6;
-    html += `<th class="${isToday ? 'today-col' : ''}" style="${isWE ? 'color:#f59e0b' : ''}">
+    html += `<th data-fecha="${f}" class="${isToday ? 'today-col' : ''}${isWE ? ' gc-finde' : ''}" style="${isWE && !isToday ? 'color:#f59e0b' : ''}">
       ${dow}<br><strong>${d.getDate()}/${d.getMonth()+1}</strong>
     </th>`;
   });
@@ -7320,13 +7338,15 @@ function renderGrilla() {
       html += `<td class="grilla-row" colspan="${fechas.length}"><div class="grilla-track" style="grid-template-columns:repeat(${fechas.length},1fr)">`;
       for (const f of fechas) {
         const isToday = f === tod;
+        const dow = new Date(f + 'T12:00:00').getDay();
+        const marca = (isToday ? ' gc-today' : '') + (dow === 0 || dow === 6 ? ' gc-finde' : '');
         if (resEnFecha(f)) {
-          html += `<div class="grilla-cell gc-busy${isToday ? ' gc-today' : ''}" onclick="grillaCellClick(this,'${b.id}','${hs}','${f}',true)"></div>`;
+          html += `<div class="grilla-cell gc-busy${marca}" onclick="grillaCellClick(this,'${b.id}','${hs}','${f}',true)"></div>`;
         } else {
           const pr = precioNocheCascada(hs, f);
           // Precio libre en la moneda configurada para la cabaña (sin convertir).
           const inner = pr > 0 ? `<div class="grilla-precio">${fmtPrecioCorto(pr, cfg.moneda || 'ARS')}</div>` : '';
-          html += `<div class="grilla-cell gc-free${isToday ? ' gc-today' : ''}" data-cab="${b.id}" data-fecha="${f}" onclick="grillaCellClick(this,'${b.id}','${hs}','${f}')">${inner}</div>`;
+          html += `<div class="grilla-cell gc-free${marca}" data-cab="${b.id}" data-fecha="${f}" onclick="grillaCellClick(this,'${b.id}','${hs}','${f}')">${inner}</div>`;
         }
       }
 
@@ -7356,7 +7376,83 @@ function renderGrilla() {
 
   html += '</tbody></table>';
   document.getElementById('grillaContainer').innerHTML = html;
+  actualizarGrillaMesHeader();
 }
+
+// ---- Mes visible en el encabezado ----
+const GRILLA_MESES_LARGOS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+// 'Octubre 2026' si desde/hasta caen en el mismo mes; 'Oct — Nov 2026' si cruza meses del
+// mismo año; 'Dic 2026 — Ene 2027' si cruza año.
+function grillaMesLabel(desde, hasta) {
+  const [ya, ma] = desde.split('-').map(Number), [yb, mb] = hasta.split('-').map(Number);
+  if (ya === yb && ma === mb) return `${GRILLA_MESES_LARGOS[ma - 1]} ${ya}`;
+  const c = (m) => GRILLA_MESES_CORTOS[m - 1];
+  if (ya === yb) return `${c(ma)} — ${c(mb)} ${ya}`;
+  return `${c(ma)} ${ya} — ${c(mb)} ${yb}`;
+}
+
+// Primer y último día con columna visible en el contenedor (descontando la columna fija
+// de cabañas). Sin scroll horizontal = todo el rango.
+function actualizarGrillaMesHeader() {
+  const el = document.getElementById('grillaMesHeader');
+  const sc = document.getElementById('grillaScroll');
+  const ths = sc ? [...sc.querySelectorAll('th[data-fecha]')] : [];
+  if (!el || !ths.length) return;
+  const corner = sc.querySelector('th.grilla-corner');
+  const izq = (corner ? corner.getBoundingClientRect().right : sc.getBoundingClientRect().left) + 1;
+  const der = sc.getBoundingClientRect().right - 1;
+  const vis = ths.filter(th => { const r = th.getBoundingClientRect(); return r.right > izq + r.width / 2 && r.left < der - r.width / 2; });
+  const desde = (vis[0] || ths[0]).dataset.fecha, hasta = (vis[vis.length - 1] || ths[ths.length - 1]).dataset.fecha;
+  el.textContent = grillaMesLabel(desde, hasta);
+}
+
+// ---- Scroll horizontal de la grilla: flechas del teclado y rueda vertical ----
+function grillaAnchoColumna(sc) {
+  const th = sc.querySelector('th[data-fecha]');
+  return th ? th.getBoundingClientRect().width : 46;
+}
+// ¿Las flechas pueden mover la grilla? Solo con la grilla visible, sin modal abierto y sin
+// foco en un campo editable (Franco tipeando en un input no debe mover la grilla).
+function grillaTeclasActivas() {
+  if (!document.getElementById('section-grilla')?.classList.contains('active')) return false;
+  if (document.querySelector('.modal-overlay.open')) return false;
+  const a = document.activeElement;
+  if (!a || a === document.body) return true;
+  if (a.closest && a.closest('#grillaScroll')) return true;
+  return !(a.isContentEditable || /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName));
+}
+function initGrillaScroll() {
+  const sc = document.getElementById('grillaScroll');
+  if (!sc || sc.dataset.scrollInit) return;
+  sc.dataset.scrollInit = '1';
+  let raf = 0;
+  sc.addEventListener('scroll', () => {
+    if (raf) return;
+    raf = requestAnimationFrame(() => { raf = 0; actualizarGrillaMesHeader(); });
+  }, { passive: true });
+  window.addEventListener('resize', actualizarGrillaMesHeader);
+  // Rueda vertical → horizontal. El gesto horizontal del trackpad (deltaX) sigue nativo.
+  // En los bordes (o si no hay scroll horizontal) no se intercepta: la página scrollea
+  // normal en vertical. No choca con el listener global de wheel de los input number
+  // (ese corre en captura en document, solo hace blur y no llama preventDefault).
+  sc.addEventListener('wheel', (e) => {
+    if (e.ctrlKey || e.shiftKey || Math.abs(e.deltaX) >= Math.abs(e.deltaY)) return;
+    const max = sc.scrollWidth - sc.clientWidth;
+    if (max <= 0) return;
+    const d = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? sc.clientWidth : 1);
+    if ((d < 0 && sc.scrollLeft <= 0) || (d > 0 && sc.scrollLeft >= max - 1)) return;
+    e.preventDefault();
+    sc.scrollLeft += d;
+  }, { passive: false });
+  // Flechas: una columna por pulsación; mantener apretado repite (auto-repeat del keydown).
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    if (e.altKey || e.ctrlKey || e.metaKey || !grillaTeclasActivas()) return;
+    e.preventDefault();
+    sc.scrollLeft += (e.key === 'ArrowRight' ? 1 : -1) * grillaAnchoColumna(sc);
+  });
+}
+initGrillaScroll();
 
 // ---- Carga unificada desde la grilla: selección de rango por 2 clicks ----
 // Estado de la selección tentativa (1er click). Se limpia al 2º click o al cambiar de fila.
