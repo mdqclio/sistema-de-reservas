@@ -166,6 +166,21 @@ for (const D of [7, 14, 30]) {
   eq('window: funciones nuevas registradas', ['grillaNavegarMes', 'grillaIrMes', 'grillaIrFecha', 'grillaSetDias', 'toggleSidebar'].every(f => new RegExp('\\b' + f + '\\b').test(win)), true);
 }
 
+// ── Columna de cabaña fija (sticky) ─────────────────────────────────────────
+// Verificado además en Chromium headless (desktop 1440 / iPhone 390, 7/14/30 días):
+// hit-test y píxeles reales. Acá quedan los invariantes de CSS que lo hacen funcionar.
+{
+  const regla = sel => (html.match(new RegExp(sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' \\{([^}]*)\\}')) || [])[1] || '';
+  const zi = sel => Number((regla(sel).match(/z-index: (\d+)/) || [])[1]);
+  const corner = regla('.grilla-table th.grilla-corner'), label = regla('.grilla-table td.cabaña-label');
+  eq('sticky: esquina y celdas de cabaña con position:sticky; left:0', [/position: sticky; left: 0/.test(corner), /position: sticky; left: 0/.test(label)], [true, true]);
+  eq('sticky: z-index barras < columna fija < esquina', zi('.grilla-barra') < zi('.grilla-table td.cabaña-label') && zi('.grilla-table td.cabaña-label') < zi('.grilla-table th.grilla-corner'), true);
+  eq('sticky: fondo opaco (surface2 sin alfa)', [/background: var\(--surface2\)/.test(corner), /background: var\(--surface2\)/.test(label), /--surface2: #[0-9a-f]{6};/.test(html)], [true, true, true]);
+  eq('sticky: .grilla-track no crea contexto de apilamiento (barras compiten con la columna)', /z-index|transform|isolation/.test(regla('.grilla-track')), false);
+  eq('sticky: sin border-left en la columna fija (por ahí asomaba la barra)', /\.grilla-table th\.grilla-corner, \.grilla-table td\.cabaña-label \{ border-left: none; \}/.test(html), true);
+  eq('sticky: .main con min-width:0 (scrollea la grilla, no la página)', /\.main \{[^}]*min-width: 0;/.test(html), true);
+}
+
 // ── Sidebar colapsable (desktop) ────────────────────────────────────────────
 {
   eq('sidebar: arranca colapsado', [/<div id="app" class="sb-colapsado"/.test(html), /\nlet sidebarColapsado = true;/.test(src)], [true, true]);

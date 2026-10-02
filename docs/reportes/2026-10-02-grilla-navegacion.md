@@ -1,6 +1,6 @@
 # Navegación de la grilla y sidebar colapsable
 
-Branch: `feat/grilla-navegacion` (desde `main` d061842). **No mergeado**: Leonardo verifica primero.
+Branch: `feat/grilla-navegacion` (desde `main` d061842). Mergeado a `main` por pedido de Leonardo ("merge y push").
 Pedidos de Franco: mirar meses a futuro en la grilla sin navegar de a 7 días, y más ancho para la grilla.
 
 ## 1 — Saltar a un mes
@@ -46,6 +46,45 @@ Pedidos de Franco: mirar meses a futuro en la grilla sin navegar de a 7 días, y
 - Mobile (≤768px): sin cambios. Todas las reglas nuevas están dentro de `@media (min-width: 769px)`;
   `toggleSidebar` en mobile sigue haciendo el toggle de `.open` igual que antes.
 
+## 5 — Columna de cabaña fija al scrollear
+
+- **Bug de fondo encontrado**: `.main` es ítem flex sin `min-width: 0`, así que crecía al ancho de la
+  tabla (30 días, o cualquier ancho en iPhone) y scrolleaba **la página entera**, no el contenedor de
+  la grilla. El sticky existente (`left: 0`) es relativo al contenedor, que nunca scrolleaba → la
+  columna se iba con el resto. Fix: `.main { min-width: 0 }`.
+- Capas explícitas: celdas de día (auto) < barras (`z-index: 1`) < columna de cabaña (`4`) <
+  esquina (`5`). `.grilla-track` no crea contexto de apilamiento, así que barras y columna fija
+  compiten en el mismo contexto y la columna gana.
+- Fondo opaco (`--surface2: #162540`, sin alfa).
+- **Barra asomando 1px**: con `border-collapse`, el borde izquierdo (translúcido) de la celda sticky no
+  lleva su fondo y por ahí se veía una línea de color de la barra. Fix: `border-left: none` en la
+  columna fija. El divisor derecho va como `box-shadow` inset (los bordes colapsados no viajan con la
+  celda sticky).
+- El encabezado de fechas **no** es sticky en vertical (el contenedor no tiene alto fijo); la esquina
+  igual tiene el z-index mayor por si se agrega.
+
+### Cómo se verificó
+
+Harness con Chromium headless (Playwright) usando el CSS real de `index.html` y el mismo markup que
+genera `renderGrilla`, 12 filas con una barra que cubre todo el rango (el peor caso), contenedor
+scrolleado al final. Desktop 1440px e iPhone 390px (DPR 3, media query mobile), con 7/14/30 días:
+
+| Caso | Scrollea el contenedor | Página scrollea | Columna fija (hit-test, 12/12) | Píxeles de barra sobre la columna |
+|---|---|---|---|---|
+| desktop 7 | no (entra) | no | ✅ | 0 |
+| desktop 14 | no (entra) | no | ✅ | 0 |
+| desktop 30 | sí (232px) | no | ✅ | 0 |
+| iPhone 7 | sí (46px) | no | ✅ | 0 |
+| iPhone 14 | sí (354px) | no | ✅ | 0 |
+| iPhone 30 | sí (1058px) | no | ✅ | 0 |
+
+- Controles negativos: con `z-index: auto` en la columna el hit-test falla en las 4 vistas que
+  scrollean; antes del fix de `border-left` el chequeo de píxeles daba 6–12 píxeles de barra.
+- Antes del fix de `.main`, `scrollable` era `false` en los 6 casos (scrolleaba la página).
+- 6 tests estáticos nuevos en `grilla.test.mjs` fijan los invariantes de CSS (sticky, orden de
+  z-index, fondo opaco, track sin contexto de apilamiento, sin border-left, `.main` min-width 0).
+- El harness no es un dispositivo real: Safari iOS sigue pendiente de prueba en el iPhone.
+
 ## Reglas duras
 
 - No se tocó lógica de disponibilidad, precios ni conflictos (`renderGrilla` solo cambió la cantidad de
@@ -57,8 +96,8 @@ Pedidos de Franco: mirar meses a futuro en la grilla sin navegar de a 7 días, y
 ## Verificación
 
 - `node --check` del script del módulo: OK.
-- Nueve suites: contabilidad 40, fmt 17, **grilla 98 (antes 50)**, grupos 33, modal 33, precios 49,
-  today 4, total 25, voucher 47 → 346 passed, 0 failed.
+- Nueve suites: contabilidad 40, fmt 17, **grilla 104 (antes 50)**, grupos 33, modal 33, precios 49,
+  today 4, total 25, voucher 47 → 352 passed, 0 failed.
 - grep de window: las 4 funciones nuevas aparecen en `Object.assign(window, …)` (también verificado
   por test).
 
@@ -67,6 +106,7 @@ Pedidos de Franco: mirar meses a futuro en la grilla sin navegar de a 7 días, y
 - **Prueba visual**: desktop y iPhone, con los tres anchos de grilla (7 / 14 / 30). En particular:
   - barras alineadas con las columnas en los tres valores;
   - scroll horizontal a 30 días en iPhone y legibilidad de precios en columnas de 44px;
-  - sidebar en desktop: hover, hamburger, que no tape nada importante; mobile igual que antes.
+  - sidebar en desktop: hover, hamburger, que no tape nada importante; mobile igual que antes;
+  - columna de cabaña fija al scrollear en Safari iOS real (verificado solo en Chromium headless).
 - Decisión a revisar: el sidebar arranca **colapsado** en desktop. Si prefieren que arranque expandido,
   es cambiar `sidebarColapsado = true` y la clase inicial `sb-colapsado` de `#app`.
