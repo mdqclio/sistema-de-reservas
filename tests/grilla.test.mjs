@@ -103,5 +103,24 @@ eq('recambio: día de salida ocupado (entra otra) → OK', grillaPrimeraNocheOcu
 rg = grillaRangoDesdeClicks('2026-10-02', '2026-10-02');
 eq('misma celda: valida solo esa noche', grillaPrimeraNocheOcupada(rg.entrada, rg.salida, ocup(['2026-10-03'])), null);
 
+// ── Sección inicial: la app abre en la grilla (respetando permisos) ─────────
+{
+  const sm = src.match(/\nconst SECCIONES_INICIO = [\s\S]*?\];/)[0];
+  const seccionInicial = new Function(sm + grab('seccionInicial') + '\nreturn seccionInicial;')();
+  const P = (o) => ({ permisos: o });
+  eq('inicio: admin → grilla', seccionInicial('admin', P({ reservas: 'n' })), 'grilla');
+  eq('inicio: recepción (reservas rw) → grilla', seccionInicial('recepcion', P({ dashboard: 'r', reservas: 'rw' })), 'grilla');
+  eq('inicio: ventas (reservas rw) → grilla', seccionInicial('ventas', P({ dashboard: 'r', mapa: 'r', reservas: 'rw' })), 'grilla');
+  eq('inicio: limpieza (reservas n, dashboard n) → mapa', seccionInicial('limpieza', P({ dashboard: 'n', mapa: 'rw', reservas: 'n', checkin: 'r' })), 'mapa');
+  eq('inicio: sin reservas pero con dashboard → dashboard', seccionInicial('x', P({ reservas: 'n', dashboard: 'r' })), 'dashboard');
+  eq('inicio: rol sin objeto de permisos → grilla', seccionInicial('recepcion', null), 'grilla');
+  eq('inicio: rol legacy sin clave reservas → grilla', seccionInicial('recepcion', P({ dashboard: 'r' })), 'grilla');
+  eq('inicio: permisos de rol admin (roles rw) → grilla', seccionInicial('otro', P({ roles: 'rw', reservas: 'n' })), 'grilla');
+  eq('inicio: todo en n → dashboard (comportamiento anterior)', seccionInicial('x', P({ dashboard: 'n', mapa: 'n', reservas: 'n', checkin: 'n', huespedes: 'n', precios: 'n' })), 'dashboard');
+  eq('inicio: login usa seccionInicial', /showSection\(seccionInicial\(rolKey, rol\)\)/.test(src), true);
+  eq('inicio: nav-grilla arranca active, nav-dashboard no', [/class="nav-item active"[^>]*id="nav-grilla"/.test(html), /class="nav-item active"[^>]*id="nav-dashboard"/.test(html)], [true, false]);
+  eq('inicio: section-grilla arranca active', [html.includes('id="section-grilla" class="section active"'), html.includes('id="section-dashboard" class="section active"')], [true, false]);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
