@@ -4699,6 +4699,9 @@ async function saveHuesped() {
 }
 
 // ===================== PRECIOS =====================
+// Tipos de cabaña editables desde Precios (mismos valores que CABANA_CONFIG).
+const TIPOS_CABANA = ['Monoambiente', '2 Ambientes', 'Loft'];
+
 const INP = `style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;"`;
 
 function renderPrecios(tab) {
@@ -4743,8 +4746,13 @@ function renderPrecios(tab) {
       </div>`;
 
   } else if(tab==='habitacion') {
+    const tipoOpts = h => TIPOS_CABANA.concat(TIPOS_CABANA.includes(h.tipo) || !h.tipo ? [] : [h.tipo])
+      .map(t=>`<option value="${escapeHtml(t)}" ${h.tipo===t?'selected':''}>${escapeHtml(t)}</option>`).join('');
     const rows = (precios.habitaciones||[]).map(h=>`<tr>
       <td><strong style="color:var(--text)">Cabaña ${escapeHtml(h.hab)}</strong> <span style="font-size:11px;color:var(--text3)">${escapeHtml(h.nombre||'')}</span></td>
+      <td><select ${INP} onchange="updateHabConfig('${h.hab}','tipo',this.value)">${h.tipo ? '' : '<option value="" selected>—</option>'}${tipoOpts(h)}</select></td>
+      <td><input type="number" min="1" step="1" ${INP} style="width:70px" value="${h.mts2 ?? ''}" onchange="updateHabConfig('${h.hab}','mts2',this.value)"></td>
+      <td><input type="number" min="1" step="1" ${INP} style="width:60px" value="${h.capacidad ?? ''}" onchange="updateHabConfig('${h.hab}','capacidad',this.value)"></td>
       <td><input type="number" ${INP} style="width:120px" value="${h.precio_base||0}" onchange="updateHabPrecio('${h.hab}','precio_base',this.value)"></td>
       <td><input type="number" ${INP} style="width:120px" value="${h.precio_alta||0}" onchange="updateHabPrecio('${h.hab}','precio_alta',this.value)"></td>
       <td><input type="number" ${INP} style="width:120px" value="${h.precio_baja||0}" onchange="updateHabPrecio('${h.hab}','precio_baja',this.value)"></td>
@@ -4754,11 +4762,11 @@ function renderPrecios(tab) {
         <div class="card-header">
           <div>
             <h3>Precios por Cabaña</h3>
-            <p style="font-size:12px;color:var(--text3);margin-top:4px">Precio por noche en ARS según la temporada configurada.</p>
+            <p style="font-size:12px;color:var(--text3);margin-top:4px">Tipo, m² y capacidad (pax) de cada cabaña, y precio por noche en ARS según la temporada configurada.</p>
           </div>
         </div>
         <table class="pricing-table">
-          <thead><tr><th>Cabaña</th><th>Precio Base (media)</th><th>Temporada Alta</th><th>Temporada Baja</th></tr></thead>
+          <thead><tr><th>Cabaña</th><th>Tipo</th><th>m²</th><th>Pax</th><th>Precio Base (media)</th><th>Temporada Alta</th><th>Temporada Baja</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
       </div>`;
@@ -4970,6 +4978,32 @@ function updateHabPrecio(hab, field, val) {
   if(h) h[field] = Number(val);
   DB.set('precios', p);
   auditLog('editar', 'Precios', `Cab ${hab} ${field}=${val}`);
+}
+// Valida un campo de config de cabaña. Devuelve el valor a guardar o null si es
+// inválido: tipo ∈ TIPOS_CABANA; mts2 y capacidad enteros > 0.
+function normalizarHabConfig(field, val) {
+  if (field === 'tipo') return TIPOS_CABANA.includes(val) ? val : null;
+  if (field === 'mts2' || field === 'capacidad') {
+    const n = Number(val);
+    return (String(val).trim() !== '' && Number.isInteger(n) && n > 0) ? n : null;
+  }
+  return null;
+}
+
+// Edita tipo / m² / capacidad de una cabaña en precios.habitaciones (mismo patrón
+// que updateHabPrecio). No toca migrateHabitacionesConfig: esto es la corrección manual.
+function updateHabConfig(hab, field, val) {
+  const v = normalizarHabConfig(field, val);
+  if (v === null) {
+    showNotif(field === 'tipo' ? 'Tipo de cabaña inválido.' : 'Ingresá un número entero mayor a 0.', 'error');
+    renderPrecios('habitacion');
+    return;
+  }
+  const p = DB.get('precios',{});
+  const h = (p.habitaciones||[]).find(x=>x.hab===hab);
+  if(h) h[field] = v;
+  DB.set('precios', p);
+  auditLog('editar', 'Precios', `Cab ${hab} ${field}=${v}`);
 }
 function updatePlatPrecio(plat, field, val) {
   const p = DB.get('precios',{});
@@ -8497,7 +8531,7 @@ Object.assign(window, {
   calcularPrecioReserva, precioNocheCascada, cargosReservaTotal, renderResCargos, reservaCargosSeleccionados, renderResPromos,
   cycleBed, showGuestDetail, previewDoc, populateRolSelect,
   switchPricingTab, switchAcctTab, cerrarCaja,
-  addTemporada, deleteTemporada, updateTemporada, updateHabPrecio, updatePlatPrecio,
+  addTemporada, deleteTemporada, updateTemporada, updateHabPrecio, updateHabConfig, updatePlatPrecio,
   addFinde, updateFinde, deleteFinde,
   addPromo, updatePromo, deletePromo,
   toggleDinamicos, addDinOcup, updateDinOcup, deleteDinOcup, addDinLast, updateDinLast, deleteDinLast,
