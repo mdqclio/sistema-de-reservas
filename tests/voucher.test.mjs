@@ -104,5 +104,35 @@ eq('voucher ARS', v.fmtMonto(300000, 'ARS'), '$ 300.000');
 eq('voucher: escapa HTML del nombre', v.renderVoucher({ ...tv, guestName: '<img src=x onerror=alert(1)>' }).includes('<img'), false);
 eq('voucher: no muestra reservaId interno', out.includes(rUSD.id), false);
 
+// ── Datos del Complejo (bot_config): solo horarios, guardado por merge ──────
+{
+  const UPD = [], NOTIF = [], AUD = [];
+  const DOMV = { 'bcf-checkin': { value: '14:00' }, 'bcf-checkout': { value: '11:00' } };
+  const envDC = {
+    document: { getElementById: id => DOMV[id] },
+    cache: { bot_config: { nombre_hostel: 'Puerto Delfín', servicios: 'Desayuno', quick_replies: [{ label: 'a', msg: 'b' }], checkin: '15:00', checkout: '10:00' } },
+    pendingWrites: new Set(), ref: (_db, path) => path, db: {},
+    update: async (path, patch) => { UPD.push([path, patch]); },
+    showNotif: (m, t) => NOTIF.push([m, t]), auditLog: (...a) => AUD.push(a),
+  };
+  const dk = Object.keys(envDC);
+  const dc = new Function(...dk, ['datosComplejoPatch', 'saveBotConfig'].map(n => grab(src, n)).join('\n') +
+    '\nreturn { datosComplejoPatch, saveBotConfig };')(...dk.map(k => envDC[k]));
+  eq('complejo: patch solo con checkin/checkout', dc.datosComplejoPatch('14:00', '11:00'), { checkin: '14:00', checkout: '11:00' });
+  eq('complejo: falta un horario → null', [dc.datosComplejoPatch('', '11:00'), dc.datosComplejoPatch('14:00', '')], [null, null]);
+  await dc.saveBotConfig();
+  eq('complejo: guarda con update() en cabanas/bot_config (merge)', UPD, [['cabanas/bot_config', { checkin: '14:00', checkout: '11:00' }]]);
+  eq('complejo: cache conserva los campos del chatbot', envDC.cache.bot_config,
+    { nombre_hostel: 'Puerto Delfín', servicios: 'Desayuno', quick_replies: [{ label: 'a', msg: 'b' }], checkin: '14:00', checkout: '11:00' });
+  eq('complejo: saveBotConfig no hace set() del nodo entero', /DB\.set\(|\bset\(ref/.test(grab(src, 'saveBotConfig')), false);
+  DOMV['bcf-checkout'].value = ''; UPD.length = 0;
+  await dc.saveBotConfig();
+  eq('complejo: horario vacío → no escribe y avisa', [UPD.length, NOTIF.at(-1)[1]], [0, 'error']);
+  eq('complejo: form sin campos del chatbot', ['bcf-nombre', 'bcf-ubicacion', 'bcf-cabanas', 'bcf-servicios', 'bcf-adicional', 'qr-list'].some(id => html.includes(`id="${id}"`)), false);
+  eq('complejo: nav "Datos del Complejo" con 🏡', /id="nav-botconfig"[^>]*>\s*<span class="icon">🏡<\/span> Datos del Complejo/.test(html), true);
+  eq('complejo: título de sección', src.includes("botconfig:'Datos del Complejo'"), true);
+  eq('complejo: buildSystemPrompt sigue existiendo', /\nfunction buildSystemPrompt\b/.test(src), true);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

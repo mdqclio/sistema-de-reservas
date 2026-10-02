@@ -605,13 +605,13 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
     </div>
     <nav id="sidebarNav">
       <div class="nav-section">Principal</div>
-      <div class="nav-item active" onclick="showSection('dashboard');closeSidebar()" id="nav-dashboard">
+      <div class="nav-item" onclick="showSection('dashboard');closeSidebar()" id="nav-dashboard">
         <span class="icon">📊</span> Dashboard
       </div>
       <div class="nav-item" onclick="showSection('mapa');closeSidebar()" id="nav-mapa">
         <span class="icon">🛏</span> Mapa de Cabañas
       </div>
-      <div class="nav-item" onclick="showSection('grilla');closeSidebar()" id="nav-grilla">
+      <div class="nav-item active" onclick="showSection('grilla');closeSidebar()" id="nav-grilla">
         <span class="icon">📊</span> Grilla de Reservas
       </div>
       <div class="nav-item" onclick="showSection('reservas');closeSidebar()" id="nav-reservas">
@@ -666,10 +666,11 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
       <div class="nav-item admin-only" onclick="showSection('log');closeSidebar()" id="nav-log" style="display:none;">
         <span class="icon">📋</span> Log de Actividad
       </div>
-      <!-- Reactivado aunque el chatbot siga apagado: bot_config lo usa el voucher
-           (horarios de check-in/out y datos de transferencia). Solo admin (.admin-only). -->
+      <!-- Datos del Complejo (ex "Config. del Bot"): el chatbot está apagado, pero el nodo
+           bot_config sigue en uso: el voucher lee de ahí los horarios de check-in/out.
+           La clave de sección sigue siendo 'botconfig'. Solo admin (.admin-only). -->
       <div class="nav-item admin-only" onclick="showSection('botconfig');closeSidebar()" id="nav-botconfig" style="display:none;">
-        <span class="icon">⚙️</span> Config. del Bot
+        <span class="icon">🏡</span> Datos del Complejo
       </div>
     </nav>
     <div class="sidebar-footer">
@@ -689,7 +690,7 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
     </div>
 
     <!-- DASHBOARD -->
-    <div id="section-dashboard" class="section active">
+    <div id="section-dashboard" class="section">
       <div class="stats-grid">
         <div class="stat-card blue">
           <div class="label">Cabañas ocupadas</div>
@@ -948,7 +949,7 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
     <!-- (sección chatbot eliminada — ahora es ventana flotante) -->
 
     <!-- GRILLA DE RESERVAS -->
-    <div id="section-grilla" class="section">
+    <div id="section-grilla" class="section active">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
         <button class="btn btn-ghost btn-sm" onclick="grillaNavegar(-7)">◀ 7 días</button>
         <button class="btn btn-ghost btn-sm" onclick="grillaNavegar(-1)">◀ 1 día</button>
@@ -1029,30 +1030,20 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
       <div class="kanban-board" id="kanbanBoard"></div>
     </div>
 
-    <!-- CONFIGURACIÓN DEL BOT -->
+    <!-- DATOS DEL COMPLEJO (nodo bot_config). Solo los campos que usa el sistema hoy:
+         horarios de check-in/out (los ve el huésped en el voucher). Los demás campos de
+         bot_config (nombre, ubicación, servicios, respuestas rápidas...) los usaba solo
+         el chatbot (apagado): no se editan acá, pero se conservan en Firebase. -->
     <div id="section-botconfig" class="section">
       <div style="display:grid;gap:20px;">
         <div class="card">
-          <div class="card-header"><h3>🏨 Información del Hostel</h3><span style="font-size:12px;color:var(--text3)">Usada por el asistente virtual</span></div>
+          <div class="card-header"><h3>🏡 Horarios</h3><span style="font-size:12px;color:var(--text3)">Los ve el huésped en el comprobante de la reserva</span></div>
           <div style="padding:20px;display:grid;gap:12px;">
-            <div class="form-group"><label>Nombre del hostel</label><input type="text" id="bcf-nombre" placeholder="Cabañas Puerto Delfín"></div>
-            <div class="form-group"><label>Ubicación</label><textarea id="bcf-ubicacion" rows="2" placeholder="Mar de las Pampas, Buenos Aires..."></textarea></div>
             <div class="form-row">
-              <div class="form-group"><label>Check-in</label><input type="time" id="bcf-checkin"></div>
-              <div class="form-group"><label>Check-out</label><input type="time" id="bcf-checkout"></div>
+              <div class="form-group"><label>Check-in (desde)</label><input type="time" id="bcf-checkin"></div>
+              <div class="form-group"><label>Check-out (hasta)</label><input type="time" id="bcf-checkout"></div>
             </div>
-            <div class="form-group"><label>Descripción de cabañas</label><textarea id="bcf-cabanas" rows="3" placeholder="Cabañas 1-4: hasta 3 personas..."></textarea></div>
-            <div class="form-group"><label>Servicios incluidos</label><textarea id="bcf-servicios" rows="3" placeholder="Desayuno, WiFi, parrilla..."></textarea></div>
-            <div class="form-group"><label>Información adicional (aparece en el prompt del bot)</label><textarea id="bcf-adicional" rows="4" placeholder="Políticas especiales, restricciones, info de temporada..."></textarea></div>
-            <button class="btn btn-blue btn-sm" onclick="saveBotConfig()" style="align-self:flex-start;">Guardar configuración del hostel</button>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card-header"><h3>💬 Respuestas rápidas del chat</h3><span style="font-size:12px;color:var(--text3)">Botones que aparecen al abrir el chat</span></div>
-          <div style="padding:20px;">
-            <div id="qr-list" style="display:grid;gap:8px;margin-bottom:14px;"></div>
-            <button class="btn btn-ghost btn-sm" onclick="addQuickReply()">+ Agregar respuesta rápida</button>
-            <button class="btn btn-blue btn-sm" style="margin-left:8px;" onclick="saveQuickReplies()">Guardar respuestas rápidas</button>
+            <button class="btn btn-blue btn-sm" onclick="saveBotConfig()" style="align-self:flex-start;">Guardar</button>
           </div>
         </div>
       </div>
@@ -2702,7 +2693,7 @@ async function enterSession(email) {
     document.getElementById('sidebarUserName').textContent = u.nombre;
     document.getElementById('sidebarUserRole').textContent = rol ? rol.nombre : rolKey;
     applyRoleUI(rolKey, rol);
-    showSection('dashboard');
+    showSection(seccionInicial(rolKey, rol));
     updateDate();
     aplicarRecurrentes();
     auditLog('login', 'Sesión', email);
@@ -2750,6 +2741,24 @@ function applyRoleUI(rolKey, rolObj) {
   document.querySelectorAll('.acct-admin-only').forEach(el => el.style.display = isAdmin ? (el.dataset.disp || '') : 'none');
 }
 
+// Sección con la que abre la app. Por defecto la grilla (desde ahí trabaja recepción).
+// La grilla muestra reservas, así que su permiso es el del módulo 'reservas'. Si el rol
+// lo tiene en 'n', cae en la primera sección del menú cuyo módulo sí pueda ver.
+// Admin, rol sin objeto de permisos o sin la clave del módulo → se considera con acceso
+// (mismo criterio que el menú, que hoy no oculta por permiso de módulo).
+const SECCIONES_INICIO = [
+  ['grilla', 'reservas'], ['dashboard', 'dashboard'], ['mapa', 'mapa'], ['reservas', 'reservas'],
+  ['checkin', 'checkin'], ['huespedes', 'huespedes'], ['precios', 'precios'],
+];
+function seccionInicial(rolKey, rolObj) {
+  const isAdmin = rolKey === 'admin' || (rolObj && rolObj.permisos && rolObj.permisos.roles === 'rw');
+  const permisos = rolObj && rolObj.permisos;
+  if (isAdmin || !permisos) return 'grilla';
+  const puede = mod => { const p = permisos[mod]; return p === undefined || p === 'r' || p === 'rw'; };
+  const sec = SECCIONES_INICIO.find(([, mod]) => puede(mod));
+  return sec ? sec[0] : 'dashboard';
+}
+
 // Rol vigente (lo setea applyRoleUI). Se usa para los gates de Facturación.
 let currentIsAdmin = false;
 let currentRolObj = null;
@@ -2775,7 +2784,7 @@ function puedeSolicitarFactura() {
 const sectionTitles = {
   dashboard:'Dashboard', mapa:'Mapa de Cabañas', reservas:'Reservas',
   checkin:'Check-In / Check-Out', pipeline:'Pipeline CRM', huespedes:'Huéspedes', precios:'Gestión de Precios',
-  grilla:'Grilla de Reservas', listanegra:'Lista Negra', contabilidad:'Contabilidad', caja:'Caja Diaria', usuarios:'Usuarios del Sistema', roles:'Roles y Permisos', log:'Log de Actividad', knowledge:'Base de Conocimiento', botconfig:'Configuración del Bot', pendientes:'Bandeja de Pendientes'
+  grilla:'Grilla de Reservas', listanegra:'Lista Negra', contabilidad:'Contabilidad', caja:'Caja Diaria', usuarios:'Usuarios del Sistema', roles:'Roles y Permisos', log:'Log de Actividad', knowledge:'Base de Conocimiento', botconfig:'Datos del Complejo', pendientes:'Bandeja de Pendientes'
 };
 
 function showSection(s) {
@@ -8101,17 +8110,14 @@ async function deleteKnowledgeEntry(id) {
   showNotif('Entrada eliminada');
 }
 
-// ===================== CONFIGURACIÓN DEL BOT =====================
+// ===================== DATOS DEL COMPLEJO (nodo bot_config) =====================
+// El form edita solo checkin/checkout. El resto de bot_config (nombre_hostel,
+// ubicacion, servicios, quick_replies...) queda en Firebase sin tocar: lo usa solo
+// buildSystemPrompt (chatbot apagado).
 function renderBotConfig() {
   const cfg = DB.get('bot_config', {});
-  document.getElementById('bcf-nombre').value    = cfg.nombre_hostel || '';
-  document.getElementById('bcf-ubicacion').value = cfg.ubicacion     || '';
   document.getElementById('bcf-checkin').value   = cfg.checkin       || '';
   document.getElementById('bcf-checkout').value  = cfg.checkout      || '';
-  document.getElementById('bcf-cabanas').value   = cfg.descripcion_cabanas || '';
-  document.getElementById('bcf-servicios').value = cfg.servicios     || '';
-  document.getElementById('bcf-adicional').value = cfg.info_adicional || '';
-  renderQuickRepliesList(cfg.quick_replies || QUICK_REPLIES_DEFAULT);
 }
 
 function renderQuickRepliesList(qrs) {
@@ -8141,18 +8147,32 @@ function removeQuickReply(i) {
   renderQuickRepliesList(qrs);
 }
 
+// Cambios a escribir en bot_config: SOLO los horarios. null si falta alguno.
+function datosComplejoPatch(checkin, checkout) {
+  const ci = String(checkin || '').trim(), co = String(checkout || '').trim();
+  if (!ci || !co) return null;
+  return { checkin: ci, checkout: co };
+}
+
+// Guarda con update() (merge): escribe solo checkin/checkout y deja intactos los
+// demás campos del nodo. Antes hacía set() del objeto entero.
 async function saveBotConfig() {
-  const stored = DB.get('bot_config', {});
-  stored.nombre_hostel      = document.getElementById('bcf-nombre').value.trim();
-  stored.ubicacion          = document.getElementById('bcf-ubicacion').value.trim();
-  stored.checkin            = document.getElementById('bcf-checkin').value;
-  stored.checkout           = document.getElementById('bcf-checkout').value;
-  stored.descripcion_cabanas = document.getElementById('bcf-cabanas').value.trim();
-  stored.servicios          = document.getElementById('bcf-servicios').value.trim();
-  stored.info_adicional     = document.getElementById('bcf-adicional').value.trim();
-  await DB.set('bot_config', stored);
-  auditLog('editar', 'Config Bot', '');
-  showNotif('✅ Configuración del hostel guardada');
+  const patch = datosComplejoPatch(
+    document.getElementById('bcf-checkin').value, document.getElementById('bcf-checkout').value);
+  if (!patch) { showNotif('Completá los horarios de check-in y check-out', 'error'); return; }
+  cache.bot_config = { ...(cache.bot_config || {}), ...patch };
+  pendingWrites.add('bot_config');
+  try {
+    await update(ref(db, 'cabanas/bot_config'), patch);
+  } catch (e) {
+    console.error('Firebase write error:', e);
+    showNotif('No se pudieron guardar los horarios', 'error');
+    return;
+  } finally {
+    pendingWrites.delete('bot_config');
+  }
+  auditLog('editar', 'Datos del Complejo', `check-in ${patch.checkin} · check-out ${patch.checkout}`);
+  showNotif('✅ Datos del complejo guardados');
 }
 
 async function saveQuickReplies() {
