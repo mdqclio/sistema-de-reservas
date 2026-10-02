@@ -288,6 +288,21 @@ td.acciones .btn:last-child { margin-right: 0; }
   display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5);
   z-index: 149; backdrop-filter: blur(2px);
 }
+/* Sidebar colapsable SOLO en desktop: franja de íconos, se expande al hover (encima del
+   contenido, sin mover la grilla) o fijo con el hamburger. Mobile (≤768) no cambia. */
+@media (min-width: 769px) {
+  .hamburger { display: flex; top: 14px; left: 8px; }
+  .sidebar-logo { padding-left: 60px; }
+  .sidebar, .main { transition: width 0.2s ease, margin-left 0.2s ease, box-shadow 0.2s ease; }
+  #app.sb-colapsado .sidebar { width: 56px; }
+  #app.sb-colapsado .main { margin-left: 56px; }
+  #app.sb-colapsado .sidebar:hover { width: 220px; box-shadow: 8px 0 24px rgba(0,0,0,0.35); }
+  .sidebar .nav-item, .sidebar .sidebar-logo, .sidebar .sidebar-user { white-space: nowrap; }
+  .sidebar .nav-section, .sidebar .sidebar-user, .sidebar .sidebar-footer { transition: opacity 0.15s; }
+  #app.sb-colapsado .sidebar:not(:hover) .nav-section,
+  #app.sb-colapsado .sidebar:not(:hover) .sidebar-user,
+  #app.sb-colapsado .sidebar:not(:hover) .sidebar-footer { opacity: 0; pointer-events: none; }
+}
 @media (max-width: 1100px) {
   .stats-grid { grid-template-columns: repeat(2,1fr); }
   .rooms-grid { grid-template-columns: repeat(2,1fr); }
@@ -345,7 +360,9 @@ td.acciones .btn:last-child { margin-right: 0; }
 .star:hover { transform:scale(1.2); }
 
 /* ===== GRILLA ===== */
-.grilla-table { border-collapse: collapse; font-size: 12px; width: 100%; min-width: 820px; table-layout: fixed; }
+/* Ancho mínimo = columna de cabañas + un mínimo por día (--gd = días visibles, lo pone
+   renderGrilla). A 30 días no se comprime: el contenedor scrollea en horizontal. */
+.grilla-table { border-collapse: collapse; font-size: 12px; width: 100%; min-width: calc(180px + var(--gd, 14) * 46px); table-layout: fixed; }
 .grilla-table th.grilla-corner { position: sticky; left: 0; z-index: 3; background: var(--surface2); width: 180px; }
 .grilla-table th {
   background: var(--surface2); color: var(--text3); font-size: 10px;
@@ -396,7 +413,7 @@ td.acciones .btn:last-child { margin-right: 0; }
 .grilla-barra.gb-cont-izq { border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: 2px dashed rgba(255,255,255,0.7); }
 .grilla-barra.gb-cont-der { border-top-right-radius: 0; border-bottom-right-radius: 0; border-right: 2px dashed rgba(255,255,255,0.7); }
 @media (max-width: 768px) {
-  .grilla-table { min-width: 720px; }
+  .grilla-table { min-width: calc(96px + var(--gd, 14) * 44px); }
   .grilla-table th.grilla-corner, .grilla-table td.cabaña-label { width: 96px; padding-left: 6px; padding-right: 6px; }
 }
 .grilla-cell.gc-today { border-left: 2px solid var(--accent) !important; }
@@ -410,6 +427,24 @@ td.acciones .btn:last-child { margin-right: 0; }
   flex: 1 1 auto; display: block; min-width: 0; max-width: 100%;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.grilla-nav { display: flex; align-items: center; gap: 8px 10px; margin-bottom: 16px; flex-wrap: wrap; }
+.grilla-fecha-input {
+  padding: 5px 8px; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--radius); color: var(--text); font-size: 12px; color-scheme: dark;
+}
+.grilla-meses { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 2px; }
+.grilla-mes {
+  background: transparent; border: 1px solid transparent; border-radius: var(--radius);
+  color: var(--text2); font-size: 12px; padding: 4px 8px; cursor: pointer; white-space: nowrap;
+}
+.grilla-mes:hover { color: var(--text); background: var(--surface2); }
+.grilla-mes.activo { color: var(--accent2); background: rgba(59,130,246,0.15); border-color: var(--accent); font-weight: 600; }
+.grilla-mes-sep { color: var(--text3); font-size: 11px; }
+.grilla-dias-sel { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.grilla-dias-btn { background: transparent; color: var(--text2); font-size: 12px; padding: 4px 9px; border-right: 1px solid var(--border); cursor: pointer; }
+.grilla-dias-btn:hover { color: var(--text); background: var(--surface2); }
+.grilla-dias-btn.activo { background: var(--blue2); color: #fff; }
+.grilla-dias-txt { font-size: 11px; color: var(--text3); padding: 0 8px; }
 .grilla-hab-header td { background: var(--surface3) !important; color: var(--text); font-weight: 600; font-size: 11px; padding: 5px 10px; border: 1px solid var(--border2); }
 
 /* ===== TOOLTIP ===== */
@@ -586,7 +621,7 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
 </div>
 
 <!-- APP -->
-<div id="app" style="display:none;">
+<div id="app" class="sb-colapsado" style="display:none;">
   <!-- HAMBURGER -->
   <div class="hamburger" id="hamburger" onclick="toggleSidebar()">
     <span></span><span></span><span></span>
@@ -951,13 +986,23 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
 
     <!-- GRILLA DE RESERVAS -->
     <div id="section-grilla" class="section active">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
+      <div class="grilla-nav">
+        <input type="date" id="grillaFechaInput" class="grilla-fecha-input" onchange="grillaIrFecha(this.value)" title="Ir a una fecha">
+        <button class="btn btn-ghost btn-sm" onclick="grillaNavegarMes(-1)">◀ 1 mes</button>
         <button class="btn btn-ghost btn-sm" onclick="grillaNavegar(-7)">◀ 7 días</button>
         <button class="btn btn-ghost btn-sm" onclick="grillaNavegar(-1)">◀ 1 día</button>
         <button class="btn btn-blue btn-sm" onclick="grillaHoy()">Hoy</button>
         <button class="btn btn-ghost btn-sm" onclick="grillaNavegar(1)">1 día ▶</button>
         <button class="btn btn-ghost btn-sm" onclick="grillaNavegar(7)">7 días ▶</button>
-        <span id="grillaRangoLabel" style="font-size:13px;color:var(--text2);margin-left:8px;"></span>
+        <button class="btn btn-ghost btn-sm" onclick="grillaNavegarMes(1)">1 mes ▶</button>
+        <span id="grillaMeses" class="grilla-meses"></span>
+        <span class="grilla-dias-sel" id="grillaDiasSel">
+          <button class="grilla-dias-btn" data-dias="7" onclick="grillaSetDias(7)">7</button>
+          <button class="grilla-dias-btn" data-dias="14" onclick="grillaSetDias(14)">14</button>
+          <button class="grilla-dias-btn" data-dias="30" onclick="grillaSetDias(30)">30</button>
+          <span class="grilla-dias-txt">días</span>
+        </span>
+        <span id="grillaRangoLabel" style="font-size:13px;color:var(--text2);"></span>
       </div>
       <div style="overflow-x:auto;">
         <div id="grillaContainer"></div>
@@ -6884,8 +6929,21 @@ async function submitPublicRegistration() {
   }
 }
 
-// ===================== SIDEBAR MOBILE =====================
+// ===================== SIDEBAR =====================
+// Mobile (≤768): overlay con .open (sin cambios). Desktop: el hamburger alterna entre
+// franja de íconos (colapsado, se expande al hover) y fijo expandido. El estado vive en
+// memoria: se recuerda mientras dure la sesión, no se guarda en ningún lado.
+const SIDEBAR_DESKTOP_MQ = '(min-width: 769px)';
+let sidebarColapsado = true;
+function aplicarSidebarColapsado() {
+  document.getElementById('app')?.classList.toggle('sb-colapsado', sidebarColapsado);
+}
 function toggleSidebar() {
+  if (window.matchMedia(SIDEBAR_DESKTOP_MQ).matches) {
+    sidebarColapsado = !sidebarColapsado;
+    aplicarSidebarColapsado();
+    return;
+  }
   document.getElementById('sidebar').classList.toggle('open');
   document.getElementById('sidebarOverlay').classList.toggle('open');
 }
@@ -7082,11 +7140,74 @@ async function showListaNegraPublica() {
 
 // ===================== GRILLA DE RESERVAS =====================
 let grillaFechaInicio = null;
-const GRILLA_DIAS = 14;
+// Días visibles: elegible 7/14/30. Solo en memoria (dura lo que dura la sesión/pestaña).
+const GRILLA_DIAS_OPCIONES = [7, 14, 30];
+let grillaDias = 14;
+const GRILLA_MESES_CORTOS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 
 function grillaHoy() {
   grillaFechaInicio = today();
   renderGrilla();
+}
+
+// Suma n meses a 'YYYY-MM-DD' conservando el día; si el mes destino es más corto,
+// queda en su último día (31/01 + 1 mes → 28/02). Solo strings, sin zona horaria.
+function grillaSumarMeses(fecha, n) {
+  const [y, m, d] = fecha.split('-').map(Number);
+  const t = (y * 12 + (m - 1)) + n;
+  const ny = Math.floor(t / 12), nm = t - ny * 12 + 1;
+  const ult = new Date(ny, nm, 0).getDate();
+  return `${ny}-${String(nm).padStart(2,'0')}-${String(Math.min(d, ult)).padStart(2,'0')}`;
+}
+
+// Fila de saltos a mes: el actual + los siguientes (n en total). Cada uno arranca el
+// día 1. Si el año difiere del de hoy se agrega ("Ene 27") para que se note el cambio.
+function grillaMesesProximos(hoy, n = 6) {
+  const base = hoy.substring(0, 7) + '-01';
+  const anioHoy = hoy.substring(0, 4);
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const inicio = grillaSumarMeses(base, i);
+    const anio = inicio.substring(0, 4);
+    const label = GRILLA_MESES_CORTOS[Number(inicio.substring(5, 7)) - 1] + (anio !== anioHoy ? ' ' + anio.substring(2) : '');
+    out.push({ inicio, mes: inicio.substring(0, 7), label });
+  }
+  return out;
+}
+
+function grillaIrMes(inicio) {
+  grillaFechaInicio = inicio;
+  renderGrilla();
+}
+
+function grillaNavegarMes(n) {
+  grillaFechaInicio = grillaSumarMeses(grillaFechaInicio || today(), n);
+  renderGrilla();
+}
+
+function grillaIrFecha(valor) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(valor || '')) return; // input vaciado: no mover
+  grillaFechaInicio = valor;
+  renderGrilla();
+}
+
+function grillaSetDias(n) {
+  if (!GRILLA_DIAS_OPCIONES.includes(n)) return;
+  grillaDias = n;
+  renderGrilla();
+}
+
+// Controles de navegación que dependen del estado: fecha del input, mes visto, días.
+function renderGrillaNav() {
+  const inp = document.getElementById('grillaFechaInput');
+  if (inp) inp.value = grillaFechaInicio;
+  const visto = grillaFechaInicio.substring(0, 7);
+  const meses = document.getElementById('grillaMeses');
+  if (meses) meses.innerHTML = grillaMesesProximos(today()).map(m =>
+    `<button class="grilla-mes${m.mes === visto ? ' activo' : ''}" onclick="grillaIrMes('${m.inicio}')">${m.label}</button>`
+  ).join('<span class="grilla-mes-sep">·</span>');
+  document.querySelectorAll('#grillaDiasSel .grilla-dias-btn').forEach(b =>
+    b.classList.toggle('activo', Number(b.dataset.dias) === grillaDias));
 }
 
 function grillaNavegar(dias) {
@@ -7124,7 +7245,7 @@ function renderGrilla() {
 
   // Generar array de fechas a mostrar
   const fechas = [];
-  for (let i = 0; i < GRILLA_DIAS; i++) {
+  for (let i = 0; i < grillaDias; i++) {
     const d = new Date(grillaFechaInicio);
     d.setDate(d.getDate() + i);
     fechas.push(d.toISOString().split('T')[0]);
@@ -7137,8 +7258,10 @@ function renderGrilla() {
 
   const diasSemana = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 
-  // Construir tabla
-  let html = '<table class="grilla-table">';
+  renderGrillaNav();
+
+  // Construir tabla (--gd = días visibles → ancho mínimo por columna en el CSS)
+  let html = `<table class="grilla-table" style="--gd:${fechas.length}">`;
 
   // Header fechas
   html += '<thead><tr><th class="grilla-corner">Cabaña</th>';
@@ -8582,7 +8705,7 @@ document.addEventListener('wheel', (e) => {
 Object.assign(window, {
   doLogin, doLogout, renderKnowledge, saveKnowledgeEntry, deleteKnowledgeEntry, editKnowledgeEntry, cancelEditKnowledge, saveEditKnowledge, showSection, closeSidebar, toggleSidebar, openNuevaReserva, onHabChange,
   toggleChatFloat, initChatbot, clearChat, sendChat, sendQuickReply, saveApiKey, copyMsg, editBotMsg, saveEditedBotMsg,
-  grillaNavegar, grillaHoy, renderGrilla,
+  grillaNavegar, grillaHoy, renderGrilla, grillaNavegarMes, grillaIrMes, grillaIrFecha, grillaSetDias,
   renderBotConfig, saveBotConfig, saveQuickReplies, addQuickReply, removeQuickReply,
   renderListaNegra, copyListaNegraLink, renderScoreStars, setScore,
   renderPipeline, openLeadModal, closeLeadModal, saveLead, moveLeadEtapa, deleteLead,
