@@ -448,12 +448,28 @@ td.acciones .btn:last-child { margin-right: 0; }
 }
 .grilla-scroll:focus { outline: none; }
 .grilla-scroll:focus-visible { outline: 1px solid var(--border2); outline-offset: 2px; }
-.grilla-nav { display: flex; align-items: center; gap: 8px 10px; margin-bottom: 16px; flex-wrap: wrap; }
+.grilla-nav { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+.grilla-nav-fila { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; }
+.grilla-nav-fila > .grilla-fecha-input { justify-self: start; }
+.grilla-nav-fila > .grilla-dias-sel { justify-self: end; }
+.grilla-nav-saltos { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; justify-content: center; }
+.grilla-par { display: inline-flex; gap: 3px; }
+.grilla-nav-fila2 { display: flex; align-items: center; justify-content: center; gap: 14px; min-width: 0; }
+.grilla-rango { font-size: 13px; color: var(--text2); white-space: nowrap; font-family: 'DM Mono', monospace; }
+/* Mobile de la nav: va DESPUÉS de las reglas base (misma especificidad, gana la última).
+   Renglón 1 apilado; los 12 meses scrollean en su propia fila. */
+@media (max-width: 768px) {
+  .grilla-nav-fila { grid-template-columns: 1fr auto; }
+  .grilla-nav-fila > .grilla-nav-saltos { grid-column: 1 / -1; grid-row: 2; justify-content: flex-start; gap: 8px; }
+  .grilla-nav-saltos .btn-sm { padding: 5px 8px; }
+  .grilla-nav-fila2 { flex-direction: column; align-items: stretch; gap: 6px; }
+  .grilla-rango { text-align: center; }
+}
 .grilla-fecha-input {
   padding: 5px 8px; background: var(--surface2); border: 1px solid var(--border);
   border-radius: var(--radius); color: var(--text); font-size: 12px; color-scheme: dark;
 }
-.grilla-meses { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 2px; }
+.grilla-meses { display: flex; align-items: center; gap: 2px; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
 .grilla-mes {
   background: transparent; border: 1px solid transparent; border-radius: var(--radius);
   color: var(--text2); font-size: 12px; padding: 4px 8px; cursor: pointer; white-space: nowrap;
@@ -1011,23 +1027,37 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
 
     <!-- GRILLA DE RESERVAS -->
     <div id="section-grilla" class="section active">
+      <!-- Renglón 1: fecha (izq) · Hoy + pares de desplazamiento (centro) · días (der).
+           Renglón 2: 12 meses + rango visible, centrado. -->
       <div class="grilla-nav">
-        <input type="date" id="grillaFechaInput" class="grilla-fecha-input" onchange="grillaIrFecha(this.value)" title="Ir a una fecha">
-        <button class="btn btn-ghost btn-sm" onclick="grillaNavegarMes(-1)">◀ 1 mes</button>
-        <button class="btn btn-ghost btn-sm" onclick="grillaNavegar(-7)">◀ 7 días</button>
-        <button class="btn btn-ghost btn-sm" onclick="grillaNavegar(-1)">◀ 1 día</button>
-        <button class="btn btn-blue btn-sm" onclick="grillaHoy()">Hoy</button>
-        <button class="btn btn-ghost btn-sm" onclick="grillaNavegar(1)">1 día ▶</button>
-        <button class="btn btn-ghost btn-sm" onclick="grillaNavegar(7)">7 días ▶</button>
-        <button class="btn btn-ghost btn-sm" onclick="grillaNavegarMes(1)">1 mes ▶</button>
-        <span id="grillaMeses" class="grilla-meses"></span>
-        <span class="grilla-dias-sel" id="grillaDiasSel">
-          <button class="grilla-dias-btn" data-dias="7" onclick="grillaSetDias(7)">7</button>
-          <button class="grilla-dias-btn" data-dias="14" onclick="grillaSetDias(14)">14</button>
-          <button class="grilla-dias-btn" data-dias="30" onclick="grillaSetDias(30)">30</button>
-          <span class="grilla-dias-txt">días</span>
-        </span>
-        <span id="grillaRangoLabel" style="font-size:13px;color:var(--text2);"></span>
+        <div class="grilla-nav-fila">
+          <input type="date" id="grillaFechaInput" class="grilla-fecha-input" onchange="grillaIrFecha(this.value)" title="Ir a una fecha">
+          <div class="grilla-nav-saltos">
+            <button class="btn btn-blue btn-sm" onclick="grillaHoy()">Hoy</button>
+            <span class="grilla-par">
+              <button class="btn btn-ghost btn-sm" onclick="grillaNavegar(-1)">◀ 1 día</button>
+              <button class="btn btn-ghost btn-sm" onclick="grillaNavegar(1)">1 día ▶</button>
+            </span>
+            <span class="grilla-par">
+              <button class="btn btn-ghost btn-sm" onclick="grillaNavegar(-7)">◀ 7 días</button>
+              <button class="btn btn-ghost btn-sm" onclick="grillaNavegar(7)">7 días ▶</button>
+            </span>
+            <span class="grilla-par">
+              <button class="btn btn-ghost btn-sm" onclick="grillaNavegarMes(-1)">◀ 1 mes</button>
+              <button class="btn btn-ghost btn-sm" onclick="grillaNavegarMes(1)">1 mes ▶</button>
+            </span>
+          </div>
+          <span class="grilla-dias-sel" id="grillaDiasSel">
+            <button class="grilla-dias-btn" data-dias="7" onclick="grillaSetDias(7)">7</button>
+            <button class="grilla-dias-btn" data-dias="14" onclick="grillaSetDias(14)">14</button>
+            <button class="grilla-dias-btn" data-dias="30" onclick="grillaSetDias(30)">30</button>
+            <span class="grilla-dias-txt">días</span>
+          </span>
+        </div>
+        <div class="grilla-nav-fila2">
+          <div id="grillaMeses" class="grilla-meses"></div>
+          <span id="grillaRangoLabel" class="grilla-rango"></span>
+        </div>
       </div>
       <div id="grillaScroll" class="grilla-scroll" tabindex="0" style="overflow-x:auto;">
         <div id="grillaContainer"></div>
@@ -7235,18 +7265,21 @@ function renderGrillaNav() {
   if (inp) inp.value = grillaFechaInicio;
   const visto = grillaFechaInicio.substring(0, 7);
   const meses = document.getElementById('grillaMeses');
-  if (meses) meses.innerHTML = grillaMesesProximos(today()).map(m =>
+  if (meses) meses.innerHTML = grillaMesesProximos(today(), 12).map(m =>
     `<button class="grilla-mes${m.mes === visto ? ' activo' : ''}" onclick="grillaIrMes('${m.inicio}')">${m.label}</button>`
   ).join('<span class="grilla-mes-sep">·</span>');
+  // En mobile la fila de meses scrollea: dejar a la vista el mes activo (sin mover la página).
+  const act = meses && meses.querySelector('.grilla-mes.activo');
+  if (act && meses.scrollWidth > meses.clientWidth) {
+    const ra = act.getBoundingClientRect(), rm = meses.getBoundingClientRect();
+    meses.scrollLeft += (ra.left + ra.width / 2) - (rm.left + rm.width / 2);
+  }
   document.querySelectorAll('#grillaDiasSel .grilla-dias-btn').forEach(b =>
     b.classList.toggle('activo', Number(b.dataset.dias) === grillaDias));
 }
 
 function grillaNavegar(dias) {
-  if (!grillaFechaInicio) grillaFechaInicio = today();
-  const d = new Date(grillaFechaInicio);
-  d.setDate(d.getDate() + dias);
-  grillaFechaInicio = d.toISOString().split('T')[0];
+  grillaFechaInicio = addDaysStr(grillaFechaInicio || today(), dias);
   renderGrilla();
 }
 
@@ -7421,6 +7454,23 @@ function grillaTeclasActivas() {
   if (a.closest && a.closest('#grillaScroll')) return true;
   return !(a.isContentEditable || /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName));
 }
+// Scroll de la grilla = moverse en el tiempo. Si al contenedor le queda lugar hacia ese
+// lado, scrollea en px (columnas ya dibujadas); si no (borde, o la grilla entra entera en
+// pantalla, que es lo normal en desktop con 7/14 días), corre la fecha de inicio día a día.
+function grillaHayLugar(scrollLeft, max, d) {
+  return d > 0 ? scrollLeft < max - 1 : d < 0 ? scrollLeft > 0 : false;
+}
+// Acumula delta de rueda/trackpad (px) y lo convierte en días enteros (1 día = ancho de
+// una columna). Devuelve los días a mover y el resto. Cambio de sentido descarta el resto.
+// golpe = rueda de mouse (deltas grandes/discretos): cada golpe mueve al menos 1 día aunque
+// la columna sea más ancha que el delta (7 días en desktop: columnas de ~170px).
+function grillaWheelDias(acc, d, colW, golpe) {
+  if (acc && Math.sign(acc) !== Math.sign(d)) acc = 0;
+  if (golpe) return { dias: Math.sign(d) * Math.max(1, Math.round(Math.abs(d) / colW)), acc: 0 };
+  acc += d;
+  const dias = Math.trunc(acc / colW);
+  return { dias, acc: acc - dias * colW };
+}
 function initGrillaScroll() {
   const sc = document.getElementById('grillaScroll');
   if (!sc || sc.dataset.scrollInit) return;
@@ -7431,25 +7481,48 @@ function initGrillaScroll() {
     raf = requestAnimationFrame(() => { raf = 0; actualizarGrillaMesHeader(); });
   }, { passive: true });
   window.addEventListener('resize', actualizarGrillaMesHeader);
-  // Rueda vertical → horizontal. El gesto horizontal del trackpad (deltaX) sigue nativo.
-  // En los bordes (o si no hay scroll horizontal) no se intercepta: la página scrollea
-  // normal en vertical. No choca con el listener global de wheel de los input number
-  // (ese corre en captura en document, solo hace blur y no llama preventDefault).
+  // Rueda (vertical u horizontal) y trackpad (dos dedos, cualquier sentido). Con lugar: la
+  // rueda vertical se traduce a horizontal y el gesto horizontal queda nativo (suave).
+  // Sin lugar: se acumula el delta y se corre la fecha (1 render por frame como mucho).
+  // preventDefault también evita el "swipe atrás" del navegador en Mac sin overflow.
+  // No choca con el listener global de wheel de los input number (captura en document,
+  // solo hace blur y no llama preventDefault).
+  let acc = 0, pendiente = 0;
   sc.addEventListener('wheel', (e) => {
-    if (e.ctrlKey || e.shiftKey || Math.abs(e.deltaX) >= Math.abs(e.deltaY)) return;
+    if (e.ctrlKey) return; // pinch-zoom
+    const horiz = Math.abs(e.deltaX) > Math.abs(e.deltaY);
+    const k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? sc.clientWidth : 1;
+    const d = (horiz ? e.deltaX : e.deltaY) * k;
+    if (!d) return;
     const max = sc.scrollWidth - sc.clientWidth;
-    if (max <= 0) return;
-    const d = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? sc.clientWidth : 1);
-    if ((d < 0 && sc.scrollLeft <= 0) || (d > 0 && sc.scrollLeft >= max - 1)) return;
+    if (grillaHayLugar(sc.scrollLeft, max, d)) {
+      if (!horiz) { e.preventDefault(); sc.scrollLeft += d; }
+      acc = 0;
+      return;
+    }
     e.preventDefault();
-    sc.scrollLeft += d;
+    // Rueda de mouse: deltaMode en líneas (Firefox) o saltos de ≥50px (Chrome/Safari 100–120).
+    // Trackpad: muchos eventos chicos en px, que se acumulan.
+    const golpe = e.deltaMode !== 0 || Math.abs(d) >= 50;
+    const r = grillaWheelDias(acc, d, grillaAnchoColumna(sc), golpe);
+    acc = r.acc;
+    if (!r.dias) return;
+    pendiente += r.dias;
+    if (!raf) raf = requestAnimationFrame(() => {
+      raf = 0;
+      const n = pendiente; pendiente = 0;
+      if (n) grillaNavegar(n);
+    });
   }, { passive: false });
-  // Flechas: una columna por pulsación; mantener apretado repite (auto-repeat del keydown).
+  // Flechas: una columna por pulsación (o un día si no hay lugar); mantener apretado
+  // repite (auto-repeat del keydown).
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
     if (e.altKey || e.ctrlKey || e.metaKey || !grillaTeclasActivas()) return;
     e.preventDefault();
-    sc.scrollLeft += (e.key === 'ArrowRight' ? 1 : -1) * grillaAnchoColumna(sc);
+    const dir = e.key === 'ArrowRight' ? 1 : -1;
+    if (grillaHayLugar(sc.scrollLeft, sc.scrollWidth - sc.clientWidth, dir)) sc.scrollLeft += dir * grillaAnchoColumna(sc);
+    else grillaNavegar(dir);
   });
 }
 initGrillaScroll();
