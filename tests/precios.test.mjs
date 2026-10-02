@@ -245,6 +245,14 @@ eq('20d total no NaN/negativo', Number.isFinite(r20.total) && r20.total >= 0, tr
   eq('config: capacidad decimal → null', normalizarHabConfig('capacidad', '4.5'), null);
   eq('config: campo no permitido → null', normalizarHabConfig('precio_base', '100'), null);
   eq('updateHabConfig no llama a migrateHabitacionesConfig', /migrateHabitacionesConfig/.test(grab('updateHabConfig')), false);
+  // Se edita desde Configuración; el nodo sigue siendo precios.habitaciones.
+  eq('config: updateHabConfig sigue escribiendo en precios', /DB\.get\('precios'[\s\S]*p\.habitaciones[\s\S]*DB\.set\('precios', p\)/.test(grab('updateHabConfig')), true);
+  eq('config: inválido re-renderiza Configuración, no Precios', [grab('updateHabConfig').includes('renderConfigCabanas()'), grab('updateHabConfig').includes('renderPrecios')], [true, false]);
+  eq('config: la tabla de Configuración edita tipo/m²/capacidad', ['tipo', 'mts2', 'capacidad'].every(f => grab('renderConfigCabanas').includes(`updateHabConfig('\${h.hab}','${f}'`)), true);
+  eq('config: renderBotConfig pinta la tabla de cabañas', grab('renderBotConfig').includes('renderConfigCabanas()'), true);
+  const rp = grab('renderPrecios');
+  eq('precios: Por Cabaña ya no edita tipo/m²/capacidad', /updateHabConfig/.test(rp), false);
+  eq('precios: Por Cabaña sigue editando base/alta/baja', ['precio_base', 'precio_alta', 'precio_baja'].every(f => rp.includes(`updateHabPrecio('\${h.hab}','${f}'`)), true);
 }
 
 // ── Resultado ─────────────────────────────────────────────────────────────

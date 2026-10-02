@@ -129,8 +129,11 @@ eq('voucher: no muestra reservaId interno', out.includes(rUSD.id), false);
   await dc.saveBotConfig();
   eq('complejo: horario vacío → no escribe y avisa', [UPD.length, NOTIF.at(-1)[1]], [0, 'error']);
   eq('complejo: form sin campos del chatbot', ['bcf-nombre', 'bcf-ubicacion', 'bcf-cabanas', 'bcf-servicios', 'bcf-adicional', 'qr-list'].some(id => html.includes(`id="${id}"`)), false);
-  eq('complejo: nav "Datos del Complejo" con 🏡', /id="nav-botconfig"[^>]*>\s*<span class="icon">🏡<\/span> Datos del Complejo/.test(html), true);
-  eq('complejo: título de sección', src.includes("botconfig:'Datos del Complejo'"), true);
+  eq('complejo: nav "Configuración" con ⚙️', /id="nav-botconfig"[^>]*>\s*<span class="icon">⚙️<\/span> Configuración/.test(html), true);
+  eq('complejo: título de sección', src.includes("botconfig:'Configuración'"), true);
+  eq('complejo: sección sigue siendo admin-only', /class="nav-item admin-only"[^>]*id="nav-botconfig"/.test(html), true);
+  eq('complejo: sin texto de inyección en el chatbot', html.includes('se inyecta automáticamente en cada conversación del chatbot'), false);
+  eq('complejo: la sección tiene la tabla de cabañas y los horarios', /id="section-botconfig"[\s\S]*?id="cfg-cabanas"[\s\S]*?id="bcf-checkin"/.test(html), true);
   eq('complejo: buildSystemPrompt sigue existiendo', /\nfunction buildSystemPrompt\b/.test(src), true);
 }
 
