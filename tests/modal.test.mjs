@@ -3,6 +3,7 @@
 //    y con el id de la reserva guardada; si el guardado falla no se envía nada.
 //  · renderAccionesModalReserva: mismas condiciones que la fila del listado.
 //  · enviarVoucher: la pestaña de WhatsApp se abre ANTES del await (iPhone/Safari).
+//  · textoNochesModal / renderNochesModal: contador "N noches" junto a la salida.
 // Ejecutar:  node tests/modal.test.mjs
 
 import fs from 'fs';
@@ -92,6 +93,32 @@ v = vis({ id: 'd', estado: 'checkout', saldo: 50 });
 eq('checkout: sin "Guardar y enviar" ni accesos', [v.enviar, v.box], [false, false]);
 v = vis({ id: 'e', estado: 'cancelada', saldo: 0 });
 eq('cancelada: sin "Guardar y enviar" ni accesos', [v.enviar, v.box], [false, false]);
+
+// ── Contador de noches junto a la fecha de salida ──
+{
+  const realNights = new Function(grab('nightsBetween') + '\nreturn nightsBetween;')();
+  const n = new Function('nightsBetween', grab('textoNochesModal') + grab('renderNochesModal') +
+    '\nreturn { textoNochesModal, renderNochesModal };')(realNights);
+  const AVISO = 'La salida debe ser posterior a la entrada (mínimo 1 noche)';
+  eq('noches: 1 noche (singular)', n.textoNochesModal('2026-10-02', '2026-10-03'), { txt: '1 noche', error: false });
+  eq('noches: 3 noches (plural)', n.textoNochesModal('2026-10-02', '2026-10-05'), { txt: '3 noches', error: false });
+  eq('noches: cruce de mes', n.textoNochesModal('2026-10-30', '2026-11-02').txt, '3 noches');
+  eq('noches: falta salida → nada', n.textoNochesModal('2026-10-02', ''), { txt: '', error: false });
+  eq('noches: falta entrada → nada', n.textoNochesModal('', '2026-10-05'), { txt: '', error: false });
+  eq('noches: salida = entrada → aviso', n.textoNochesModal('2026-10-02', '2026-10-02'), { txt: AVISO, error: true });
+  eq('noches: salida < entrada → aviso, sin número negativo', n.textoNochesModal('2026-10-05', '2026-10-02'), { txt: AVISO, error: true });
+  eq('noches: aviso = el mismo texto que saveReserva', grab('saveReserva').includes(AVISO), true);
+  eq('noches: usa nightsBetween (no cálculo propio)', /nightsBetween\(/.test(grab('textoNochesModal')), true);
+  // render con el DOM mockeado
+  const D = { 'res-entrada': { value: '2026-10-02' }, 'res-salida': { value: '2026-10-04' }, 'res-noches': { textContent: '', style: {} } };
+  const rn = new Function('document', 'nightsBetween', grab('textoNochesModal') + grab('renderNochesModal') + '\nreturn renderNochesModal;')({ getElementById: id => D[id] }, realNights);
+  rn();
+  eq('noches: render pinta "2 noches"', D['res-noches'].textContent, '2 noches');
+  D['res-salida'].value = '2026-10-01'; rn();
+  eq('noches: render con salida <= entrada → aviso en rojo', [D['res-noches'].textContent, D['res-noches'].style.color], [AVISO, 'var(--red)']);
+  eq('noches: onEntradaChange recalcula el contador', grab('onEntradaChange').includes('renderNochesModal()'), true);
+  eq('noches: onchange de la salida recalcula el contador', /id="res-salida" onchange="[^"]*renderNochesModal\(\)/.test(html), true);
+}
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
