@@ -184,10 +184,74 @@ for (const D of [7, 14, 30]) {
 // ── Sidebar colapsable (desktop) ────────────────────────────────────────────
 {
   eq('sidebar: arranca colapsado', [/<div id="app" class="sb-colapsado"/.test(html), /\nlet sidebarColapsado = true;/.test(src)], [true, true]);
-  eq('sidebar: reglas de colapso solo en desktop (min-width: 769px)', /@media \(min-width: 769px\) \{[\s\S]*?#app\.sb-colapsado \.sidebar \{ width: 56px; \}[\s\S]*?#app\.sb-colapsado \.sidebar:hover \{ width: 220px;/.test(html), true);
+  eq('sidebar: colapso total solo en desktop (translateX -100%, main sin margen)', /@media \(min-width: 769px\) \{[\s\S]*?#app\.sb-colapsado \.sidebar \{ transform: translateX\(-100%\);[\s\S]*?\.main \{ margin-left: 0; \}/.test(html), true);
+  eq('sidebar: ya no hay franja de 56px', /sb-colapsado[^{]*\{[^}]*56px/.test(html), false);
+  eq('sidebar: overlay transparente en desktop para click afuera', /@media \(min-width: 769px\) \{[\s\S]*?\.sidebar-overlay\.open \{ display: block; background: transparent;/.test(html), true);
+  const cs = grab('closeSidebar');
+  eq('sidebar: closeSidebar en desktop colapsa; mobile sigue sacando .open', [/sidebarColapsado = true/.test(cs), /classList\.remove\('open'\)/.test(cs)], [true, true]);
+  eq('sidebar: nav items cierran al elegir sección', (html.match(/onclick="showSection\('[a-z]+'\);closeSidebar\(\)"/g) || []).length >= 10, true);
   eq('sidebar: mobile sigue como overlay (.open)', /@media \(max-width: 768px\) \{\n  \.hamburger \{ display: flex; \}\n  \.sidebar \{\n    transform: translateX\(-100%\);/.test(html), true);
   const ts = grab('toggleSidebar');
   eq('sidebar: toggle en desktop alterna colapsado; en mobile .open', [/sidebarColapsado = !sidebarColapsado/.test(ts), /classList\.toggle\('open'\)/.test(ts)], [true, true]);
+}
+
+// ── Mes visible en el encabezado ────────────────────────────────────────────
+{
+  const grillaMesLabel = new Function(
+    src.match(/\nconst GRILLA_MESES_CORTOS = [^\n]*/)[0] + src.match(/\nconst GRILLA_MESES_LARGOS = [^\n]*/)[0] + grab('grillaMesLabel') +
+    '\nreturn grillaMesLabel;')();
+  eq('mes: mismo mes → nombre largo', grillaMesLabel('2026-10-01', '2026-10-30'), 'Octubre 2026');
+  eq('mes: cruza dos meses', grillaMesLabel('2026-10-20', '2026-11-02'), 'Oct — Nov 2026');
+  eq('mes: cruza año', grillaMesLabel('2026-12-20', '2027-01-18'), 'Dic 2026 — Ene 2027');
+  eq('mes: 30 días desde el 31/1 (3 meses) → primero — último', grillaMesLabel('2027-01-31', '2027-03-01'), 'Ene — Mar 2027');
+  eq('mes: un solo día', grillaMesLabel('2026-02-14', '2026-02-14'), 'Febrero 2026');
+  eq('mes: header en la topbar, oculto fuera de la grilla', [/<h1 id="pageTitle">Dashboard<\/h1>\s*<div id="grillaMesHeader" class="grilla-mes-header" hidden><\/div>/.test(html), /grillaMesHeader'\)\.hidden = s !== 'grilla'/.test(grab('showSection'))], [true, true]);
+  eq('mes: se actualiza al render, al scrollear y al resize', [/actualizarGrillaMesHeader\(\);\n\}/.test(grab('renderGrilla')), /addEventListener\('scroll'[\s\S]*?actualizarGrillaMesHeader/.test(grab('initGrillaScroll')), /addEventListener\('resize', actualizarGrillaMesHeader\)/.test(grab('initGrillaScroll'))], [true, true, true]);
+  eq('mes: th de fechas con data-fecha', /<th data-fecha="\$\{f\}"/.test(grab('renderGrilla')), true);
+}
+
+// ── Scroll con teclado y rueda ──────────────────────────────────────────────
+{
+  const mk = (active, modal) => ({
+    activeElement: active,
+    body: BODY,
+    getElementById: id => id === 'section-grilla' ? { classList: { contains: c => c === 'active' && GRILLA_ACTIVA } } : null,
+    querySelector: q => q === '.modal-overlay.open' && modal ? {} : null,
+  });
+  const BODY = { tagName: 'BODY' };
+  let GRILLA_ACTIVA = true;
+  const el = (tagName, extra = {}) => ({ tagName, isContentEditable: false, closest: sel => (extra.enGrilla && sel === '#grillaScroll') ? {} : null, ...extra });
+  const teclas = d => new Function('document', grab('grillaTeclasActivas') + '\nreturn grillaTeclasActivas();')(d);
+  eq('teclas: sin foco (body) → mueve', teclas(mk(BODY)), true);
+  eq('teclas: foco en la grilla → mueve', teclas(mk(el('DIV', { enGrilla: true }))), true);
+  eq('teclas: foco en botón de navegación → mueve', teclas(mk(el('BUTTON'))), true);
+  eq('teclas: tipeando en input → NO', teclas(mk(el('INPUT'))), false);
+  eq('teclas: en select → NO', teclas(mk(el('SELECT'))), false);
+  eq('teclas: en textarea → NO', teclas(mk(el('TEXTAREA'))), false);
+  eq('teclas: contenteditable → NO', teclas(mk(el('DIV', { isContentEditable: true }))), false);
+  eq('teclas: input date de la grilla (no está dentro del scroll) → NO', teclas(mk(el('INPUT'))), false);
+  eq('teclas: modal abierto → NO', teclas(mk(BODY, true)), false);
+  GRILLA_ACTIVA = false;
+  eq('teclas: otra sección → NO', teclas(mk(BODY)), false);
+  GRILLA_ACTIVA = true;
+
+  const ini = grab('initGrillaScroll');
+  eq('teclas: una columna por pulsación, solo ← →, sin modificadores', [/grillaAnchoColumna\(sc\)/.test(ini), /e\.key !== 'ArrowLeft' && e\.key !== 'ArrowRight'/.test(ini), /e\.altKey \|\| e\.ctrlKey \|\| e\.metaKey/.test(ini)], [true, true, true]);
+  eq('wheel: listener no pasivo con preventDefault y scrollLeft += delta', [/addEventListener\('wheel'[\s\S]*?\{ passive: false \}/.test(ini), /e\.preventDefault\(\);\s*sc\.scrollLeft \+= d;/.test(ini)], [true, true]);
+  eq('wheel: respeta gesto horizontal nativo y bordes', [/Math\.abs\(e\.deltaX\) >= Math\.abs\(e\.deltaY\)\) return/.test(ini), /sc\.scrollLeft <= 0\) \|\| \(d > 0 && sc\.scrollLeft >= max - 1\)\) return/.test(ini)], [true, true]);
+  // Convivencia con el listener global de los input number: sigue igual (captura, solo blur).
+  eq('wheel: listener global de input number intacto', /document\.addEventListener\('wheel', \(e\) => \{\n  const t = e\.target;\n  if \(t instanceof HTMLInputElement && t\.type === 'number' && document\.activeElement === t\) t\.blur\(\);\n\}, \{ passive: false, capture: true \}\);/.test(src), true);
+  eq('wheel: el global no llama preventDefault (no pisa al de la grilla)', /type === 'number'[^\n]*preventDefault/.test(src), false);
+  eq('scroll: contenedor con id y foco', /<div id="grillaScroll" class="grilla-scroll" tabindex="0"/.test(html), true);
+}
+
+// ── Diseño: precio tenue, finde, hoy ────────────────────────────────────────
+{
+  const rg = grab('renderGrilla');
+  eq('diseño: precio libre tenue (text3, no blanco)', /\.grilla-cell \.grilla-precio \{[^}]*color: var\(--text3\)/.test(html), true);
+  eq('diseño: celdas y th de fin de semana marcados', [/gc-finde/.test(rg), /\.grilla-track \.grilla-cell\.gc-finde \{ background:/.test(html), /th\.gc-finde \{ background:/.test(html)], [true, true, true]);
+  eq('diseño: hoy = columna teñida (no solo borde izq)', [/\.grilla-track \.grilla-cell\.gc-today \{ background:/.test(html), /gc-today \{ border-left/.test(html)], [true, false]);
+  eq('diseño: selección le gana al finde/hoy', /\.grilla-track \.grilla-cell\.gc-sel \{ background: var\(--accent2\); \}/.test(html) && html.indexOf('.grilla-track .grilla-cell.gc-sel') > html.indexOf('.grilla-track .grilla-cell.gc-today {'), true);
 }
 
 // ── Sección inicial: la app abre en la grilla (respetando permisos) ─────────
