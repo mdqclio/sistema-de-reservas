@@ -1,5 +1,6 @@
-// Tests de saldoReserva (saldo único para listado/grilla) y grillaBarraPos
-// (barras de medio día de la grilla). Extrae las funciones reales de index.html.
+// Tests de saldoReserva (saldo único para listado/grilla), grillaBarraPos
+// (barras de medio día de la grilla) y selección de rango por 2 clicks
+// (2º click = fecha de salida). Extrae las funciones reales de index.html.
 // Ejecutar:  node tests/grilla.test.mjs
 
 import fs from 'fs';
@@ -19,9 +20,10 @@ function grab(name) {
 
 // calcularPrecioReserva mockeado: 100 por noche (solo para el fallback de totalReserva).
 const calcularPrecioReserva = (hab, e, s) => ({ total: 100 * Math.round((new Date(s) - new Date(e)) / 86400000) });
-const { saldoReserva, grillaBarraPos } = new Function('calcularPrecioReserva',
+const { saldoReserva, grillaBarraPos, grillaRangoDesdeClicks, grillaPrimeraNocheOcupada, nightsBetween } = new Function('calcularPrecioReserva',
   grab('nightsBetween') + grab('totalReserva') + grab('saldoReserva') + grab('grillaBarraPos') +
-  '\nreturn { saldoReserva, grillaBarraPos };')(calcularPrecioReserva);
+  grab('addDaysStr') + grab('grillaRangoDesdeClicks') + grab('grillaPrimeraNocheOcupada') +
+  '\nreturn { saldoReserva, grillaBarraPos, grillaRangoDesdeClicks, grillaPrimeraNocheOcupada, nightsBetween };')(calcularPrecioReserva);
 
 let pass = 0, fail = 0;
 function eq(label, got, exp) {
@@ -81,6 +83,25 @@ eq('entra el último día visible: media celda final + cortaDer', [near(p.left, 
 eq('termina antes del rango → null', grillaBarraPos('2026-10-01', '2026-10-09', INI, N), null);
 eq('empieza después del rango → null', grillaBarraPos('2026-10-24', '2026-10-26', INI, N), null);
 eq('0 noches (entrada = salida) → null', grillaBarraPos('2026-10-12', '2026-10-12', INI, N), null);
+
+// ── Selección de rango: 2º click = fecha de salida ───────────────────────────
+let rg = grillaRangoDesdeClicks('2026-10-02', '2026-10-04');
+eq('clicks 2 y 4 → entrada 2, salida 4', rg, { entrada: '2026-10-02', salida: '2026-10-04' });
+eq('clicks 2 y 4 → 2 noches', nightsBetween(rg.entrada, rg.salida), 2);
+eq('clicks en orden inverso (4 y 2) → mismo rango', grillaRangoDesdeClicks('2026-10-04', '2026-10-02'), { entrada: '2026-10-02', salida: '2026-10-04' });
+eq('clicks consecutivos (2 y 3) → 1 noche', nightsBetween('2026-10-02', grillaRangoDesdeClicks('2026-10-02', '2026-10-03').salida), 1);
+rg = grillaRangoDesdeClicks('2026-10-02', '2026-10-02');
+eq('misma celda → 1 noche (salida = día + 1), nunca 0', [rg.salida, nightsBetween(rg.entrada, rg.salida)], ['2026-10-03', 1]);
+eq('cruce de mes (30/10 y 2/11) → 3 noches', nightsBetween('2026-10-30', grillaRangoDesdeClicks('2026-10-30', '2026-11-02').salida), 3);
+
+// Validación de ocupación sobre [entrada, salida)
+const ocup = set => f => set.includes(f);
+eq('todas libres → null', grillaPrimeraNocheOcupada('2026-10-02', '2026-10-04', ocup([])), null);
+eq('noche del medio ocupada → la detecta', grillaPrimeraNocheOcupada('2026-10-02', '2026-10-05', ocup(['2026-10-03'])), '2026-10-03');
+eq('entrada ocupada → la detecta', grillaPrimeraNocheOcupada('2026-10-02', '2026-10-04', ocup(['2026-10-02'])), '2026-10-02');
+eq('recambio: día de salida ocupado (entra otra) → OK', grillaPrimeraNocheOcupada('2026-10-02', '2026-10-04', ocup(['2026-10-04'])), null);
+rg = grillaRangoDesdeClicks('2026-10-02', '2026-10-02');
+eq('misma celda: valida solo esa noche', grillaPrimeraNocheOcupada(rg.entrada, rg.salida, ocup(['2026-10-03'])), null);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
