@@ -1136,7 +1136,7 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
     </div>
     <div class="form-row">
       <div class="form-group"><label>Fecha Entrada *</label><input type="date" id="res-entrada" onchange="onEntradaChange()"></div>
-      <div class="form-group"><label>Fecha Salida *</label><input type="date" id="res-salida" onchange="updateBedsSelect();renderResPromos();calcTotalReserva()"></div>
+      <div class="form-group"><label>Fecha Salida *</label><input type="date" id="res-salida" onchange="updateBedsSelect();renderResPromos();calcTotalReserva();renderNochesModal()"><div id="res-noches" style="font-size:11px;color:var(--text3);margin-top:4px;min-height:14px;"></div></div>
     </div>
     <div class="form-row form-row-precio">
       <div class="form-group"><label>Moneda</label>
@@ -3090,6 +3090,27 @@ function onEntradaChange() {
   updateBedsSelect();
   renderResPromos();
   calcTotalReserva();
+  renderNochesModal();
+}
+
+// Texto del contador de noches del modal de reserva (solo visual; la validación
+// real está en saveReserva). Usa nightsBetween, la misma que precios y grilla.
+// Falta alguna fecha → ''. Salida <= entrada → el mismo aviso que saveReserva.
+function textoNochesModal(entrada, salida) {
+  if (!entrada || !salida) return { txt: '', error: false };
+  const n = nightsBetween(entrada, salida);
+  if (!(n >= 1)) return { txt: 'La salida debe ser posterior a la entrada (mínimo 1 noche)', error: true };
+  return { txt: n === 1 ? '1 noche' : n + ' noches', error: false };
+}
+
+// Pinta "N noches" debajo de la fecha de salida del modal de reserva.
+function renderNochesModal() {
+  const el = document.getElementById('res-noches');
+  if (!el) return;
+  const { txt, error } = textoNochesModal(
+    document.getElementById('res-entrada').value, document.getElementById('res-salida').value);
+  el.textContent = txt;
+  el.style.color = error ? 'var(--red)' : 'var(--text3)';
 }
 
 // ===================== MAPA CAMAS =====================
@@ -3954,6 +3975,7 @@ function openNuevaReserva() {
   renderResCargos([]);
   renderResPromos('');
   calcTotalReserva();
+  renderNochesModal();
   openModal('modalReserva');
 }
 
@@ -3993,6 +4015,7 @@ function editReserva(rid) {
   renderResCargos(r.cargos || []);
   renderResPromos(r.promo || '');
   calcTotalReserva();
+  renderNochesModal();
   openModal('modalReserva');
 }
 
@@ -7306,6 +7329,7 @@ function openReservaDesdeGrilla(hab, cabId, entrada, salida) {
   renderResCargos([]);
   renderResPromos('');
   calcTotalReserva();
+  renderNochesModal();
   openModal('modalReserva');
 }
 
@@ -8538,7 +8562,7 @@ Object.assign(window, {
   addFechaEsp, updateFechaEsp, deleteFechaEsp,
   addCargo, updateCargo, deleteCargo,
   togglePerm, deleteRol, toggleUsuarioEstado,
-  grillaCellClick, setHuespedMode, filtrarHuespedes, seleccionarHuesped, openReservaDesdeGrilla,
+  grillaCellClick, renderNochesModal, setHuespedMode, filtrarHuespedes, seleccionarHuesped, openReservaDesdeGrilla,
   renderPendientes, togglePendiente, promoverPendiente, rechazarPendiente, generarLinkPrecheckin,
   irAFacturacion, renderFacturacion, crearSolicitudFactura, toggleFacMov, facSetModo, facSetEmisor,
   facSetFiltro, facLimpiarFiltro, facSetCampo, facSetManual, facSeleccionarTodos,
