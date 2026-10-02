@@ -20,3 +20,17 @@ Reglas:
    va a un branch propio, nunca a main.
 
 Esto aplica siempre, sin que haga falta pedirlo.
+
+## SHA al terminar: siempre, como última línea
+
+Toda respuesta que cierre una tarea (commit, push, merge, reporte)
+termina con el SHA del remoto, sin que Leonardo tenga que pedirlo:
+
+    SHA <branch>: <hash>
+
+- El hash sale de `git fetch && git log origin/<branch> -1 --format='%H'`
+  DESPUÉS del push. Nunca el SHA local.
+- Si se mergeó a main, también va `SHA main: <hash>` de origin/main.
+- Si el trabajo quedó en un branch sin mergear, aclararlo en esa línea
+  o justo antes (ej. "no mergeado").
+- Si el push falló, no hay SHA: decirlo en su lugar.
