@@ -231,6 +231,22 @@ eq('20b subtotal 0', r20.subtotal, 0);
 eq('20c total 0', r20.total, 0);
 eq('20d total no NaN/negativo', Number.isFinite(r20.total) && r20.total >= 0, true);
 
+// ── Config de cabaña editable (tipo / m² / capacidad) ─────────────────────
+{
+  const TIPOS_CABANA = ['Monoambiente', '2 Ambientes', 'Loft'];
+  const normalizarHabConfig = new Function('TIPOS_CABANA', grab('normalizarHabConfig') + '\nreturn normalizarHabConfig;')(TIPOS_CABANA);
+  eq('config: tipo Loft válido', normalizarHabConfig('tipo', 'Loft'), 'Loft');
+  eq('config: tipo fuera de la lista → null', normalizarHabConfig('tipo', 'Suite'), null);
+  eq('config: capacidad 6 (caso Franco, cab 7/8)', normalizarHabConfig('capacidad', '6'), 6);
+  eq('config: m² 60', normalizarHabConfig('mts2', '60'), 60);
+  eq('config: capacidad vacía → null', normalizarHabConfig('capacidad', ''), null);
+  eq('config: capacidad 0 → null', normalizarHabConfig('capacidad', '0'), null);
+  eq('config: capacidad negativa → null', normalizarHabConfig('capacidad', '-2'), null);
+  eq('config: capacidad decimal → null', normalizarHabConfig('capacidad', '4.5'), null);
+  eq('config: campo no permitido → null', normalizarHabConfig('precio_base', '100'), null);
+  eq('updateHabConfig no llama a migrateHabitacionesConfig', /migrateHabitacionesConfig/.test(grab('updateHabConfig')), false);
+}
+
 // ── Resultado ─────────────────────────────────────────────────────────────
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
