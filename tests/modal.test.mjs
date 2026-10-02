@@ -110,12 +110,24 @@ eq('cancelada: sin "Guardar y enviar" ni accesos', [v.enviar, v.box], [false, fa
   eq('noches: aviso = el mismo texto que saveReserva', grab('saveReserva').includes(AVISO), true);
   eq('noches: usa nightsBetween (no cálculo propio)', /nightsBetween\(/.test(grab('textoNochesModal')), true);
   // render con el DOM mockeado
-  const D = { 'res-entrada': { value: '2026-10-02' }, 'res-salida': { value: '2026-10-04' }, 'res-noches': { textContent: '', style: {} } };
+  const cls = new Set();
+  const D = { 'res-entrada': { value: '2026-10-02' }, 'res-salida': { value: '2026-10-04' },
+    'res-noches': { textContent: '', innerHTML: '', style: {}, classList: { toggle: (c, on) => on ? cls.add(c) : cls.delete(c) } } };
   const rn = new Function('document', 'nightsBetween', grab('textoNochesModal') + grab('renderNochesModal') + '\nreturn renderNochesModal;')({ getElementById: id => D[id] }, realNights);
   rn();
-  eq('noches: render pinta "2 noches"', D['res-noches'].textContent, '2 noches');
+  eq('noches: render número grande + palabra', D['res-noches'].innerHTML, '<span class="rn-num">2</span><span class="rn-txt">noches</span>');
+  eq('noches: render normal sin rojo', [D['res-noches'].style.color, cls.has('rn-error')], ['', false]);
+  D['res-salida'].value = '2026-10-03'; rn();
+  eq('noches: render singular', D['res-noches'].innerHTML, '<span class="rn-num">1</span><span class="rn-txt">noche</span>');
   D['res-salida'].value = '2026-10-01'; rn();
-  eq('noches: render con salida <= entrada → aviso en rojo', [D['res-noches'].textContent, D['res-noches'].style.color], [AVISO, 'var(--red)']);
+  eq('noches: render con salida <= entrada → aviso en rojo', [D['res-noches'].textContent, D['res-noches'].style.color, cls.has('rn-error')], [AVISO, 'var(--red)', true]);
+  D['res-salida'].value = ''; D['res-noches'].innerHTML = 'x'; rn();
+  eq('noches: render sin salida → vacío', D['res-noches'].textContent, '');
+  // Ubicación: en la fila del selector de cabaña, a su derecha; ya no bajo la salida.
+  const filaCab = html.match(/<div class="form-row">\s*<div class="form-group"><label>Cabaña \*<\/label>[\s\S]*?\n    <\/div>\n/)[0];
+  eq('noches: #res-noches en la fila del selector de cabaña', /<\/select>\s*<\/div>\s*<div id="res-noches"/.test(filaCab), true);
+  eq('noches: #res-noches ya no está en el form-group de la salida', /id="res-salida"[^\n]*res-noches"/.test(html), false);
+  eq('noches: un solo #res-noches', (html.match(/id="res-noches"/g) || []).length, 1);
   eq('noches: onEntradaChange recalcula el contador', grab('onEntradaChange').includes('renderNochesModal()'), true);
   eq('noches: onchange de la salida recalcula el contador', /id="res-salida" onchange="[^"]*renderNochesModal\(\)/.test(html), true);
 }

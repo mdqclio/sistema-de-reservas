@@ -206,6 +206,12 @@ td.acciones .btn:last-child { margin-right: 0; }
 .modal-overlay.open .modal { transform: translateY(0); }
 .modal h2 { font-size: 18px; font-weight: 600; margin-bottom: 20px; color: var(--text); }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+/* Contador de noches del modal de reserva, a la derecha del selector de cabaña.
+   El número se lee de un vistazo; en mobile (.form-row a 1 columna) cae debajo. */
+.res-noches { display: flex; align-items: baseline; gap: 6px; align-self: end; min-width: 0; min-height: 38px; margin-bottom: 16px; }
+.res-noches .rn-num { font-size: 24px; font-weight: 700; line-height: 1; color: var(--text); }
+.res-noches .rn-txt { font-size: 14px; color: var(--text2); }
+.res-noches.rn-error { align-items: center; font-size: 13px; font-weight: 600; }
 /* Moneda | Precio por noche | Total (modal de reserva). */
 .form-row.form-row-precio { grid-template-columns: 90px 1fr 1fr; }
 .form-group input, .form-group select, .form-group textarea {
@@ -300,6 +306,7 @@ td.acciones .btn:last-child { margin-right: 0; }
   .rooms-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
   .roles-grid { grid-template-columns: 1fr; }
   .form-row { grid-template-columns: 1fr; }
+  .res-noches { min-height: 0; margin-top: -6px; }
   .form-row.form-row-precio { grid-template-columns: 1fr 1fr; }
   .form-row.form-row-precio > :first-child { grid-column: 1 / -1; }
   .topbar { flex-direction: column; align-items: flex-start; gap: 8px; }
@@ -1118,6 +1125,7 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
           <option value="12">Cabaña 12 (6 personas)</option>
         </select>
       </div>
+      <div id="res-noches" class="res-noches" aria-live="polite"></div>
       <div class="form-group" style="display:none">
         <select id="res-cabaña"><option value="">auto</option></select>
       </div>
@@ -1136,7 +1144,7 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
     </div>
     <div class="form-row">
       <div class="form-group"><label>Fecha Entrada *</label><input type="date" id="res-entrada" onchange="onEntradaChange()"></div>
-      <div class="form-group"><label>Fecha Salida *</label><input type="date" id="res-salida" onchange="updateBedsSelect();renderResPromos();calcTotalReserva();renderNochesModal()"><div id="res-noches" style="font-size:11px;color:var(--text3);margin-top:4px;min-height:14px;"></div></div>
+      <div class="form-group"><label>Fecha Salida *</label><input type="date" id="res-salida" onchange="updateBedsSelect();renderResPromos();calcTotalReserva();renderNochesModal()"></div>
     </div>
     <div class="form-row form-row-precio">
       <div class="form-group"><label>Moneda</label>
@@ -3103,14 +3111,18 @@ function textoNochesModal(entrada, salida) {
   return { txt: n === 1 ? '1 noche' : n + ' noches', error: false };
 }
 
-// Pinta "N noches" debajo de la fecha de salida del modal de reserva.
+// Pinta "N noches" a la derecha del selector de cabaña: número grande + palabra.
+// El texto sale de textoNochesModal; acá solo se parte para darle formato.
 function renderNochesModal() {
   const el = document.getElementById('res-noches');
   if (!el) return;
   const { txt, error } = textoNochesModal(
     document.getElementById('res-entrada').value, document.getElementById('res-salida').value);
-  el.textContent = txt;
-  el.style.color = error ? 'var(--red)' : 'var(--text3)';
+  const m = !error && /^(\d+) (noches?)$/.exec(txt);
+  if (m) el.innerHTML = `<span class="rn-num">${m[1]}</span><span class="rn-txt">${m[2]}</span>`;
+  else el.textContent = txt;
+  el.classList.toggle('rn-error', error);
+  el.style.color = error ? 'var(--red)' : '';
 }
 
 // ===================== MAPA CAMAS =====================
