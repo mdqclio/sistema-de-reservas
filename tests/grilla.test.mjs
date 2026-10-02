@@ -143,12 +143,13 @@ for (const D of [7, 14, 30]) {
   eq('31/10 + 1 mes → 30/11', grillaSumarMeses('2026-10-31', 1), '2026-11-30');
   eq('+12 meses', grillaSumarMeses('2026-10-02', 12), '2027-10-02');
 
-  let ms = grillaMesesProximos('2026-10-02');
+  let ms = grillaMesesProximos('2026-10-02', 6);
   eq('meses: 6, arranca en el actual', ms.length, 6);
   eq('meses: labels con año cuando cambia', ms.map(m => m.label), ['Oct', 'Nov', 'Dic', 'Ene 27', 'Feb 27', 'Mar 27']);
   eq('meses: cada uno arranca el día 1', ms.map(m => m.inicio), ['2026-10-01', '2026-11-01', '2026-12-01', '2027-01-01', '2027-02-01', '2027-03-01']);
   eq('meses: clave YYYY-MM para marcar el visto', ms[3].mes, '2027-01');
-  ms = grillaMesesProximos('2026-03-31');
+  eq('meses: 12 desde octubre → Oct … Sep 27', grillaMesesProximos('2026-10-02', 12).map(m => m.label), ['Oct', 'Nov', 'Dic', 'Ene 27', 'Feb 27', 'Mar 27', 'Abr 27', 'May 27', 'Jun 27', 'Jul 27', 'Ago 27', 'Sep 27']);
+  ms = grillaMesesProximos('2026-03-31', 6);
   eq('meses: desde el 31 no saltea meses cortos', ms.map(m => m.label), ['Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago']);
   eq('meses: hoy en enero → sin año en ninguno', grillaMesesProximos('2027-01-20').some(m => / \d/.test(m.label)), false);
 
@@ -238,11 +239,54 @@ for (const D of [7, 14, 30]) {
   const ini = grab('initGrillaScroll');
   eq('teclas: una columna por pulsación, solo ← →, sin modificadores', [/grillaAnchoColumna\(sc\)/.test(ini), /e\.key !== 'ArrowLeft' && e\.key !== 'ArrowRight'/.test(ini), /e\.altKey \|\| e\.ctrlKey \|\| e\.metaKey/.test(ini)], [true, true, true]);
   eq('wheel: listener no pasivo con preventDefault y scrollLeft += delta', [/addEventListener\('wheel'[\s\S]*?\{ passive: false \}/.test(ini), /e\.preventDefault\(\);\s*sc\.scrollLeft \+= d;/.test(ini)], [true, true]);
-  eq('wheel: respeta gesto horizontal nativo y bordes', [/Math\.abs\(e\.deltaX\) >= Math\.abs\(e\.deltaY\)\) return/.test(ini), /sc\.scrollLeft <= 0\) \|\| \(d > 0 && sc\.scrollLeft >= max - 1\)\) return/.test(ini)], [true, true]);
+  eq('wheel: con lugar, horizontal nativo y vertical → scrollLeft; sin lugar → corre la fecha', [/if \(!horiz\) \{ e\.preventDefault\(\); sc\.scrollLeft \+= d; \}/.test(ini), /grillaNavegar\(n\)/.test(ini)], [true, true]);
+  eq('wheel: trackpad horizontal también se maneja (deltaX)', /horiz \? e\.deltaX : e\.deltaY/.test(ini), true);
+  eq('teclas: sin lugar → un día', /else grillaNavegar\(dir\)/.test(ini), true);
   // Convivencia con el listener global de los input number: sigue igual (captura, solo blur).
   eq('wheel: listener global de input number intacto', /document\.addEventListener\('wheel', \(e\) => \{\n  const t = e\.target;\n  if \(t instanceof HTMLInputElement && t\.type === 'number' && document\.activeElement === t\) t\.blur\(\);\n\}, \{ passive: false, capture: true \}\);/.test(src), true);
   eq('wheel: el global no llama preventDefault (no pisa al de la grilla)', /type === 'number'[^\n]*preventDefault/.test(src), false);
   eq('scroll: contenedor con id y foco', /<div id="grillaScroll" class="grilla-scroll" tabindex="0"/.test(html), true);
+}
+
+// ── Scroll a través del tiempo (fix: la grilla entra entera y no había qué scrollear) ──
+{
+  const { grillaHayLugar, grillaWheelDias } = new Function(grab('grillaHayLugar') + grab('grillaWheelDias') + '\nreturn { grillaHayLugar, grillaWheelDias };')();
+  eq('lugar: sin overflow (max 0) → no hay lugar en ningún sentido', [grillaHayLugar(0, 0, 1), grillaHayLugar(0, 0, -1)], [false, false]);
+  eq('lugar: al inicio → solo hacia adelante', [grillaHayLugar(0, 300, 1), grillaHayLugar(0, 300, -1)], [true, false]);
+  eq('lugar: al final → solo hacia atrás', [grillaHayLugar(300, 300, 1), grillaHayLugar(300, 300, -1)], [false, true]);
+  eq('lugar: al medio → ambos', [grillaHayLugar(150, 300, 1), grillaHayLugar(150, 300, -1)], [true, true]);
+  eq('lugar: subpíxel al final cuenta como final', grillaHayLugar(299.4, 300, 1), false);
+  let r = grillaWheelDias(0, 100, 46);
+  eq('rueda: 100px con columna 46 → 2 días, resto 8', [r.dias, Math.round(r.acc)], [2, 8]);
+  r = grillaWheelDias(0, 4, 46);
+  eq('trackpad: delta chico → 0 días, acumula', [r.dias, r.acc], [0, 4]);
+  let acc = 0, total = 0;
+  for (let i = 0; i < 23; i++) { const x = grillaWheelDias(acc, 4, 46); acc = x.acc; total += x.dias; }
+  eq('trackpad: 23 eventos de 4px (92px) → 2 días', total, 2);
+  r = grillaWheelDias(-40, 10, 46);
+  eq('cambio de sentido descarta el resto', [r.dias, r.acc], [0, 10]);
+  r = grillaWheelDias(0, -120, 46);
+  eq('hacia atrás → días negativos', r.dias, -2);
+  r = grillaWheelDias(0, 120, 100);
+  eq('rueda de mouse típica (120) con columna ancha (100) → 1 día', r.dias, 1);
+  eq('golpe de rueda con columna más ancha (174px) → 1 día igual', grillaWheelDias(0, 120, 174, true).dias, 1);
+  eq('golpe de rueda hacia atrás → -1 día', grillaWheelDias(0, -120, 174, true).dias, -1);
+  eq('golpe de rueda grande (360px, col 46) → 8 días', grillaWheelDias(0, 360, 46, true).dias, 8);
+  eq('golpe no deja resto', grillaWheelDias(30, 120, 46, true).acc, 0);
+  eq('grillaNavegar usa addDaysStr (sin ida y vuelta por UTC)', /addDaysStr\(grillaFechaInicio \|\| today\(\), dias\)/.test(grab('grillaNavegar')), true);
+}
+
+// ── Barra de navegación en dos renglones ────────────────────────────────────
+{
+  const nav = html.slice(html.indexOf('<div class="grilla-nav">'), html.indexOf('<div id="grillaScroll"'));
+  const orden = ['grillaFechaInput', 'grillaHoy()', 'grillaNavegar(-1)', 'grillaNavegar(1)', 'grillaNavegar(-7)', 'grillaNavegar(7)', 'grillaNavegarMes(-1)', 'grillaNavegarMes(1)', 'grillaDiasSel', 'grillaMeses', 'grillaRangoLabel'].map(x => nav.indexOf(x));
+  eq('nav: orden fecha · Hoy · pares día/7/mes · días · meses · rango', orden.every((x, i) => x > 0 && (i === 0 || x > orden[i - 1])), true);
+  const f1 = nav.slice(nav.indexOf('grilla-nav-fila"'), nav.indexOf('grilla-nav-fila2'));
+  eq('nav: renglón 1 = fecha + saltos + días; renglón 2 = meses + rango', [f1.includes('grillaFechaInput'), f1.includes('grillaDiasSel'), !f1.includes('grillaMeses'), nav.slice(nav.indexOf('grilla-nav-fila2')).includes('grillaRangoLabel')], [true, true, true, true]);
+  eq('nav: pares agrupados (3 .grilla-par de 2 botones)', (nav.match(/<span class="grilla-par">\s*<button[^>]*>[^<]*<\/button>\s*<button[^>]*>[^<]*<\/button>\s*<\/span>/g) || []).length, 3);
+  eq('nav: renglón 1 en grid izq/centro/der', /\.grilla-nav-fila \{ display: grid; grid-template-columns: 1fr auto 1fr;/.test(html), true);
+  eq('nav: 12 meses', /grillaMesesProximos\(today\(\), 12\)/.test(grab('renderGrillaNav')), true);
+  eq('nav: meses scrollean en su fila (sin wrap) y el activo queda a la vista', [/\.grilla-meses \{[^}]*overflow-x: auto/.test(html), /meses\.scrollLeft \+=/.test(grab('renderGrillaNav'))], [true, true]);
 }
 
 // ── Diseño: precio tenue, finde, hoy ────────────────────────────────────────
