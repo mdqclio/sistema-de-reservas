@@ -59,6 +59,8 @@ const env = {
   auditLog: () => {}, closeModal: () => {}, showNotif: (m, t) => { env.lastNotif = [m, t]; }, renderReservas: () => {},
   renderHuespedes: () => {}, renderGrilla: () => {}, renderMapa: () => {}, fmtMoney: (m) => String(m), escapeHtml: s => String(s),
   ESTADO_RESERVA: Object.freeze({ CONFIRMADA: 'confirmada', CHECKIN: 'checkin', CHECKOUT: 'checkout', CANCELADA: 'cancelada' }),
+  // Cajas (feat/cajas): el cobro exige caja; acá se elige la de Jesús.
+  leerCajaObligatoria: () => 'caja-jesus', cajaPorDefecto: () => 'caja-franco',
 };
 const fnNames = ['nightsBetween', 'addDaysStr', 'cargosReservaTotal', 'calcularPrecioReserva', 'totalReserva', 'saldoReserva',
   'reservasDelGrupo', 'repartirPago', 'resumenGrupo', 'cabanaLibreParaGrupo', 'reservaCargosSeleccionados',

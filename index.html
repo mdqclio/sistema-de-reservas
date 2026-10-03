@@ -492,6 +492,15 @@ td.acciones .btn:last-child { margin-right: 0; }
 .grilla-table th.grilla-corner, .grilla-table td.cabaña-label { border-left: none; }
 .grilla-hab-header td { background: var(--surface3) !important; color: var(--text); font-weight: 600; font-size: 11px; padding: 5px 10px; border: 1px solid var(--border2); }
 
+/* ===== CAJAS ===== */
+.caja-saldos { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; padding: 14px; }
+.caja-saldo { display: flex; flex-direction: column; gap: 3px; text-align: left; padding: 10px 12px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); cursor: pointer; }
+.caja-saldo:hover { border-color: var(--border2); }
+.caja-saldo.activa { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.caja-saldo-nombre { font-size: 12px; color: var(--text2); font-weight: 600; }
+.caja-saldo-monto { font-size: 16px; font-weight: 600; font-family: 'DM Mono', monospace; }
+.caja-saldo-monto.neg { color: #f87171; }
+
 /* ===== RECORDATORIO DE CHECK-IN ===== */
 .recordatorio-fila { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
 .recordatorio-quien { flex: 1 1 180px; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
@@ -971,16 +980,29 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
 
     <!-- CAJA DIARIA -->
     <div id="section-caja" class="section">
+      <!-- Saldos por caja (calculados desde los movimientos, por moneda). Click = ver esa caja. -->
+      <div class="card" style="margin-bottom:14px;">
+        <div class="card-header">
+          <h3>💼 Saldos por caja</h3>
+          <button class="btn btn-blue btn-sm" onclick="openTransferencia()">⇄ Transferir entre cajas</button>
+        </div>
+        <div id="cajaSaldos" class="caja-saldos"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
+        <label style="font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;">Caja</label>
+        <select id="cajaVistaSel" onchange="setCajaVista(this.value)" style="padding:7px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);"></select>
+        <span id="caja-transf" style="font-size:12px;color:var(--text3);"></span>
+      </div>
       <div class="stats-grid">
         <div class="stat-card green"><div class="label">Ingresos del día</div><div class="value" id="caja-ingresos">$0</div><div class="sub" id="caja-ingresos-usd">USD 0</div></div>
-        <div class="stat-card red"><div class="label">Egresos del día</div><div class="value" id="caja-egresos">$0</div></div>
-        <div class="stat-card blue"><div class="label">Balance ARS</div><div class="value" id="caja-balance">$0</div></div>
-        <div class="stat-card amber"><div class="label">Balance USD</div><div class="value" id="caja-balance-usd">USD 0</div></div>
+        <div class="stat-card red"><div class="label">Egresos del día</div><div class="value" id="caja-egresos">$0</div><div class="sub" id="caja-egresos-usd">USD 0</div></div>
+        <div class="stat-card blue"><div class="label">Balance ARS del día</div><div class="value" id="caja-balance">$0</div></div>
+        <div class="stat-card amber"><div class="label">Balance USD del día</div><div class="value" id="caja-balance-usd">USD 0</div></div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
         <div class="card">
           <div class="card-header">
-            <h3>Movimientos de hoy</h3>
+            <h3>Movimientos de hoy · <span class="caja-vista-nombre"></span></h3>
             <button class="btn btn-blue btn-sm" onclick="openMovimientoModal()">+ Movimiento</button>
           </div>
           <table>
@@ -989,7 +1011,7 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
           </table>
         </div>
         <div class="card" style="padding:20px;">
-          <h3 style="margin-bottom:16px;font-size:15px;font-weight:600;">Cierre de Caja</h3>
+          <h3 style="margin-bottom:16px;font-size:15px;font-weight:600;">Cierre de caja · <span class="caja-vista-nombre"></span></h3>
           <div class="form-group" style="margin-bottom:12px;">
             <label>Observaciones del día</label>
             <textarea id="cajaObs" rows="3" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:9px 12px;font-size:13px;resize:vertical;"></textarea>
@@ -1002,13 +1024,19 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
             <input type="number" id="cajaTipoCambio" value="1430" style="width:100%;">
             <div id="cotizacionInfo" style="display:none;margin-top:6px;font-size:11px;color:var(--text3);line-height:1.8;"></div>
           </div>
-          <div class="form-group" style="margin-bottom:12px;">
-            <label>Arqueo — efectivo contado en caja</label>
-            <input type="number" id="cajaArqueo" placeholder="Monto real contado" style="width:100%;">
+          <div class="form-row" style="margin-bottom:12px;">
+            <div class="form-group" style="margin:0;">
+              <label>Arqueo — contado en pesos</label>
+              <input type="number" id="cajaArqueo" placeholder="$ contados" style="width:100%;">
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label>Arqueo — contado en dólares</label>
+              <input type="number" id="cajaArqueoUSD" placeholder="US$ contados" style="width:100%;">
+            </div>
           </div>
           <div id="cajaArqueoDif" style="display:none;padding:8px 12px;border-radius:var(--radius);font-size:13px;margin-bottom:12px;"></div>
           <button class="btn btn-ghost btn-sm" style="width:100%;margin-bottom:8px;" onclick="calcArqueo()">Calcular diferencia</button>
-          <button class="btn btn-green" style="width:100%;" onclick="cerrarCaja()">Cerrar Caja del Día</button>
+          <button class="btn btn-green" style="width:100%;" onclick="cerrarCaja()">Cerrar caja del día</button>
           <div id="historialCierres" style="margin-top:16px;"></div>
         </div>
       </div>
@@ -1151,6 +1179,10 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
         <div class="card">
           <div class="card-header"><h3>🏕 Cabañas</h3><span style="font-size:12px;color:var(--text3)">Tipo, m² y capacidad (pax). Se guarda al salir del campo.</span></div>
           <div id="cfg-cabanas" style="overflow-x:auto;"></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>💼 Cajas</h3><span style="font-size:12px;color:var(--text3)">Dónde está la plata. Se guarda al salir del campo. Con movimientos no se borra: se desactiva.</span></div>
+          <div id="cfg-cajas" style="overflow-x:auto;"></div>
         </div>
         <div class="card">
           <div class="card-header"><h3>🏡 Horarios</h3><span style="font-size:12px;color:var(--text3)">Los ve el huésped en el comprobante de la reserva</span></div>
@@ -1477,6 +1509,33 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
   </div>
 </div>
 
+<!-- MODAL TRANSFERENCIA ENTRE CAJAS: dos movimientos vinculados, NO es ingreso ni egreso -->
+<div class="modal-overlay" id="modalTransferencia">
+  <div class="modal">
+    <h2>⇄ Transferir entre cajas</h2>
+    <div class="form-row">
+      <div class="form-group"><label>Desde (origen) *</label><select id="tr-origen" onchange="actualizarSaldoOrigenTransferencia()"></select></div>
+      <div class="form-group"><label>Hacia (destino) *</label><select id="tr-destino"></select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Moneda</label>
+        <select id="tr-moneda" onchange="actualizarSaldoOrigenTransferencia()"><option value="ARS">ARS</option><option value="USD">USD</option></select>
+      </div>
+      <div class="form-group"><label>Monto *</label><input type="number" id="tr-monto" placeholder="0"></div>
+    </div>
+    <div id="tr-saldo-origen" style="font-size:12px;color:var(--text3);margin:-6px 0 10px;"></div>
+    <div class="form-row">
+      <div class="form-group"><label>Fecha</label><input type="date" id="tr-fecha"></div>
+      <div class="form-group"><label>Detalle</label><input type="text" id="tr-concepto" placeholder="Ej: retiro de efectivo de las cabañas"></div>
+    </div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:8px;">Una sola moneda: para cambiar pesos por dólares son dos operaciones aparte. No cuenta como ingreso ni egreso.</div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalTransferencia')">Cancelar</button>
+      <button class="btn btn-blue" onclick="saveTransferencia()">Registrar transferencia</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL RECORDATORIO DE CHECK-IN (21:00 AR, una vez por día) -->
 <div class="modal-overlay" id="modalRecordatorio">
   <div class="modal">
@@ -1510,6 +1569,7 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
         </select>
       </div>
     </div>
+    <div class="form-group"><label>Caja * <span style="text-transform:none;color:var(--text3)">(dónde queda la plata)</span></label><select id="pago-caja"></select></div>
     <div class="form-group"><label>Concepto</label><input type="text" id="pago-concepto" placeholder="Ej: Saldo restante estadía"></div>
     <!-- Solo si la reserva es de un grupo: aplicar a esta sola o repartir entre varias. -->
     <div id="pago-grupo" style="display:none;background:var(--surface2);border-radius:var(--radius);padding:12px;margin-bottom:12px;font-size:13px;">
@@ -1562,6 +1622,10 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
           <option value="mercadopago">Mercado Pago</option>
           <option value="tarjeta">Tarjeta</option>
         </select>
+      </div>
+      <div class="form-group">
+        <label>Caja *</label>
+        <select id="ext-caja"></select>
       </div>
     </div>
     <div class="modal-footer">
@@ -1657,6 +1721,7 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
           <option value="cheque">Cheque</option>
         </select>
       </div>
+      <div class="form-group"><label>Caja *</label><select id="mov-caja"></select></div>
       <div class="form-group"><label>Fecha</label><input type="date" id="mov-fecha"></div>
     </div>
     <div class="form-group"><label>Proveedor (opcional)</label>
@@ -1753,6 +1818,7 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
         </select>
       </div>
     </div>
+    <div class="form-group"><label>Caja * <span style="text-transform:none;color:var(--text3)">(de dónde sale)</span></label><select id="rec-caja"></select></div>
     <div class="form-group"><label>Proveedor (opcional)</label>
       <select id="rec-proveedor"><option value="">— Sin proveedor —</option></select>
     </div>
@@ -1894,6 +1960,10 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
             <option value="mercadopago">Mercado Pago</option>
             <option value="tarjeta">Tarjeta</option>
           </select>
+        </div>
+        <div class="form-group">
+          <label>Caja *</label>
+          <select id="horario-caja"></select>
         </div>
       </div>
     </div>
@@ -2327,6 +2397,10 @@ async function writeMovimiento(reg) {
   // aunque el call site (seña, saldo check-in, comisión, savePago) no los pase.
   if (reg.facturado === undefined) reg.facturado = false;
   if (reg.nroComprobante === undefined) reg.nroComprobante = '';
+  // Caja: solo en movimientos NUEVOS que no la traen (default por método). Un movimiento
+  // que ya existe y se reescribe (conciliar factura, marcar revertido) queda como estaba:
+  // los viejos sin caja se leen como de la principal (cajaDeMovimiento), no se migran.
+  if (reg.caja === undefined && !(cache.movimientos && cache.movimientos[reg.id])) reg.caja = cajaPorDefecto(reg.metodo);
   const id = reg.id;
   ensureMovimientosObj();
   cache.movimientos[id] = reg;        // update optimista del cache
@@ -2571,6 +2645,10 @@ const colCierres    = makeLiveCollection('cierres',               liveRerender('
 const colTipoCambio = makeLiveCollection('tipo_cambio_historial', null); // histórico, sin re-render en vivo
 const colRecurrentes= makeLiveCollection('recurrentes',           liveRerender('contabilidad', () => renderAcct(currentAcctTab)));
 const colPresupuestos=makeLiveCollection('presupuestos',          liveRerender('contabilidad', () => renderAcct(currentAcctTab)), migratePresupuestos);
+// Cajas (dónde está la plata: Franco, Jesús, Banco, MP…). Re-render de Configuración y
+// Caja Diaria, sin pisar un formulario abierto.
+const colCajas      = makeLiveCollection('cajas',
+  () => { if (anyModalOpen()) return; if (sectionActive('botconfig')) renderConfigCajas(); if (sectionActive('caja')) renderCaja(); });
 const colKnowledge  = makeLiveCollection('knowledge_base',
   () => { if (sectionActive('knowledge') && !anyModalOpen()
             && ![...document.querySelectorAll('.kb-text-edit')].some(t => t.style.display === 'block')) renderKnowledge(); },
@@ -2628,6 +2706,7 @@ async function loadAllData() {
     try { attachPendientesLive(); } catch(e) { console.error('pendientes live init error:', e); }
     // Facturación: catálogo de emisores (seed una sola vez) + listeners de emisores/facturas.
     try { await seedEmisores(); } catch(e) { console.error('emisores seed error:', e); }
+    try { await seedCajas(); } catch(e) { console.error('cajas seed error:', e); }
     try { attachFacturacionLive(); } catch(e) { console.error('facturacion live init error:', e); }
     // Corrige tipo/mts2/capacidad de las cabañas ya cargadas (una sola vez, aislada).
     try { await migrateHabitacionesConfig(); } catch(e) { console.error('habitaciones_config migration error:', e); }
@@ -4424,6 +4503,7 @@ function openPago(rid) {
       <div><span style="color:var(--text3);display:block;font-size:11px">Total estadía</span><strong style="color:var(--accent2)">${fmtMoney(total,r.moneda)}</strong></div>
       <div><span style="color:var(--text3);display:block;font-size:11px">Saldo pendiente</span><strong style="color:#fbbf24">${fmtMoney(r.saldo||0,r.moneda)}</strong></div>
     </div>`;
+  llenarSelectCaja('pago-caja', '');
   openModal('modalPago');
 }
 
@@ -4470,12 +4550,12 @@ function onPagoModoChange() {
 
 // Aplica un cobro a UNA reserva: actualiza pagado/saldo/estadoPago y registra su
 // movimiento (1 movimiento por reserva; caja y facturación no saben de grupos).
-function aplicarPagoReserva(r, monto, metodo, concepto) {
+function aplicarPagoReserva(r, monto, metodo, concepto, caja) {
   r.pagado = (Number(r.pagado)||0) + monto;
   r.saldo = Math.max((Number(r.saldo)||0) - monto, 0);
   r.estadoPago = r.saldo <= 0 ? 'total' : 'senia';
   writeReserva(r); // escritura por hijo
-  writeMovimiento({ id:nuevoMovimientoId(), tipo:'ingreso', cat:'reserva', moneda:r.moneda, monto, metodo, fecha:today(), concepto, reservaId:r.id }); // escritura por hijo
+  writeMovimiento({ id:nuevoMovimientoId(), tipo:'ingreso', cat:'reserva', moneda:r.moneda, monto, metodo, fecha:today(), concepto, reservaId:r.id, caja: caja || cajaPorDefecto(metodo) }); // escritura por hijo
   refrescarTokenReserva(r); // saldo del voucher al día
 }
 
@@ -4485,6 +4565,8 @@ function savePago() {
   const metodo = document.getElementById('pago-metodo').value;
   const concepto = document.getElementById('pago-concepto').value;
   if(!monto||monto<=0) { showNotif('Ingresá un monto válido','error'); return; }
+  const caja = leerCajaObligatoria('pago-caja');
+  if (!caja) return;
   const reservas = getReservas();
   const r = reservas.find(x=>x.id===rid);
   if(!r) return;
@@ -4499,14 +4581,14 @@ function savePago() {
     const pagador = getHuespedNombre(r.huespedId, r);
     rep.partes.forEach(p => {
       const x = elegidas.find(y => y.id === p.id);
-      aplicarPagoReserva(x, p.monto, metodo, `${concepto || 'Pago'} (pago grupal de ${pagador}) - Cab.${x.hab}`);
+      aplicarPagoReserva(x, p.monto, metodo, `${concepto || 'Pago'} (pago grupal de ${pagador}) - Cab.${x.hab}`, caja);
     });
     closeModal('modalPago');
     renderReservas();
     showNotif(`💰 Pago grupal registrado: ${fmtMoney(monto, r.moneda)} en ${rep.partes.length} reservas`);
     return;
   }
-  aplicarPagoReserva(r, monto, metodo, concepto);
+  aplicarPagoReserva(r, monto, metodo, concepto, caja);
   closeModal('modalPago');
   renderReservas();
   showNotif('💰 Pago registrado: '+fmtMoney(monto, r.moneda));
@@ -4531,6 +4613,7 @@ function openExtender(rid) {
   document.getElementById('ext-cobrar').addEventListener('change', function() {
     document.getElementById('ext-pago-row').style.display = this.value==='si' ? '' : 'none';
   });
+  llenarSelectCaja('ext-caja', '');
   openModal('modalExtender');
 }
 
@@ -4552,6 +4635,8 @@ async function saveExtension() {
   const nuevaSalida = document.getElementById('ext-nueva-salida').value;
   const cobrar = document.getElementById('ext-cobrar').value;
   const metodo = document.getElementById('ext-metodo').value;
+  const caja = document.getElementById('ext-caja')?.value || '';
+  if (cobrar === 'si' && !caja) { showNotif('Elegí la caja donde entra el cobro', 'error'); return; }
   const reservas = getReservas();
   const r = reservas.find(x=>x.id===rid);
   if(!r || !nuevaSalida || nuevaSalida <= r.salida) { showNotif('Elegí una fecha posterior a la salida actual','error'); return; }
@@ -4560,7 +4645,7 @@ async function saveExtension() {
   r.salida = nuevaSalida;
   if(cobrar === 'si') {
     r.pagado = (Number(r.pagado)||0) + montoExtra;
-    await writeMovimiento({ id:nuevoMovimientoId(), tipo:'ingreso', cat:'reserva', moneda:r.moneda, monto:montoExtra, metodo, fecha:today(), concepto:`Extensión ${extra} noche(s) - ${getHuespedNombre(r.huespedId)} Cab.${r.hab}` }); // escritura por hijo
+    await writeMovimiento({ id:nuevoMovimientoId(), tipo:'ingreso', cat:'reserva', moneda:r.moneda, monto:montoExtra, metodo, fecha:today(), concepto:`Extensión ${extra} noche(s) - ${getHuespedNombre(r.huespedId)} Cab.${r.hab}`, caja }); // escritura por hijo
   } else {
     r.saldo = (Number(r.saldo)||0) + montoExtra;
     r.estadoPago = 'senia';
@@ -5487,6 +5572,8 @@ function openMovimientoModal() {
   document.getElementById('mov-comprobante').value = '';
   document.getElementById('mov-tipo').value = 'egreso';
   populateMovCats();
+  // En Caja Diaria se sugiere la caja que se está mirando; en Contabilidad, elegir.
+  llenarSelectCaja('mov-caja', sectionActive('caja') ? cajaVista : '');
   openModal('modalMovimiento');
 }
 
@@ -5535,13 +5622,7 @@ function renderAcct(tab) {
     const sinFacturarARS = cobradoARS - facturadoARS;
     const ivaFacturado = facturadoARS / 1.21 * 0.21;
     // Resumen por categoría
-    const porCat = {};
-    movsmes.forEach(m => {
-      const k = m.cat || 'Otro';
-      if (!porCat[k]) porCat[k] = { ing:0, eg:0 };
-      if (m.tipo==='ingreso') porCat[k].ing += Number(m.monto);
-      else porCat[k].eg += Number(m.monto);
-    });
+    const porCat = resumenPorCategoria(movsmes); // sin transferencias entre cajas
     c.innerHTML = `
       <div class="acct-grid" style="margin-bottom:16px;">
         <div class="stat-card green"><div class="label">Ingresos ARS (mes)</div><div class="value">${fmtMoney(ingARS)}</div></div>
@@ -5588,8 +5669,9 @@ function renderAcct(tab) {
         <tbody>${filtered.length
           ? filtered.sort((a,b)=>b.fecha>a.fecha?1:-1).map(m => {
               const prov = m.proveedorId ? (colProveedores.list().find(p=>p.id===m.proveedorId)?.nombre||'') : '';
-              const color = m.tipo==='ingreso' ? '#34d399' : '#f87171';
-              const signo = m.tipo==='ingreso' ? '+' : '-';
+              const esTr = esTransferencia(m);
+              const color = esTr ? 'var(--accent2)' : (m.tipo==='ingreso' ? '#34d399' : '#f87171');
+              const signo = esTr ? '⇄ ' : (m.tipo==='ingreso' ? '+' : '-');
               const tcInfo = m.moneda==='USD'&&m.tc ? ` <span style="font-size:10px;color:var(--text3)">(TC $${m.tc})</span>` : '';
               const impInfo = m.impuesto ? ` <span style="font-size:10px;color:var(--amber)">IMP ${m.impuestoPct}%</span>` : '';
               // Contraasiento: el revertido se atenúa, la reversa se marca. Ninguno
@@ -5606,7 +5688,7 @@ function renderAcct(tab) {
                 <td${revertido ? ' style="text-decoration:line-through"' : ''}>${escapeHtml(m.concepto)}${impInfo}${revInfo}</td>
                 <td><span class="badge ${m.tipo==='ingreso'?'green':'red'}">${m.cat||'—'}</span></td>
                 <td style="font-weight:500;color:${color}">${signo}${fmtMoney(m.monto,m.moneda)}${tcInfo}</td>
-                <td>${m.metodo||'—'}</td>
+                <td>${m.metodo||'—'}<div style="font-size:10px;color:var(--text3)">${escapeHtml(nombreCaja(cajaDeMovimiento(m)))}</div></td>
                 <td style="font-size:12px;color:var(--text3)">${prov}</td>
                 <td style="text-align:right;white-space:nowrap">${accion}</td>
               </tr>`;
@@ -5745,12 +5827,15 @@ function openRecurrenteModal(id) {
   document.getElementById('rec-metodo').value = r?.metodo || 'transferencia';
   document.getElementById('rec-proveedor').value = r?.proveedorId || '';
   if (r?.cat) document.getElementById('rec-cat').value = r.cat;
+  llenarSelectCaja('rec-caja', r?.caja || '');
   openModal('modalRecurrente');
 }
 
 async function saveRecurrente() {
   const concepto = document.getElementById('rec-concepto').value.trim();
   if (!concepto) { showNotif('El concepto es obligatorio', 'error'); return; }
+  const caja = leerCajaObligatoria('rec-caja');
+  if (!caja) return;
   const id = document.getElementById('rec-id').value;
   const prev = id ? colRecurrentes.list().find(x => x.id === id) : null;
   const data = {
@@ -5763,6 +5848,7 @@ async function saveRecurrente() {
     dia: Number(document.getElementById('rec-dia').value),
     metodo: document.getElementById('rec-metodo').value,
     proveedorId: document.getElementById('rec-proveedor').value,
+    caja,
   };
   await colRecurrentes.write(data); // por hijo
   closeModal('modalRecurrente');
@@ -5796,6 +5882,7 @@ async function aplicarRecurrentes() {
         concepto: r.concepto + ' (recurrente automático)',
         proveedorId: r.proveedorId || '',
         esRecurrente: true,
+        caja: r.caja || cajaPorDefecto(r.metodo || 'transferencia'), // recurrentes viejos sin caja: por método
       });
       r.ultimaAplicacion = hoy;
       await colRecurrentes.write(r); // por hijo: marca aplicado sin pisar otros
@@ -5961,14 +6048,16 @@ function exportarCSV() {
   const movs = getMovimientos();
   if (!movs.length) { showNotif('No hay movimientos para exportar', 'error'); return; }
   const provs = colProveedores.list();
-  const headers = ['Fecha','Tipo','Categoría','Concepto','Moneda','Monto','TC','Monto ARS equiv.','Método','Proveedor','Impuesto','% Impuesto','Referencia'];
+  const headers = ['Fecha','Tipo','Categoría','Concepto','Moneda','Monto','TC','Monto ARS equiv.','Método','Proveedor','Impuesto','% Impuesto','Referencia','Caja','Transferencia'];
+  const cajasCsv = getCajas();
   const rows = movs.sort((a,b)=>a.fecha>b.fecha?1:-1).map(m => {
     const prov = m.proveedorId ? (provs.find(p=>p.id===m.proveedorId)?.nombre||'') : '';
     const montoARS = m.moneda==='USD' && m.tc ? (Number(m.monto)*Number(m.tc)).toFixed(2) : m.monto;
     return [
       m.fecha, m.tipo, m.cat||'', m.concepto, m.moneda, m.monto,
       m.tc||'', montoARS, m.metodo||'', prov,
-      m.impuesto?'Sí':'No', m.impuestoPct||'', m.ref||''
+      m.impuesto?'Sí':'No', m.impuestoPct||'', m.ref||'',
+      nombreCaja(cajaDeMovimiento(m), cajasCsv), m.transferenciaId ? `${m.direccion} (${m.transferenciaId})` : ''
     ].map(v => `"${String(v).replace(/"/g,'""')}"`).join(',');
   });
   const csv = '\uFEFF' + [headers.join(','), ...rows].join('\n');
@@ -6415,39 +6504,398 @@ function irAFacturacion() {
 }
 
 // ===================== CAJA DIARIA =====================
+// ===================== CAJAS =====================
+// Dónde está la plata. Nodo /cabanas/cajas/{id} = { id, nombre, tipo, activa, orden,
+// saldoInicial? }. Cada movimiento lleva `caja` (id). Los movimientos viejos SIN caja se
+// leen como de la caja principal (Franco): contabilidad es append-only, no se reescribe.
+// Saldos: siempre calculados desde los movimientos, por moneda (ARS y USD nunca se suman).
+const CAJA_PRINCIPAL = 'caja-franco';
+const TIPOS_CAJA = ['efectivo', 'banco', 'digital'];
+const MONEDAS_CAJA = ['ARS', 'USD'];
+const CAJAS_SEED = {
+  'caja-franco': { id: 'caja-franco', nombre: 'Franco (efectivo)', tipo: 'efectivo', activa: true, orden: 1 },
+  'caja-jesus':  { id: 'caja-jesus',  nombre: 'Jesús (efectivo)',  tipo: 'efectivo', activa: true, orden: 2 },
+  'caja-banco':  { id: 'caja-banco',  nombre: 'Banco',             tipo: 'banco',    activa: true, orden: 3 },
+  'caja-mp':     { id: 'caja-mp',     nombre: 'Mercado Pago',      tipo: 'digital',  activa: true, orden: 4 },
+};
+// Caja sugerida por método de pago, para los movimientos que se generan sin formulario
+// de caja (seña al crear la reserva, comisión, recurrentes viejos). Si esa caja no está
+// activa, la principal.
+const CAJA_POR_METODO = { efectivo: 'caja-franco', transferencia: 'caja-banco', tarjeta: 'caja-banco', debito: 'caja-banco', cheque: 'caja-banco', mercadopago: 'caja-mp' };
+// Transferencia entre cajas: NO es ingreso ni egreso del negocio. Tipo propio, dos
+// movimientos (salida / entrada) con el mismo transferenciaId.
+const TIPO_TRANSFERENCIA = 'transferencia';
+
+function cajaDeMovimiento(m) { return (m && m.caja) || CAJA_PRINCIPAL; }
+function esTransferencia(m) { return !!m && m.tipo === TIPO_TRANSFERENCIA; }
+// Signo del movimiento en el saldo de SU caja: ingreso +; egreso/devolución −;
+// transferencia según dirección.
+function signoEnCaja(m) {
+  if (esTransferencia(m)) return m.direccion === 'entrada' ? 1 : -1;
+  return m.tipo === 'ingreso' ? 1 : -1;
+}
+const redondeo2 = (n) => Math.round(n * 100) / 100;
+
+function cajasOrdenadas(list) {
+  return (list || []).filter(c => c && c.id).slice()
+    .sort((a, b) => (Number(a.orden) || 0) - (Number(b.orden) || 0) || String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es'));
+}
+// Cajas cargadas; si el nodo todavía no llegó (o no hay permisos), las del seed.
+function getCajas() {
+  const l = cajasOrdenadas(colCajas.list());
+  return l.length ? l : cajasOrdenadas(Object.values(CAJAS_SEED));
+}
+function nombreCaja(id, cajas = getCajas()) {
+  return (cajas.find(c => c.id === id) || {}).nombre || id || '—';
+}
+function cajaPorDefecto(metodo, cajas = getCajas()) {
+  const id = CAJA_POR_METODO[metodo];
+  const c = id && cajas.find(x => x.id === id);
+  return (c && c.activa !== false) ? id : CAJA_PRINCIPAL;
+}
+
+// Saldos por caja y moneda: { [cajaId]: { ARS, USD } }. Calculados, nunca guardados.
+// saldoInicial opcional de la caja ({ ARS, USD, desde }): se parte de ese monto y solo
+// cuentan los movimientos con fecha >= desde (sirve para la principal, que hereda todo
+// el historial sin caja).
+function saldosPorCaja(movs, cajas) {
+  const out = {}, desde = {};
+  (cajas || []).forEach(c => {
+    out[c.id] = {};
+    const si = c.saldoInicial;
+    if (si && si.desde) {
+      desde[c.id] = si.desde;
+      MONEDAS_CAJA.forEach(mon => { if (Number(si[mon])) out[c.id][mon] = Number(si[mon]); });
+    }
+  });
+  (movs || []).forEach(m => {
+    if (!m) return;
+    const c = cajaDeMovimiento(m);
+    if (desde[c] && String(m.fecha || '') < desde[c]) return;
+    const mon = m.moneda || 'ARS';
+    out[c] = out[c] || {};
+    out[c][mon] = redondeo2((out[c][mon] || 0) + signoEnCaja(m) * (Number(m.monto) || 0));
+  });
+  return out;
+}
+
+// Resumen de UNA caja en UNA fecha, por moneda. Ingresos y egresos son del negocio (las
+// transferencias quedan afuera); las transferencias van aparte. neto = lo que cambió el
+// saldo de la caja ese día.
+function resumenCajaDia(movs, cajaId, fecha) {
+  const r = {};
+  MONEDAS_CAJA.forEach(mon => { r[mon] = { ingresos: 0, egresos: 0, transfEntrada: 0, transfSalida: 0, neto: 0 }; });
+  (movs || []).forEach(m => {
+    if (!m || m.fecha !== fecha || cajaDeMovimiento(m) !== cajaId) return;
+    const mon = m.moneda || 'ARS';
+    const x = r[mon] || (r[mon] = { ingresos: 0, egresos: 0, transfEntrada: 0, transfSalida: 0, neto: 0 });
+    const v = Number(m.monto) || 0;
+    if (esTransferencia(m)) { if (m.direccion === 'entrada') x.transfEntrada += v; else x.transfSalida += v; }
+    else if (m.tipo === 'ingreso') x.ingresos += v;
+    else x.egresos += v; // egreso y devolución
+    x.neto += signoEnCaja(m) * v;
+  });
+  Object.values(r).forEach(x => Object.keys(x).forEach(k => { x[k] = redondeo2(x[k]); }));
+  return r;
+}
+
+// Resumen por categoría de Contabilidad: las transferencias no son ingreso ni egreso.
+function resumenPorCategoria(movs) {
+  const porCat = {};
+  (movs || []).forEach(m => {
+    if (!m || esTransferencia(m)) return;
+    const k = m.cat || 'Otro';
+    if (!porCat[k]) porCat[k] = { ing: 0, eg: 0 };
+    if (m.tipo === 'ingreso') porCat[k].ing += Number(m.monto);
+    else porCat[k].eg += Number(m.monto);
+  });
+  return porCat;
+}
+
+// Valida una transferencia. Devuelve '' si está OK o el motivo. Una sola moneda: pesos por
+// dólares son dos operaciones aparte (no hay conversión).
+function validarTransferencia(t, cajas) {
+  const activa = id => cajas.some(c => c.id === id && c.activa !== false);
+  if (!t.origen || !t.destino) return 'Elegí la caja de origen y la de destino';
+  if (t.origen === t.destino) return 'El origen y el destino tienen que ser cajas distintas';
+  if (!activa(t.origen) || !activa(t.destino)) return 'Las dos cajas tienen que estar activas';
+  if (!MONEDAS_CAJA.includes(t.moneda)) return 'Moneda inválida';
+  if (t.monedaDestino !== undefined && t.monedaDestino !== t.moneda) return 'No se puede transferir entre monedas distintas: son dos operaciones aparte';
+  if (!(Number(t.monto) > 0)) return 'Ingresá un monto mayor a 0';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(t.fecha || '')) return 'Fecha inválida';
+  return '';
+}
+// Arma los DOS movimientos de una transferencia (egreso en origen, ingreso en destino):
+// mismo monto, misma moneda, mismo transferenciaId.
+function armarTransferencia(t, ids, cajas) {
+  const base = {
+    tipo: TIPO_TRANSFERENCIA, cat: 'Transferencia entre cajas', moneda: t.moneda, monto: Number(t.monto),
+    metodo: 'interno', fecha: t.fecha, transferenciaId: ids.transferenciaId, facturado: false, nroComprobante: '',
+  };
+  const txt = t.concepto ? ` — ${t.concepto}` : '';
+  return [
+    { ...base, id: ids.salida, caja: t.origen, direccion: 'salida', cajaContraparte: t.destino,
+      concepto: `Transferencia a ${nombreCaja(t.destino, cajas)}${txt}`.slice(0, 200) },
+    { ...base, id: ids.entrada, caja: t.destino, direccion: 'entrada', cajaContraparte: t.origen,
+      concepto: `Transferencia desde ${nombreCaja(t.origen, cajas)}${txt}`.slice(0, 200) },
+  ];
+}
+
+// Movimientos de una caja (incluye los viejos sin caja si es la principal).
+function movimientosDeCaja(movs, cajaId) { return (movs || []).filter(m => m && cajaDeMovimiento(m) === cajaId); }
+// Una caja con movimientos no se borra (se desactiva). La principal nunca: hereda los
+// movimientos viejos sin caja.
+function puedeBorrarCaja(cajaId, movs) {
+  if (cajaId === CAJA_PRINCIPAL) return false;
+  return movimientosDeCaja(movs, cajaId).length === 0;
+}
+// Valida un campo editable de caja. Devuelve el valor a guardar o undefined si es inválido.
+function normalizarCajaCampo(field, val) {
+  if (field === 'nombre') { const v = String(val || '').trim(); return v && v.length <= 60 ? v : undefined; }
+  if (field === 'tipo') return TIPOS_CAJA.includes(val) ? val : undefined;
+  if (field === 'activa') return val === true || val === 'true';
+  if (field === 'orden') { const n = Number(val); return String(val).trim() !== '' && Number.isInteger(n) ? n : undefined; }
+  if (field === 'saldoInicialARS' || field === 'saldoInicialUSD') { if (String(val).trim() === '') return 0; const n = Number(val); return Number.isFinite(n) ? redondeo2(n) : undefined; }
+  if (field === 'saldoInicialDesde') { if (!val) return ''; return /^\d{4}-\d{2}-\d{2}$/.test(val) ? val : undefined; }
+  return undefined;
+}
+
+// Siembra las 4 cajas iniciales una sola vez (flag persistente, como emisores). No pisa
+// cajas que ya existan. Flag propio: _migrado/cajas lo usa la migración del nodo.
+async function seedCajas() {
+  const flagRef = ref(db, 'cabanas/_migrado/cajas_seed');
+  const flagSnap = await get(flagRef);
+  if (flagSnap.exists() && flagSnap.val()) return;
+  const snap = await get(ref(db, 'cabanas/cajas'));
+  const actual = snap.exists() ? (snap.val() || {}) : {};
+  const faltan = {};
+  Object.entries(CAJAS_SEED).forEach(([id, c]) => { if (!actual[id]) faltan[id] = c; });
+  if (Object.keys(faltan).length) await update(ref(db, 'cabanas/cajas'), faltan);
+  await set(flagRef, true);
+}
+
+// <option>s de caja para los formularios. Solo activas (+ la actual aunque esté inactiva).
+// Sin preselección: elegir la caja es obligatorio.
+function opcionesCajaHTML(actual) {
+  const cajas = getCajas().filter(c => c.activa !== false || c.id === actual);
+  return `<option value="">— Elegí la caja —</option>` + cajas.map(c =>
+    `<option value="${escapeHtml(c.id)}" ${c.id === actual ? 'selected' : ''}>${escapeHtml(c.nombre)}</option>`).join('');
+}
+function llenarSelectCaja(selId, actual) {
+  const el = document.getElementById(selId);
+  if (el) el.innerHTML = opcionesCajaHTML(actual || '');
+}
+// Lee una caja obligatoria de un select. '' si no eligió (y avisa).
+function leerCajaObligatoria(selId) {
+  const v = document.getElementById(selId)?.value || '';
+  if (!v) showNotif('Elegí la caja donde entra / sale la plata', 'error');
+  return v;
+}
+function fmtSaldoMonedas(sal) {
+  const partes = MONEDAS_CAJA.filter(mon => Number(sal?.[mon])).map(mon => fmtMoney(sal[mon], mon));
+  return partes.length ? partes.join(' · ') : fmtMoney(0, 'ARS');
+}
+
+// ---- Configuración: CRUD de cajas ----
+function renderConfigCajas() {
+  const c = document.getElementById('cfg-cajas');
+  if (!c) return;
+  const cajas = getCajas();
+  const movs = getMovimientos();
+  const rows = cajas.map(k => {
+    const si = k.saldoInicial || {};
+    const nMov = movimientosDeCaja(movs, k.id).length;
+    return `<tr${k.activa === false ? ' style="opacity:.55"' : ''}>
+      <td><input type="text" ${INP} style="min-width:150px" value="${escapeHtml(k.nombre || '')}" onchange="updateCaja('${k.id}','nombre',this.value)">${k.id === CAJA_PRINCIPAL ? ' <span class="badge blue" style="font-size:10px">Principal</span>' : ''}</td>
+      <td><select ${INP} onchange="updateCaja('${k.id}','tipo',this.value)">${TIPOS_CAJA.map(t => `<option value="${t}" ${k.tipo === t ? 'selected' : ''}>${t}</option>`).join('')}</select></td>
+      <td style="text-align:center"><input type="checkbox" ${k.activa !== false ? 'checked' : ''} ${k.id === CAJA_PRINCIPAL ? 'disabled title="La principal no se desactiva"' : ''} onchange="updateCaja('${k.id}','activa',this.checked)"></td>
+      <td><input type="number" step="1" ${INP} style="width:60px" value="${k.orden ?? ''}" onchange="updateCaja('${k.id}','orden',this.value)"></td>
+      <td><input type="number" ${INP} style="width:100px" value="${si.ARS || ''}" placeholder="0" onchange="updateCaja('${k.id}','saldoInicialARS',this.value)"></td>
+      <td><input type="number" ${INP} style="width:80px" value="${si.USD || ''}" placeholder="0" onchange="updateCaja('${k.id}','saldoInicialUSD',this.value)"></td>
+      <td><input type="date" ${INP} value="${si.desde || ''}" onchange="updateCaja('${k.id}','saldoInicialDesde',this.value)"></td>
+      <td style="font-size:12px;color:var(--text3);text-align:center">${nMov}</td>
+      <td>${k.id === CAJA_PRINCIPAL ? '' : `<button class="btn btn-red btn-sm" title="Borrar (solo sin movimientos)" onclick="deleteCaja('${k.id}')">🗑</button>`}</td>
+    </tr>`;
+  }).join('');
+  c.innerHTML = `<table class="pricing-table">
+      <thead><tr><th>Nombre</th><th>Tipo</th><th>Activa</th><th>Orden</th><th>Saldo inicial $</th><th>Saldo inicial US$</th><th>Contado el</th><th>Movs.</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div style="padding:10px 14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+      <button class="btn btn-blue btn-sm" onclick="addCaja()">＋ Agregar caja</button>
+      <span style="font-size:11px;color:var(--text3)">Saldo inicial: lo contado en esa caja en la fecha indicada; el saldo cuenta los movimientos desde ese día. Vacío = todo el historial.</span>
+    </div>`;
+}
+async function addCaja() {
+  const cajas = getCajas();
+  const orden = Math.max(0, ...cajas.map(c => Number(c.orden) || 0)) + 1;
+  const reg = { id: colCajas.nuevoId(), nombre: 'Nueva caja', tipo: 'efectivo', activa: true, orden };
+  await colCajas.write(reg);
+  auditLog('crear', 'Caja', reg.nombre);
+  renderConfigCajas();
+}
+async function updateCaja(id, field, val) {
+  const prev = getCajas().find(c => c.id === id);
+  if (!prev) return;
+  const v = normalizarCajaCampo(field, val);
+  if (v === undefined) { showNotif('Valor inválido', 'error'); renderConfigCajas(); return; }
+  if (field === 'activa' && id === CAJA_PRINCIPAL && v === false) { showNotif('La caja principal no se desactiva', 'error'); renderConfigCajas(); return; }
+  const reg = { ...prev };
+  if (field.startsWith('saldoInicial')) {
+    const si = { ...(prev.saldoInicial || {}) };
+    if (field === 'saldoInicialARS') si.ARS = v;
+    if (field === 'saldoInicialUSD') si.USD = v;
+    if (field === 'saldoInicialDesde') si.desde = v;
+    reg.saldoInicial = si;
+  } else reg[field] = v;
+  await colCajas.write(reg);
+  auditLog('editar', 'Caja', `${prev.nombre} ${field}=${v}`);
+  renderConfigCajas();
+}
+async function deleteCaja(id) {
+  const caja = getCajas().find(c => c.id === id);
+  if (!caja) return;
+  const movs = getMovimientos();
+  if (!puedeBorrarCaja(id, movs)) {
+    const n = movimientosDeCaja(movs, id).length;
+    if (id !== CAJA_PRINCIPAL && caja.activa !== false
+        && confirm(`"${caja.nombre}" tiene ${n} movimiento(s): no se puede borrar.\n\n¿Desactivarla? Deja de aparecer en los formularios; su historial y su saldo se conservan.`)) {
+      await updateCaja(id, 'activa', false);
+    } else if (id === CAJA_PRINCIPAL || caja.activa === false) {
+      showNotif(`"${caja.nombre}" tiene ${n} movimiento(s): no se puede borrar`, 'error');
+    }
+    return;
+  }
+  if (!confirm(`¿Borrar la caja "${caja.nombre}"? No tiene movimientos.`)) return;
+  await colCajas.remove(id);
+  auditLog('borrar', 'Caja', caja.nombre);
+  renderConfigCajas();
+}
+
+// ---- Transferencias entre cajas ----
+function openTransferencia(origen) {
+  llenarSelectCaja('tr-origen', origen || '');
+  llenarSelectCaja('tr-destino', '');
+  document.getElementById('tr-moneda').value = 'ARS';
+  document.getElementById('tr-monto').value = '';
+  document.getElementById('tr-fecha').value = today();
+  document.getElementById('tr-concepto').value = '';
+  actualizarSaldoOrigenTransferencia();
+  openModal('modalTransferencia');
+}
+function actualizarSaldoOrigenTransferencia() {
+  const el = document.getElementById('tr-saldo-origen');
+  if (!el) return;
+  const origen = document.getElementById('tr-origen').value;
+  const mon = document.getElementById('tr-moneda').value;
+  if (!origen) { el.textContent = ''; return; }
+  const sal = (saldosPorCaja(getMovimientos(), getCajas())[origen] || {})[mon] || 0;
+  el.textContent = `Saldo de ${nombreCaja(origen)} en ${mon}: ${fmtMoney(sal, mon)}`;
+}
+async function saveTransferencia() {
+  const cajas = getCajas();
+  const t = {
+    origen: document.getElementById('tr-origen').value,
+    destino: document.getElementById('tr-destino').value,
+    moneda: document.getElementById('tr-moneda').value,
+    monto: Number(document.getElementById('tr-monto').value),
+    fecha: document.getElementById('tr-fecha').value,
+    concepto: document.getElementById('tr-concepto').value.trim(),
+  };
+  const err = validarTransferencia(t, cajas);
+  if (err) { showNotif(err, 'error'); return; }
+  const sal = (saldosPorCaja(getMovimientos(), cajas)[t.origen] || {})[t.moneda] || 0;
+  if (t.monto > sal && !confirm(`${nombreCaja(t.origen, cajas)} tiene ${fmtMoney(sal, t.moneda)} según el sistema y vas a transferir ${fmtMoney(t.monto, t.moneda)}. ¿Seguir igual?`)) return;
+  const [salida, entrada] = armarTransferencia(t, { transferenciaId: 'tr' + nuevoMovimientoId(), salida: nuevoMovimientoId(), entrada: nuevoMovimientoId() }, cajas);
+  await writeMovimiento(salida);
+  await writeMovimiento(entrada);
+  auditLog('transferencia', 'Caja', `${fmtMoney(t.monto, t.moneda)} ${nombreCaja(t.origen, cajas)} → ${nombreCaja(t.destino, cajas)}`);
+  closeModal('modalTransferencia');
+  renderCaja();
+  showNotif(`⇄ Transferencia registrada: ${fmtMoney(t.monto, t.moneda)} a ${nombreCaja(t.destino, cajas)}`);
+}
+
+// Caja que se está mirando / cerrando en Caja Diaria (memoria de la sesión).
+let cajaVista = CAJA_PRINCIPAL;
+function setCajaVista(id) {
+  const nueva = id || CAJA_PRINCIPAL;
+  if (nueva !== cajaVista) {
+    // El arqueo es de UNA caja: al cambiar de caja no puede quedar lo contado de la otra.
+    ['cajaArqueo', 'cajaArqueoUSD'].forEach(k => { const el = document.getElementById(k); if (el) el.value = ''; });
+    const dif = document.getElementById('cajaArqueoDif'); if (dif) dif.style.display = 'none';
+  }
+  cajaVista = nueva;
+  renderCaja();
+}
+
 function renderCaja() {
   const tod = today();
   document.getElementById('mov-fecha').value = tod;
-  const movs = getMovimientos().filter(m=>m.fecha===tod);
-  const ingARS = movs.filter(m=>m.tipo==='ingreso'&&m.moneda==='ARS').reduce((a,b)=>a+Number(b.monto),0);
-  const ingUSD = movs.filter(m=>m.tipo==='ingreso'&&m.moneda==='USD').reduce((a,b)=>a+Number(b.monto),0);
-  const egARS = movs.filter(m=>m.tipo==='egreso'&&m.moneda==='ARS').reduce((a,b)=>a+Number(b.monto),0);
-  document.getElementById('caja-ingresos').textContent = fmtMoney(ingARS);
-  document.getElementById('caja-ingresos-usd').textContent = 'USD '+ingUSD.toLocaleString('es-AR');
-  document.getElementById('caja-egresos').textContent = fmtMoney(egARS);
-  document.getElementById('caja-balance').textContent = fmtMoney(ingARS-egARS);
-  document.getElementById('caja-balance-usd').textContent = 'USD '+ingUSD.toLocaleString('es-AR');
+  const cajas = getCajas();
+  if (!cajas.some(c => c.id === cajaVista)) cajaVista = CAJA_PRINCIPAL;
+  const movsAll = getMovimientos();
+  const saldos = saldosPorCaja(movsAll, cajas);
+
+  // Saldos de todas las cajas (lo que Franco mira antes de ir a las cabañas).
+  const sb = document.getElementById('cajaSaldos');
+  if (sb) sb.innerHTML = cajas
+    .filter(c => c.activa !== false || MONEDAS_CAJA.some(mon => Number(saldos[c.id]?.[mon])))
+    .map(c => `<button type="button" class="caja-saldo${c.id === cajaVista ? ' activa' : ''}" onclick="setCajaVista('${c.id}')">
+        <span class="caja-saldo-nombre">${escapeHtml(c.nombre)}${c.activa === false ? ' <span style="font-size:10px;color:var(--text3)">(inactiva)</span>' : ''}</span>
+        ${MONEDAS_CAJA.filter(mon => mon === 'ARS' || Number(saldos[c.id]?.[mon])).map(mon => `<span class="caja-saldo-monto${Number(saldos[c.id]?.[mon]) < 0 ? ' neg' : ''}">${fmtMoney(saldos[c.id]?.[mon] || 0, mon)}</span>`).join('')}
+      </button>`).join('');
+  const sel = document.getElementById('cajaVistaSel');
+  if (sel) sel.innerHTML = cajas.map(c => `<option value="${escapeHtml(c.id)}" ${c.id === cajaVista ? 'selected' : ''}>${escapeHtml(c.nombre)}</option>`).join('');
+  const nombre = nombreCaja(cajaVista, cajas);
+  document.querySelectorAll('.caja-vista-nombre').forEach(el => { el.textContent = nombre; });
+
+  // Resumen del día de ESTA caja. Ingresos/egresos sin transferencias.
+  const res = resumenCajaDia(movsAll, cajaVista, tod);
+  document.getElementById('caja-ingresos').textContent = fmtMoney(res.ARS.ingresos);
+  document.getElementById('caja-ingresos-usd').textContent = fmtMoney(res.USD.ingresos, 'USD');
+  document.getElementById('caja-egresos').textContent = fmtMoney(res.ARS.egresos);
+  document.getElementById('caja-egresos-usd').textContent = fmtMoney(res.USD.egresos, 'USD');
+  document.getElementById('caja-balance').textContent = fmtMoney(redondeo2(res.ARS.ingresos - res.ARS.egresos));
+  document.getElementById('caja-balance-usd').textContent = fmtMoney(redondeo2(res.USD.ingresos - res.USD.egresos), 'USD');
+  const tr = MONEDAS_CAJA.filter(mon => res[mon].transfEntrada || res[mon].transfSalida)
+    .map(mon => `${mon}: +${fmtMoney(res[mon].transfEntrada, mon)} / −${fmtMoney(res[mon].transfSalida, mon)}`).join(' · ');
+  document.getElementById('caja-transf').textContent = tr ? `Transferencias del día (no son ingreso ni egreso) — ${tr}` : '';
+
+  const movs = movsAll.filter(m => m && m.fecha === tod && cajaDeMovimiento(m) === cajaVista);
   document.getElementById('tablaCaja').innerHTML = movs.length
-    ? movs.map(m=>`<tr>
+    ? movs.map(m => {
+        const tr = esTransferencia(m);
+        const sig = signoEnCaja(m) > 0 ? '+' : '−';
+        const badge = tr ? '<span class="badge blue">⇄ transf.</span>' : `<span class="badge ${m.tipo==='ingreso'?'green':'red'}">${m.tipo}</span>`;
+        return `<tr>
         <td style="font-family:'DM Mono';font-size:12px">${fmtFecha(m.fecha)}</td>
         <td>${escapeHtml(m.concepto)}</td>
-        <td><span class="badge ${m.tipo==='ingreso'?'green':'red'}">${m.tipo}</span></td>
-        <td style="font-weight:500;color:${m.tipo==='ingreso'?'#34d399':'#f87171'}">${m.tipo==='ingreso'?'+':'-'}${fmtMoney(m.monto,m.moneda)}</td>
+        <td>${badge}</td>
+        <td style="font-weight:500;color:${tr ? 'var(--accent2)' : (m.tipo==='ingreso'?'#34d399':'#f87171')}">${sig}${fmtMoney(m.monto,m.moneda)}</td>
         <td>${m.metodo}</td>
-      </tr>`).join('')
-    : '<tr><td colspan="5" style="text-align:center;color:var(--text3)">Sin movimientos hoy</td></tr>';
+      </tr>`; }).join('')
+    : '<tr><td colspan="5" style="text-align:center;color:var(--text3)">Sin movimientos hoy en esta caja</td></tr>';
 
-  const cierres = colCierres.list();
-  document.getElementById('historialCierres').innerHTML = cierres.slice(-3).reverse().map(c=>`
-    <div style="padding:8px 0;border-top:1px solid var(--border);font-size:12px;color:var(--text2)">
-      <strong style="color:var(--text)">${fmtFecha(c.fecha)}</strong> — ${fmtMoney(c.balanceARS)} / USD ${c.balanceUSD} <span style="color:var(--text3)">(TC: $${c.tc})</span>
-    </div>`).join('');
+  // Historial: cierres de esta caja + los anteriores a las cajas (sin campo caja), aparte.
+  const cierres = colCierres.list().slice().sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
+  const linea = c => `<div style="padding:8px 0;border-top:1px solid var(--border);font-size:12px;color:var(--text2)">
+      <strong style="color:var(--text)">${fmtFecha(c.fecha)}</strong> — ${c.caja
+        ? `saldo ${fmtMoney(c.saldoARS || 0)} / ${fmtMoney(c.saldoUSD || 0, 'USD')}${c.arqueo != null ? ` · arqueo ${fmtMoney(c.arqueo)} (dif. ${fmtMoney(c.diferencia || 0)})` : ''}`
+        : `${fmtMoney(c.balanceARS)} / USD ${c.balanceUSD}`} <span style="color:var(--text3)">(TC: $${c.tc})</span>
+    </div>`;
+  const deCaja = cierres.filter(c => c.caja === cajaVista).slice(-3).reverse();
+  const viejos = cierres.filter(c => !c.caja).slice(-3).reverse();
+  document.getElementById('historialCierres').innerHTML =
+    (deCaja.length ? deCaja.map(linea).join('') : '<div style="font-size:12px;color:var(--text3);padding-top:8px">Sin cierres de esta caja todavía.</div>') +
+    (viejos.length ? `<div style="margin-top:12px;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Cierres anteriores a las cajas (todas juntas)</div>${viejos.map(linea).join('')}` : '');
 }
 
 function saveMovimiento() {
   const monto = document.getElementById('mov-monto').value;
   const concepto = document.getElementById('mov-concepto').value;
   if (!monto || !concepto) { showNotif('Monto y concepto son obligatorios', 'error'); return; }
+  const caja = leerCajaObligatoria('mov-caja');
+  if (!caja) return;
   const moneda = document.getElementById('mov-moneda').value;
   const tc = moneda === 'USD' ? Number(document.getElementById('mov-tc')?.value || 0) : null;
   const tieneImpuesto = document.getElementById('mov-impuesto')?.checked;
@@ -6470,6 +6918,7 @@ function saveMovimiento() {
     ref: document.getElementById('mov-ref')?.value?.trim() || '',
     facturado,
     nroComprobante,
+    caja,
   };
   if (tc) mov.tc = tc;
   writeMovimiento(mov); // escritura por hijo
@@ -6511,6 +6960,7 @@ function puedeRevertirMovimiento(m) {
   if (!m || !m.id) return false;
   if (m.revertido === true) return false;
   if (m.reversaDe) return false;
+  if (m.tipo === 'transferencia') return false; // se corrige con otra transferencia
   if (motivoBloqueoReversa(m)) return false;
   return true;
 }
@@ -6522,6 +6972,7 @@ async function revertirMovimiento(id) {
   // listener pudo haber cambiado el estado entre el render y el click.
   if (orig.revertido === true) { showNotif('Ese movimiento ya fue revertido', 'error'); return; }
   if (orig.reversaDe) { showNotif('Una reversa no se puede revertir', 'error'); return; }
+  if (esTransferencia(orig)) { showNotif('Una transferencia entre cajas se corrige con otra transferencia en sentido contrario', 'error'); return; }
   const bloqueo = motivoBloqueoReversa(orig);
   if (bloqueo === 'emitida') {
     showNotif('Tiene factura emitida con CAE: se anula con nota de crédito en ARCA, no acá', 'error');
@@ -6554,6 +7005,7 @@ async function revertirMovimiento(id) {
     reversaDe: orig.id,
     facturado: false,
     nroComprobante: '',
+    caja: cajaDeMovimiento(orig), // misma caja que el original (los viejos sin caja → principal)
   };
   if (orig.proveedorId) reversa.proveedorId = orig.proveedorId;
   if (orig.tc) reversa.tc = orig.tc;
@@ -6569,52 +7021,73 @@ async function revertirMovimiento(id) {
   showNotif('Movimiento revertido — se creó el contraasiento');
 }
 
+// Arqueo de la caja que se está cerrando: lo contado contra el saldo que dice el sistema
+// para ESA caja (acumulado, por moneda).
 function calcArqueo() {
-  const contado = Number(document.getElementById('cajaArqueo')?.value || 0);
-  if (!contado) { showNotif('Ingresá el efectivo contado', 'error'); return; }
-  const tod = today();
-  const movs = getMovimientos().filter(m => m.fecha === tod);
-  const efectivoEsperado = movs.filter(m => m.metodo === 'efectivo').reduce((s,m) => {
-    return s + (m.tipo === 'ingreso' ? Number(m.monto) : -Number(m.monto));
-  }, 0);
-  const dif = contado - efectivoEsperado;
+  const contado = document.getElementById('cajaArqueo')?.value;
+  const contadoUSD = document.getElementById('cajaArqueoUSD')?.value;
+  if (contado === '' && contadoUSD === '') { showNotif('Ingresá lo contado', 'error'); return; }
+  const sal = saldosPorCaja(getMovimientos(), getCajas())[cajaVista] || {};
+  const filas = [];
+  if (contado !== '') filas.push(['ARS', Number(contado), sal.ARS || 0]);
+  if (contadoUSD !== '') filas.push(['USD', Number(contadoUSD), sal.USD || 0]);
+  const ok = filas.every(([, c, e]) => redondeo2(c - e) === 0);
   const div = document.getElementById('cajaArqueoDif');
   if (div) {
     div.style.display = '';
-    div.style.background = dif === 0 ? 'rgba(5,150,105,0.1)' : 'rgba(220,38,38,0.1)';
-    div.style.border = `1px solid ${dif === 0 ? 'rgba(5,150,105,0.3)' : 'rgba(220,38,38,0.3)'}`;
-    div.style.color = dif === 0 ? '#34d399' : '#f87171';
-    div.innerHTML = dif === 0
-      ? '✅ Arqueo perfecto — no hay diferencia'
-      : `⚠️ Diferencia: ${dif > 0 ? '+' : ''}${fmtMoney(dif)} (esperado ${fmtMoney(efectivoEsperado)}, contado ${fmtMoney(contado)})`;
+    div.style.background = ok ? 'rgba(5,150,105,0.1)' : 'rgba(220,38,38,0.1)';
+    div.style.border = `1px solid ${ok ? 'rgba(5,150,105,0.3)' : 'rgba(220,38,38,0.3)'}`;
+    div.style.color = ok ? '#34d399' : '#f87171';
+    div.innerHTML = filas.map(([mon, c, e]) => {
+      const d = redondeo2(c - e);
+      return d === 0 ? `✅ ${mon}: coincide (${fmtMoney(e, mon)})` : `⚠️ ${mon}: contado ${fmtMoney(c, mon)} · sistema ${fmtMoney(e, mon)} · diferencia ${d > 0 ? '+' : ''}${fmtMoney(d, mon)}`;
+    }).join('<br>');
   }
 }
 
+// Cierre POR CAJA. Los cierres viejos (sin `caja`) no se tocan: se muestran aparte como
+// "anteriores a las cajas". Campos nuevos: caja, cajaNombre, saldo/resumen por moneda y
+// arqueo USD. Se mantienen balanceARS/balanceUSD/arqueo/efectivoEsperado/diferencia para
+// que el registro tenga la misma forma que antes (ver reporte por el cambio de sentido).
 function cerrarCaja() {
   const tod = today();
-  const movs = getMovimientos().filter(m => m.fecha === tod);
-  const ingARS = movs.filter(m=>m.tipo==='ingreso'&&m.moneda==='ARS').reduce((a,b)=>a+Number(b.monto),0);
-  const egARS = movs.filter(m=>(m.tipo==='egreso'||m.tipo==='devolucion')&&m.moneda==='ARS').reduce((a,b)=>a+Number(b.monto),0);
-  const ingUSD = movs.filter(m=>m.tipo==='ingreso'&&m.moneda==='USD').reduce((a,b)=>a+Number(b.monto),0);
+  const cajas = getCajas();
+  const movs = getMovimientos();
+  const res = resumenCajaDia(movs, cajaVista, tod);
+  const sal = saldosPorCaja(movs, cajas)[cajaVista] || {};
+  const saldoARS = sal.ARS || 0, saldoUSD = sal.USD || 0;
   const tc = document.getElementById('cajaTipoCambio').value;
-  const arqueo = document.getElementById('cajaArqueo')?.value || null;
-  const efectivoEsperado = movs.filter(m=>m.metodo==='efectivo').reduce((s,m)=>s+(m.tipo==='ingreso'?Number(m.monto):-Number(m.monto)),0);
+  const arqV = document.getElementById('cajaArqueo')?.value;
+  const arqUV = document.getElementById('cajaArqueoUSD')?.value;
+  const arqueo = arqV !== '' && arqV != null ? Number(arqV) : null;
+  const arqueoUSD = arqUV !== '' && arqUV != null ? Number(arqUV) : null;
+  const nombre = nombreCaja(cajaVista, cajas);
+  if (!confirm(`¿Cerrar la caja "${nombre}" del ${fmtFecha(tod)}?`)) return;
   colCierres.write({
     id: colCierres.nuevoId(),
     fecha: tod,
-    balanceARS: ingARS - egARS,
-    balanceUSD: ingUSD,
+    caja: cajaVista,
+    cajaNombre: nombre,
+    ingresosARS: res.ARS.ingresos, egresosARS: res.ARS.egresos,
+    ingresosUSD: res.USD.ingresos, egresosUSD: res.USD.egresos,
+    transfNetoARS: redondeo2(res.ARS.transfEntrada - res.ARS.transfSalida),
+    transfNetoUSD: redondeo2(res.USD.transfEntrada - res.USD.transfSalida),
+    saldoARS, saldoUSD,
+    balanceARS: redondeo2(res.ARS.ingresos - res.ARS.egresos),
+    balanceUSD: redondeo2(res.USD.ingresos - res.USD.egresos),
     tc,
     obs: document.getElementById('cajaObs').value,
-    arqueo: arqueo ? Number(arqueo) : null,
-    efectivoEsperado,
-    diferencia: arqueo ? Number(arqueo) - efectivoEsperado : null,
+    arqueo,
+    efectivoEsperado: saldoARS,
+    diferencia: arqueo != null ? redondeo2(arqueo - saldoARS) : null,
+    arqueoUSD,
+    diferenciaUSD: arqueoUSD != null ? redondeo2(arqueoUSD - saldoUSD) : null,
     cierreHora: new Date().toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit'}),
     cerradoPor: currentUser?.name || 'Sistema',
   });
-  auditLog('cierre', 'Caja', `Balance ARS: ${fmtMoney(ingARS-egARS)} | USD: ${ingUSD}`);
+  auditLog('cierre', 'Caja', `${nombre} — saldo ${fmtMoney(saldoARS)} | ${fmtMoney(saldoUSD, 'USD')}`);
   renderCaja();
-  showNotif('✅ Caja cerrada correctamente');
+  showNotif(`✅ Caja "${nombre}" cerrada`);
 }
 
 // ===================== ROLES =====================
@@ -7143,6 +7616,7 @@ function openHorario(rid, tipo) {
       <div><span style="color:var(--text3);display:block;font-size:11px">${isLate?'Salida estándar':'Entrada estándar'}</span><strong style="color:#fbbf24">${isLate?'10:00 hs':'14:00 hs'}</strong></div>
       <div><span style="color:var(--text3);display:block;font-size:11px">${isLate?'Fecha de salida':'Fecha de entrada'}</span><strong>${isLate?fmtFecha(r.salida):fmtFecha(r.entrada)}</strong></div>
     </div>`;
+  llenarSelectCaja('horario-caja', '');
   openModal('modalHorario');
 }
 
@@ -7163,6 +7637,8 @@ async function saveHorario() {
   const notas = document.getElementById('horario-notas').value;
   if(!hora) { showNotif('Ingresá la hora','error'); return; }
   if(cobrar && monto <= 0) { showNotif('Ingresá un monto válido','error'); return; }
+  const caja = document.getElementById('horario-caja')?.value || '';
+  if (cobrar && !caja) { showNotif('Elegí la caja donde entra el cobro', 'error'); return; }
 
   const reservas = getReservas();
   const r = reservas.find(x=>x.id===rid);
@@ -7178,7 +7654,7 @@ async function saveHorario() {
   if(cobrar && monto > 0) {
     const label = tipo === 'late' ? 'Late Check-out' : 'Early Check-in';
     await writeMovimiento({ id:nuevoMovimientoId(), tipo:'ingreso', cat:'reserva', moneda, monto, metodo, fecha:today(),
-      concepto:`${label} ${hora}hs — ${getHuespedNombre(r.huespedId)} Cab.${r.hab}` }); // escritura por hijo
+      concepto:`${label} ${hora}hs — ${getHuespedNombre(r.huespedId)} Cab.${r.hab}`, caja }); // escritura por hijo
   }
   await writeReserva(r); // escritura por hijo
   refrescarTokenReserva(r); // voucher al día
@@ -8571,6 +9047,7 @@ function renderBotConfig() {
   document.getElementById('bcf-checkin').value   = cfg.checkin       || '';
   document.getElementById('bcf-checkout').value  = cfg.checkout      || '';
   renderConfigCabanas();
+  renderConfigCajas();
 }
 
 // ── Config de cabañas (tipo / m² / capacidad) ──
@@ -9101,6 +9578,8 @@ Object.assign(window, {
   grillaCellClick, renderNochesModal, setHuespedMode, filtrarHuespedes, seleccionarHuesped, openReservaDesdeGrilla,
   renderPendientes, togglePendiente, promoverPendiente, rechazarPendiente, generarLinkPrecheckin,
   recordatorioMarcarLlegada,
+  addCaja, updateCaja, deleteCaja, renderConfigCajas, setCajaVista,
+  openTransferencia, saveTransferencia, actualizarSaldoOrigenTransferencia,
   irAFacturacion, renderFacturacion, crearSolicitudFactura, toggleFacMov, facSetModo, facSetEmisor,
   facSetFiltro, facLimpiarFiltro, facSetCampo, facSetManual, facSeleccionarTodos,
 });
