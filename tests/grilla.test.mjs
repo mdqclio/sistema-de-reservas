@@ -276,6 +276,29 @@ for (const D of [7, 14, 30]) {
   eq('grillaNavegar usa addDaysStr (sin ida y vuelta por UTC)', /addDaysStr\(grillaFechaInicio \|\| today\(\), dias\)/.test(grab('grillaNavegar')), true);
 }
 
+// ── Arrastrar la grilla con el mouse ────────────────────────────────────────
+{
+  const grillaEsArrastre = new Function(src.match(/\nconst GRILLA_DRAG_UMBRAL = [^\n]*/)[0] + grab('grillaEsArrastre') + '\nreturn grillaEsArrastre;')();
+  eq('drag: umbral 5px', /\nconst GRILLA_DRAG_UMBRAL = 5;/.test(src), true);
+  eq('drag: sin movimiento → click', grillaEsArrastre(0, 0), false);
+  eq('drag: 4px horizontal → click', grillaEsArrastre(4, 0), false);
+  eq('drag: temblor 3,3 (4.24px) → click', grillaEsArrastre(3, 3), false);
+  eq('drag: 5px → arrastre', grillaEsArrastre(-5, 0), true);
+  eq('drag: 4,3 (5px diagonal) → arrastre', grillaEsArrastre(4, 3), true);
+  eq('drag: vertical 6px → arrastre (no es un click quieto)', grillaEsArrastre(0, 6), true);
+  eq('drag: 120px → arrastre', grillaEsArrastre(120, 2), true);
+  const ini = grab('initGrillaDrag');
+  const down = ini.slice(ini.indexOf("addEventListener('pointerdown'"), ini.indexOf("addEventListener('pointermove'"));
+  eq('drag: solo mouse, botón principal (touch/lápiz nativo)', /e\.pointerType !== 'mouse' \|\| e\.button !== 0\) return/.test(down), true);
+  eq('drag: pointerdown no captura ni hace preventDefault (clicks siguen yendo a la celda)', [/setPointerCapture|preventDefault/.test(down)], [false]);
+  eq('drag: captura recién al pasar el umbral', /grillaEsArrastre\([^)]*\)\) return;\s*p\.arrastrando = true;\s*try \{ sc\.setPointerCapture/.test(ini), true);
+  eq('drag: click posterior anulado en captura (antes que los onclick)', /addEventListener\('click', \(e\) => \{\s*if \(!anularClick\) return;\s*anularClick = false;\s*e\.stopPropagation\(\);\s*e\.preventDefault\(\);\s*\}, true\)/.test(ini), true);
+  eq('drag: el flag se limpia si el click no llega', /setTimeout\(\(\) => \{ anularClick = false; \}, 0\)/.test(ini), true);
+  eq('drag: sin lugar corre la fecha (misma regla que la rueda)', [/grillaHayLugar\(/.test(ini), /grillaNavegar\(n\)/.test(ini)], [true, true]);
+  eq('drag: cursor grab / grabbing y sin selección dentro de la grilla', [/\.grilla-scroll \{ cursor: grab; user-select: none;/.test(html), /\.grilla-scroll\.grilla-arrastrando, \.grilla-scroll\.grilla-arrastrando \* \{ cursor: grabbing !important; \}/.test(html)], [true, true]);
+  eq('drag: se inicializa al cargar', /\ninitGrillaDrag\(\);\n/.test(src), true);
+}
+
 // ── Barra de navegación en dos renglones ────────────────────────────────────
 {
   const nav = html.slice(html.indexOf('<div class="grilla-nav">'), html.indexOf('<div id="grillaScroll"'));
