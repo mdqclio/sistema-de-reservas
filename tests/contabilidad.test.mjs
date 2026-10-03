@@ -223,5 +223,70 @@ setFacturas({});
 eq('4j null NO se revierte',   puedeRevertirMovimiento(null), false);
 eq('4k sin id NO se revierte', puedeRevertirMovimiento({ tipo: 'ingreso' }), false);
 
+// ── Check-in sin cobro (feat/checkin-sin-cobro) ─────────────────────────────
+// Premisa nueva: el check-in marca la llegada y NO escribe movimientos ni toca
+// pagado/saldo. El cobro va por 💰 Cobrar (savePago). La comisión de plataforma pasa
+// al check-out, una sola vez.
+{
+  const grabAsync = (name) => {
+    const m = src.match(new RegExp('\\nasync function ' + name + '\\b[\\s\\S]*?\\n\\}', 'm'));
+    if (!m) throw new Error('no se encontró la función: ' + name);
+    return m[0];
+  };
+  const LOG = [];
+  const DOMV = {};
+  const domEl = (id) => (DOMV[id] ||= { value: '', innerHTML: '', style: {}, classList: { contains: () => false } });
+  let RES = [];
+  let PRECIOS = { plataformas: [{ plat: 'booking', comision: 15 }] };
+  const env = {
+    document: { getElementById: domEl, querySelector: () => null },
+    getReservas: () => RES,
+    getHuespedNombre: () => 'Ana',
+    removeCheckinToken: async (t) => LOG.push('removeToken:' + t),
+    writeReserva: async (r) => LOG.push('writeReserva:' + r.estado),
+    writeBed: async (c, st) => LOG.push('writeBed:' + c + ':' + st),
+    writeMovimiento: async (m) => LOG.push('writeMovimiento:' + m.cat + ':' + m.monto),
+    auditLog: (a) => LOG.push('audit:' + a),
+    closeModal: (id) => LOG.push('close:' + id),
+    showNotif: () => {}, renderReservas: () => {}, renderCheckin: () => {}, renderMapa: () => {}, renderGrilla: () => {},
+    DB: { get: (k, d) => (k === 'precios' ? PRECIOS : d) },
+    calcularPrecioReserva: () => ({ total: 1000 }),
+    nuevoMovimientoId: () => 'M1', today: () => '2026-10-03',
+    ESTADO_RESERVA: { CONFIRMADA: 'confirmada', CHECKIN: 'checkin', CHECKOUT: 'checkout', CANCELADA: 'cancelada' },
+  };
+  const keys = Object.keys(env);
+  const ci = new Function(...keys, [grabAsync('confirmCheckin'), grabAsync('marcarCheckin'), grabAsync('registrarComisionPlataforma'), grabAsync('doCheckout'), grab('refrescarVistasEstadia')].join('\n') +
+    '\nreturn { confirmCheckin, marcarCheckin, registrarComisionPlataforma, doCheckout };')(...keys.map(k => env[k]));
+
+  const r = { id: 'R1', huespedId: 'h', hab: '4', cabaña: 'c4', estado: 'confirmada', total: 1000, pagado: 300, saldo: 700, estadoPago: 'senia', plataforma: 'booking', checkinToken: 'tok' };
+  RES = [r];
+  Object.assign(domEl('ci-res-id'), { value: 'R1' }); Object.assign(domEl('ci-llave'), { value: '' });
+  Object.assign(domEl('ci-hora'), { value: '15:30' }); Object.assign(domEl('ci-obs'), { value: 'llegó con perro' });
+  await ci.confirmCheckin();
+  eq('5a check-in: NO escribe movimientos (ni saldo ni comisión)', LOG.filter(x => x.startsWith('writeMovimiento')), []);
+  eq('5b check-in: pagado / saldo / estadoPago intactos (sigue debiendo)', [r.pagado, r.saldo, r.estadoPago], [300, 700, 'senia']);
+  eq('5c check-in: estado checkin, hora y obs guardadas', [r.estado, r.horaCheckin, r.obsCheckin], ['checkin', '15:30', 'llegó con perro']);
+  eq('5d check-in: cabaña ocupada, reserva escrita, token consumido', [LOG.includes('writeBed:c4:occupied'), LOG.includes('writeReserva:checkin'), LOG.includes('removeToken:tok'), r.checkinToken], [true, true, true, undefined]);
+  eq('5e check-in: no marca la comisión como registrada', r.comisionRegistrada, undefined);
+  eq('5f check-in: sin campos de facturación del cobro', /ci-facturado|ci-comprobante|ciFacturado|ciComprobante/.test(html), false);
+
+  LOG.length = 0;
+  await ci.doCheckout('R1');
+  eq('5g check-out: registra la comisión de plataforma (15% de 1000)', LOG.filter(x => x.startsWith('writeMovimiento')), ['writeMovimiento:Comisión plataforma:150']);
+  eq('5h check-out: estado checkout y cabaña sucia', [r.estado, LOG.includes('writeBed:c4:dirty'), r.comisionRegistrada], ['checkout', true, true]);
+  LOG.length = 0;
+  await ci.registrarComisionPlataforma(r);
+  eq('5i comisión: guard anti-duplicado', LOG.filter(x => x.startsWith('writeMovimiento')), []);
+  const vieja = { id: 'R2', cabaña: 'c5', hab: '5', estado: 'checkin', total: 1000, plataforma: 'booking', comisionRegistrada: true };
+  RES = [vieja]; LOG.length = 0;
+  await ci.doCheckout('R2');
+  eq('5j check-out de reserva que ya registró comisión en el check-in viejo: no duplica', LOG.filter(x => x.startsWith('writeMovimiento')), []);
+  const directa = { id: 'R3', cabaña: 'c6', hab: '6', estado: 'checkin', total: 1000, plataforma: 'directo' };
+  RES = [directa]; LOG.length = 0;
+  await ci.doCheckout('R3');
+  eq('5k check-out directo (sin comisión configurada): no escribe movimientos', LOG.filter(x => x.startsWith('writeMovimiento')), []);
+  eq('5l savePago sigue registrando el cobro (flujo de cobro intacto)', /writeMovimiento|aplicarPagoReserva/.test(grab('savePago')), true);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

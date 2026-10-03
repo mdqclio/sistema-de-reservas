@@ -89,6 +89,14 @@ v = vis({ id: 'b', estado: 'confirmada', saldo: 0 });
 eq('confirmada sin saldo: sin 💰', /openPago/.test(v.html), false);
 v = vis({ id: 'c', estado: 'checkin', saldo: 50 });
 eq('check-in: 📄 💰 sin 🔗', [/enviarVoucher/.test(v.html), /openPago/.test(v.html), /generarLinkPrecheckin/.test(v.html)], [true, true, false]);
+// Check-in / Check-out desde la ficha: según estado, reusan doCheckin / doCheckout y
+// cierran el modal de reserva antes (modales encimados, mismo patrón que Cobrar).
+v = vis({ id: 'k1', estado: 'confirmada', saldo: 100 });
+eq('confirmada: ✅ Check-in (cierra reserva → doCheckin), sin Check-out', [/closeModal\('modalReserva'\);doCheckin\('k1'\)/.test(v.html), /doCheckout/.test(v.html)], [true, false]);
+v = vis({ id: 'k2', estado: 'checkin', saldo: 0 });
+eq('en check-in: 🚪 Check-out (cierra reserva → doCheckout), sin Check-in', [/closeModal\('modalReserva'\);doCheckout\('k2'\)/.test(v.html), /doCheckin/.test(v.html)], [true, false]);
+v = vis({ id: 'k3', estado: 'checkout', saldo: 0 });
+eq('checkout / cancelada: ni Check-in ni Check-out', [/doCheckin|doCheckout/.test(v.html), /doCheckin|doCheckout/.test(vis({ id: 'k4', estado: 'cancelada' }).html)], [false, false]);
 v = vis({ id: 'd', estado: 'checkout', saldo: 50 });
 eq('checkout: sin "Guardar y enviar" ni accesos', [v.enviar, v.box], [false, false]);
 v = vis({ id: 'e', estado: 'cancelada', saldo: 0 });

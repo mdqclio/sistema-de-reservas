@@ -498,6 +498,12 @@ td.acciones .btn:last-child { margin-right: 0; }
 .grilla-table th.grilla-corner, .grilla-table td.cabaña-label { border-left: none; }
 .grilla-hab-header td { background: var(--surface3) !important; color: var(--text); font-weight: 600; font-size: 11px; padding: 5px 10px; border: 1px solid var(--border2); }
 
+/* ===== RECORDATORIO DE CHECK-IN ===== */
+.recordatorio-fila { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.recordatorio-quien { flex: 1 1 180px; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.recordatorio-quien span { color: var(--text3); font-size: 12px; }
+.recordatorio-acciones { display: flex; gap: 6px; margin-left: auto; }
+
 /* ===== TOOLTIP ===== */
 .tooltip-wrap { position: relative; }
 .tooltip-wrap:hover .tooltip-box { opacity: 1; pointer-events: all; }
@@ -1471,19 +1477,23 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
       </div>
     </div>
     <div class="form-group"><label>Observaciones</label><input type="text" id="ci-obs" placeholder="Opcional"></div>
-    <div class="form-row">
-      <div class="form-group" style="display:flex;align-items:center;gap:8px;padding-top:18px;">
-        <input type="checkbox" id="ci-facturado" style="accent-color:var(--accent);width:16px;height:16px;" onchange="onCiFacturadoChange()">
-        <label style="margin:0;text-transform:none;font-size:13px;color:var(--text2);">Facturar el saldo cobrado</label>
-      </div>
-      <div class="form-group" id="ci-comprobante-group" style="display:none;">
-        <label>N° comprobante</label>
-        <input type="text" id="ci-comprobante" placeholder="Ej: 0001-00001234">
-      </div>
-    </div>
+    <!-- El check-in solo marca la llegada: no cobra ni factura. El saldo se registra con
+         💰 Cobrar cuando efectivamente pagan (durante la estadía o al irse). -->
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modalCheckin')">Cancelar</button>
       <button class="btn btn-green" onclick="confirmCheckin()">✅ Confirmar Check-in</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL RECORDATORIO DE CHECK-IN (21:00 AR, una vez por día) -->
+<div class="modal-overlay" id="modalRecordatorio">
+  <div class="modal">
+    <h2>🔔 Check-ins pendientes</h2>
+    <div id="recordatorioContenido"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalRecordatorio')">Cerrar</button>
+      <button class="btn btn-blue" onclick="closeModal('modalRecordatorio');showSection('checkin')">Ir a Check-In / Out</button>
     </div>
   </div>
 </div>
@@ -4044,8 +4054,9 @@ function openGrupo(grupoId) {
 }
 
 // Botones del modal de reserva según la reserva abierta (null = nueva). Mismas
-// condiciones que la fila del listado: 📄 canCheckin||canCheckout, 💰 además con
-// saldo, 🔗 canCheckin. Solo llaman a las funciones existentes.
+// condiciones que la fila del listado: ✅ Check-in si confirmada, 🚪 Check-out si en
+// check-in, 📄 canCheckin||canCheckout, 💰 además con saldo, 🔗 canCheckin. Solo
+// llaman a las funciones existentes.
 function renderAccionesModalReserva(r) {
   const box = document.getElementById('res-acciones');
   const btnEnviar = document.getElementById('btnGuardarEnviar');
@@ -4061,6 +4072,10 @@ function renderAccionesModalReserva(r) {
   if (btnEnviar) btnEnviar.style.display = (canCheckin || canCheckout) ? '' : 'none';
   if (!box) return;
   const btns = [
+    // Check-in / Check-out: reusan doCheckin / doCheckout. Se cierra el modal de reserva
+    // antes (doCheckin abre el modal de check-in encima): mismo patrón que Cobrar.
+    canCheckin ? `<button type="button" class="btn btn-green btn-sm" onclick="closeModal('modalReserva');doCheckin('${r.id}')">✅ Check-in</button>` : '',
+    canCheckout ? `<button type="button" class="btn btn-amber btn-sm" onclick="closeModal('modalReserva');doCheckout('${r.id}')">🚪 Check-out</button>` : '',
     (canCheckin || canCheckout) ? `<button type="button" class="btn btn-ghost btn-sm" onclick="enviarVoucher('${r.id}')">📄 Enviar comprobante</button>` : '',
     // Cobrar: se cierra el modal de reserva antes de abrir el de pago (mismo patrón que la vista de grupo).
     (canCheckin || canCheckout) && hasSaldo ? `<button type="button" class="btn btn-green btn-sm" onclick="closeModal('modalReserva');openPago('${r.id}')">💰 Cobrar</button>` : '',
@@ -4337,73 +4352,70 @@ function doCheckin(rid) {
     if(!confirm(`La fecha de entrada es ${r.entrada}. ¿Confirmar check-in anticipado?`)) return;
   }
   document.getElementById('ci-res-id').value = rid;
-  const now = new Date();
-  document.getElementById('ci-hora').value = now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
+  document.getElementById('ci-hora').value = ahoraArgentina().hhmm; // hora argentina, no la zona del dispositivo
   document.getElementById('ci-llave').value = r.llave || '';
   document.getElementById('ci-obs').value = '';
-  document.getElementById('ci-facturado').checked = false;
-  document.getElementById('ci-comprobante').value = '';
-  document.getElementById('ci-comprobante-group').style.display = 'none';
+  const saldo = saldoReserva(r);
   document.getElementById('ci-resumen').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
       <div><span style="color:var(--text3);display:block;font-size:11px">Huésped</span><strong>${escapeHtml(getHuespedNombre(r.huespedId))}</strong></div>
       <div><span style="color:var(--text3);display:block;font-size:11px">Cab. / Cabaña</span><strong>Cabaña ${r.hab}</strong></div>
       <div><span style="color:var(--text3);display:block;font-size:11px">Salida</span><strong>${fmtFecha(r.salida)}</strong></div>
-    </div>`;
+    </div>
+    ${saldo > 0 ? `<div style="margin-top:8px;color:var(--text2);font-size:12px;">Saldo pendiente ${fmtMoney(saldo, r.moneda)} · se registra con 💰 Cobrar cuando paguen.</div>` : ''}`;
   openModal('modalCheckin');
 }
 
 async function confirmCheckin() {
   const rid = document.getElementById('ci-res-id').value;
-  const llave = document.getElementById('ci-llave').value.trim();
-  const hora = document.getElementById('ci-hora').value;
-  const obs = document.getElementById('ci-obs').value;
-  const ciFacturado = document.getElementById('ci-facturado').checked;
-  const ciComprobante = ciFacturado ? (document.getElementById('ci-comprobante').value.trim() || '') : '';
-  const reservas = getReservas();
-  const r = reservas.find(x=>x.id===rid);
+  const r = getReservas().find(x=>x.id===rid);
   if(!r) return;
-  r.estado = 'checkin';
-  r.llave = llave;
-  r.horaCheckin = hora;
-  r.obsCheckin = obs;
+  const llave = document.getElementById('ci-llave').value.trim();
+  await marcarCheckin(r, { hora: document.getElementById('ci-hora').value, obs: document.getElementById('ci-obs').value, llave });
+  closeModal('modalCheckin');
+  refrescarVistasEstadia();
+  showNotif(`✅ Check-in realizado: ${getHuespedNombre(r.huespedId, r)}${llave?' — Llave: '+llave:''}`);
+}
+
+// Marca la LLEGADA y nada más: estado 'checkin', hora/obs, consume el token de pre
+// check-in y pone la cabaña ocupada. NO escribe movimientos ni toca pagado/saldo: el
+// cobro se registra con 💰 Cobrar (openPago → savePago) cuando efectivamente pagan.
+// Estar alojado y deber plata es el caso normal. La usan el modal de check-in y el
+// recordatorio de las 21:00 (marcar llegada directo), así no hay dos lógicas.
+async function marcarCheckin(r, { hora, obs, llave } = {}) {
+  r.estado = ESTADO_RESERVA.CHECKIN;
+  if (llave !== undefined) r.llave = llave;
+  r.horaCheckin = hora || '';
+  r.obsCheckin = obs || '';
   // Consumir el token de pre check-in (si existía): ya no debe poder usarse.
   if (r.checkinToken) { try { await removeCheckinToken(r.checkinToken); } catch(e) { console.warn('no se pudo borrar checkin_token', e); } delete r.checkinToken; }
-  // Cobrar el saldo pendiente al hacer check-in. Con seña previa (flujo normal
-  // 30% + saldo), el 70% restante entra a caja recién acá; el gate anterior
-  // (pagado===0) hacía que ese saldo nunca se registrara y se perdiera plata.
-  // Total autoritativo: el guardado en la reserva (cascada) o, para reservas viejas
-  // sin `total`, se recalcula con la cascada respetando el precio/noche guardado.
-  const montoTotal = Number(r.total) || calcularPrecioReserva(r.hab, r.entrada, r.salida, { precioOverride: r.precio, cargos: r.cargos, promo: r.promo }).total;
-  const yaPagado = Number(r.pagado) || 0;
-  const saldoPendiente = Math.max(montoTotal - yaPagado, 0);
-  if (saldoPendiente > 0) {
-    await writeMovimiento({ id:nuevoMovimientoId(), tipo:'ingreso', cat:'Reserva / Check-in', moneda:r.moneda, monto:saldoPendiente, metodo:r.pago, fecha:today(), concepto:`${yaPagado>0?'Saldo':'Pago'} check-in ${getHuespedNombre(r.huespedId)} - Cab.${r.hab}`, reservaId:r.id, facturado:ciFacturado, nroComprobante:ciComprobante }); // escritura por hijo
-    r.pagado = montoTotal;
-    r.saldo = 0;
-    r.estadoPago = 'total';
-  }
-  // Comisión automática de plataforma: una sola vez, sobre el total, con guard
-  // anti-duplicado. Antes vivía dentro del branch pagado===0, así que las reservas
-  // con seña nunca registraban comisión (otro agujero de plata).
-  if (!r.comisionRegistrada) {
-    const precios = DB.get('precios', {});
-    const platData = (precios.plataformas||[]).find(p => p.plat === (r.plataforma||'directo'));
-    if (platData && platData.comision > 0) {
-      const comision = Math.round(montoTotal * platData.comision / 100);
-      await writeMovimiento({ id:nuevoMovimientoId(), tipo:'egreso', cat:'Comisión plataforma', moneda:r.moneda, monto:comision, metodo:'transferencia', fecha:today(), concepto:`Comisión ${r.plataforma} ${platData.comision}% - Cab.${r.hab}`, reservaId:r.id }); // escritura por hijo
-    }
-    r.comisionRegistrada = true;
-  }
   await writeReserva(r); // escritura por hijo
-  // Actualizar estado de cabaña en beds (escritura por hijo)
-  await writeBed(r.cabaña, 'occupied');
+  await writeBed(r.cabaña, 'occupied'); // escritura por hijo
   auditLog('check-in', 'Reserva', `${getHuespedNombre(r.huespedId, r)} · Cab ${r.hab}`);
-  closeModal('modalCheckin');
+}
+
+// Comisión automática de plataforma: una sola vez, sobre el total, con guard
+// anti-duplicado (r.comisionRegistrada). Antes se registraba al hacer check-in; como el
+// check-in ya no mueve plata, se registra al hacer check-out (estadía concluida). Las
+// reservas que ya la registraron en el check-in tienen el flag y no duplican.
+async function registrarComisionPlataforma(r) {
+  if (r.comisionRegistrada) return;
+  const precios = DB.get('precios', {});
+  const platData = (precios.plataformas||[]).find(p => p.plat === (r.plataforma||'directo'));
+  if (platData && platData.comision > 0) {
+    const montoTotal = Number(r.total) || calcularPrecioReserva(r.hab, r.entrada, r.salida, { precioOverride: r.precio, cargos: r.cargos, promo: r.promo }).total;
+    const comision = Math.round(montoTotal * platData.comision / 100);
+    await writeMovimiento({ id:nuevoMovimientoId(), tipo:'egreso', cat:'Comisión plataforma', moneda:r.moneda, monto:comision, metodo:'transferencia', fecha:today(), concepto:`Comisión ${r.plataforma} ${platData.comision}% - Cab.${r.hab}`, reservaId:r.id }); // escritura por hijo
+  }
+  r.comisionRegistrada = true;
+}
+
+// Vistas que dependen del estado de la estadía (check-in / check-out).
+function refrescarVistasEstadia() {
   renderReservas();
   renderCheckin();
   renderMapa();
-  showNotif(`✅ Check-in realizado: ${getHuespedNombre(r.huespedId, r)}${llave?' — Llave: '+llave:''}`);
+  if (document.getElementById('section-grilla')?.classList.contains('active')) renderGrilla();
 }
 
 function openPago(rid) {
@@ -4574,27 +4586,38 @@ async function doCheckout(rid) {
   const r = reservas.find(x=>x.id===rid);
   if(!r) return;
   r.estado = 'checkout';
+  await registrarComisionPlataforma(r);
   await writeBed(r.cabaña, 'dirty'); // escritura por hijo
   await writeReserva(r); // escritura por hijo
   auditLog('check-out', 'Reserva', `${getHuespedNombre(r.huespedId, r)} · Cab ${r.hab}`);
-  renderReservas();
-  renderCheckin();
-  renderMapa();
+  refrescarVistasEstadia();
   showNotif('🚪 Check-out realizado: '+getHuespedNombre(r.huespedId));
 }
 
 // ===================== CHECKIN SECTION =====================
+// Pendientes ordenados: los de HOY primero (por cabaña) y después los atrasados, del
+// más reciente al más viejo (ayer, anteayer, …). Devuelve [{ r, atraso }] con los días
+// de atraso respecto de `hoy` (0 = hoy). campo: 'entrada' (check-in) | 'salida' (check-out).
+function ordenarPendientesEstadia(lista, campo, hoy) {
+  return lista
+    .map(r => ({ r, atraso: Math.max(nightsBetween(String(r[campo]).slice(0, 10), hoy), 0) }))
+    .sort((a, b) => a.atraso - b.atraso || (Number(a.r.hab) || 0) - (Number(b.r.hab) || 0));
+}
+function badgeAtraso(atraso) {
+  return atraso > 0 ? ` <span class="badge amber" style="font-size:10px">${atraso} día${atraso === 1 ? '' : 's'} de atraso</span>` : '';
+}
+
 function renderCheckin() {
   const reservas = getReservas();
   const tod = today();
-  const pendCheckin = reservas.filter(r=>r.estado===ESTADO_RESERVA.CONFIRMADA&&r.entrada<=tod);
-  const pendCheckout = reservas.filter(r=>r.estado===ESTADO_RESERVA.CHECKIN&&r.salida<=tod);
+  const pendCheckin = ordenarPendientesEstadia(reservas.filter(r=>r.estado===ESTADO_RESERVA.CONFIRMADA&&String(r.entrada).slice(0,10)<=tod), 'entrada', tod);
+  const pendCheckout = ordenarPendientesEstadia(reservas.filter(r=>r.estado===ESTADO_RESERVA.CHECKIN&&String(r.salida).slice(0,10)<=tod), 'salida', tod);
   const enHostel = reservas.filter(r=>r.estado===ESTADO_RESERVA.CHECKIN);
 
   document.getElementById('tablaCheckin').innerHTML = pendCheckin.length
-    ? pendCheckin.map(r=>`<tr>
+    ? pendCheckin.map(({ r, atraso })=>`<tr>
         <td>${escapeHtml(getHuespedNombre(r.huespedId, r))}</td>
-        <td>Cab.${r.hab}</td><td>${fmtFecha(r.entrada)}</td>
+        <td>Cab.${r.hab}</td><td>${fmtFecha(r.entrada)}${badgeAtraso(atraso)}</td>
         <td style="display:flex;gap:4px;flex-wrap:wrap;">
           <button class="btn btn-green btn-sm" onclick="doCheckin('${r.id}');renderCheckin()">Check-in</button>
           <button class="btn btn-blue btn-sm" onclick="openHorario('${r.id}','early')">🌅 Early</button>
@@ -4603,9 +4626,9 @@ function renderCheckin() {
     : '<tr><td colspan="4" style="text-align:center;color:var(--text3)">Sin pendientes</td></tr>';
 
   document.getElementById('tablaCheckout').innerHTML = pendCheckout.length
-    ? pendCheckout.map(r=>`<tr>
+    ? pendCheckout.map(({ r, atraso })=>`<tr>
         <td>${escapeHtml(getHuespedNombre(r.huespedId, r))}</td>
-        <td>Cab.${r.hab}</td><td>${fmtFecha(r.salida)}</td>
+        <td>Cab.${r.hab}</td><td>${fmtFecha(r.salida)}${badgeAtraso(atraso)}</td>
         <td style="display:flex;gap:4px;flex-wrap:wrap;">
           <button class="btn btn-amber btn-sm" onclick="doCheckout('${r.id}');renderCheckin()">Check-out</button>
           <button class="btn btn-blue btn-sm" onclick="openHorario('${r.id}','late')">🌙 Late</button>
@@ -4635,6 +4658,90 @@ function renderCheckin() {
       }).join('')
     : '<tr><td colspan="8" style="text-align:center;color:var(--text3)">Sin huéspedes activos</td></tr>';
 }
+
+// ===================== RECORDATORIO DE CHECK-IN (21:00 hora argentina) =====================
+// Fecha y hora en Argentina, explícito por timezone (no depende del reloj/zona del
+// dispositivo ni de UTC). today() usa la fecha local del dispositivo; para este aviso se
+// fija la zona para que nunca dependa de dónde corra.
+const AR_TZ = 'America/Argentina/Buenos_Aires';
+const RECORDATORIO_HORA = 21;
+function ahoraArgentina(d = new Date()) {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+    timeZone: AR_TZ, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(d).map(x => [x.type, x.value]));
+  return { fecha: `${p.year}-${p.month}-${p.day}`, hora: Number(p.hour), minuto: Number(p.minute), hhmm: `${p.hour}:${p.minute}` };
+}
+// Check-ins pendientes a una fecha: los de hoy y, aparte, los atrasados (con días).
+function pendientesCheckinDia(reservas, hoy) {
+  const pend = ordenarPendientesEstadia(reservas.filter(r => r.estado === ESTADO_RESERVA.CONFIRMADA && String(r.entrada).slice(0, 10) <= hoy), 'entrada', hoy);
+  return { hoy: pend.filter(x => x.atraso === 0), atrasados: pend.filter(x => x.atraso > 0) };
+}
+// ¿Mostrar el aviso? Desde las 21:00 AR, una sola vez por día, solo si hay pendientes.
+function debeMostrarRecordatorio(ahora, yaMostradoFecha, cantPendientes) {
+  return ahora.hora >= RECORDATORIO_HORA && yaMostradoFecha !== ahora.fecha && cantPendientes > 0;
+}
+// Solo para quien puede hacer check-in (admin o módulo checkin en 'rw'; roles viejos sin
+// la clave → recepción).
+function puedeHacerCheckin() {
+  if (currentIsAdmin) return true;
+  const p = currentRolObj?.permisos?.checkin;
+  if (p) return p === 'rw';
+  return currentUser?.rolKey === 'recepcion';
+}
+// "Ya se mostró hoy": localStorage (sobrevive recargas en ese navegador) con respaldo en
+// memoria si el storage no está disponible.
+const RECORDATORIO_KEY = 'recordatorioCheckinFecha';
+let recordatorioMostradoMem = '';
+function recordatorioYaMostrado() {
+  try { return localStorage.getItem(RECORDATORIO_KEY) || recordatorioMostradoMem; } catch (e) { return recordatorioMostradoMem; }
+}
+function marcarRecordatorioMostrado(fecha) {
+  recordatorioMostradoMem = fecha;
+  try { localStorage.setItem(RECORDATORIO_KEY, fecha); } catch (e) {}
+}
+function revisarRecordatorioCheckin() {
+  if (!currentUser || document.getElementById('app')?.style.display === 'none') return;
+  if (!puedeHacerCheckin()) return;
+  if (document.querySelector('.modal-overlay.open')) return; // no tapar un modal en uso: se reintenta al minuto
+  const ahora = ahoraArgentina();
+  const p = pendientesCheckinDia(getReservas(), ahora.fecha);
+  if (!debeMostrarRecordatorio(ahora, recordatorioYaMostrado(), p.hoy.length + p.atrasados.length)) return;
+  marcarRecordatorioMostrado(ahora.fecha);
+  renderRecordatorioCheckin();
+  openModal('modalRecordatorio');
+}
+function renderRecordatorioCheckin() {
+  const box = document.getElementById('recordatorioContenido');
+  if (!box) return;
+  const p = pendientesCheckinDia(getReservas(), ahoraArgentina().fecha);
+  // Filas flex (no <table>): en iPhone la regla mobile de tablas (min-width 600px)
+  // dejaba los botones fuera de la vista.
+  const fila = ({ r, atraso }) => `<div class="recordatorio-fila">
+      <div class="recordatorio-quien"><strong>${escapeHtml(getHuespedNombre(r.huespedId, r))}</strong>
+        <span>Cab.${r.hab} · ${fmtFecha(r.entrada)}${badgeAtraso(atraso)}</span></div>
+      <div class="recordatorio-acciones">
+        <button class="btn btn-green btn-sm" onclick="recordatorioMarcarLlegada('${r.id}')">✅ Llegó</button>
+        <button class="btn btn-ghost btn-sm" onclick="closeModal('modalRecordatorio');editReserva('${r.id}')">Abrir</button>
+      </div>
+    </div>`;
+  const tabla = (titulo, lista) => lista.length ? `
+    <h3 style="font-size:13px;color:var(--text2);margin:12px 0 6px;">${titulo} (${lista.length})</h3>
+    ${lista.map(fila).join('')}` : '';
+  box.innerHTML = (p.hoy.length || p.atrasados.length)
+    ? tabla('Llegan hoy', p.hoy) + tabla('Atrasados', p.atrasados) +
+      '<div style="margin-top:10px;font-size:12px;color:var(--text3);">"Llegó" marca el check-in. No registra cobros: el saldo se cobra aparte con 💰 Cobrar.</div>'
+    : '<div style="color:var(--text2);padding:8px 0;">Listo: no quedan check-ins pendientes.</div>';
+}
+// Marcar la llegada directo desde el aviso (seguro: el check-in no mueve plata).
+async function recordatorioMarcarLlegada(rid) {
+  const r = getReservas().find(x => x.id === rid);
+  if (!r || r.estado !== ESTADO_RESERVA.CONFIRMADA) { renderRecordatorioCheckin(); return; }
+  await marcarCheckin(r, { hora: ahoraArgentina().hhmm, obs: '' });
+  refrescarVistasEstadia();
+  renderRecordatorioCheckin();
+  showNotif(`✅ Check-in realizado: ${getHuespedNombre(r.huespedId, r)}`);
+}
+setInterval(revisarRecordatorioCheckin, 60 * 1000);
 
 // ===================== HUÉSPEDES =====================
 function renderHuespedes() {
@@ -5373,12 +5480,6 @@ function onMovImpuestoChange() {
 function onMovFacturadoChange() {
   const checked = document.getElementById('mov-facturado')?.checked;
   const group = document.getElementById('mov-comprobante-group');
-  if (group) group.style.display = checked ? '' : 'none';
-}
-
-function onCiFacturadoChange() {
-  const checked = document.getElementById('ci-facturado')?.checked;
-  const group = document.getElementById('ci-comprobante-group');
   if (group) group.style.display = checked ? '' : 'none';
 }
 
@@ -8989,7 +9090,7 @@ Object.assign(window, {
   saveProveedor, deleteProveedor, openProveedorModal, renderProveedores,
   saveRecurrente, deleteRecurrente, openRecurrenteModal, aplicarRecurrentes,
   savePresupuesto, exportarCSV, calcArqueo,
-  openMovimientoModal, onMovTipoChange, onMovMonedaChange, onMovImpuestoChange, onMovFacturadoChange, onCiFacturadoChange,
+  openMovimientoModal, onMovTipoChange, onMovMonedaChange, onMovImpuestoChange, onMovFacturadoChange,
   revertirMovimiento,
   renderCuentasPorCobrar, renderPresupuesto, renderRecurrentes, renderAuditoria, setAuditFiltro, renderProveedores,
   editReserva,
@@ -9011,6 +9112,7 @@ Object.assign(window, {
   togglePerm, deleteRol, toggleUsuarioEstado,
   grillaCellClick, renderNochesModal, setHuespedMode, filtrarHuespedes, seleccionarHuesped, openReservaDesdeGrilla,
   renderPendientes, togglePendiente, promoverPendiente, rechazarPendiente, generarLinkPrecheckin,
+  recordatorioMarcarLlegada,
   irAFacturacion, renderFacturacion, crearSolicitudFactura, toggleFacMov, facSetModo, facSetEmisor,
   facSetFiltro, facLimpiarFiltro, facSetCampo, facSetManual, facSeleccionarTodos,
 });
