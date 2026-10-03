@@ -206,7 +206,7 @@ for (const D of [7, 14, 30]) {
   eq('mes: cruza año', grillaMesLabel('2026-12-20', '2027-01-18'), 'Dic 2026 — Ene 2027');
   eq('mes: 30 días desde el 31/1 (3 meses) → primero — último', grillaMesLabel('2027-01-31', '2027-03-01'), 'Ene — Mar 2027');
   eq('mes: un solo día', grillaMesLabel('2026-02-14', '2026-02-14'), 'Febrero 2026');
-  eq('mes: header en la topbar, oculto fuera de la grilla', [/<h1 id="pageTitle">Dashboard<\/h1>\s*<div class="grilla-titulo-centro">\s*<div id="grillaMesHeader" class="grilla-mes-header" hidden><\/div>/.test(html), /grillaMesHeader'\)\.hidden = s !== 'grilla'/.test(grab('showSection'))], [true, true]);
+  eq('mes: header en la topbar, oculto fuera de la grilla', [/<h1 id="pageTitle">Dashboard<\/h1>\s*<div id="grillaMesHeader" class="grilla-mes-header" hidden><\/div>\s*<div class="topbar-right">/.test(html), /grillaMesHeader'\)\.hidden = s !== 'grilla'/.test(grab('showSection'))], [true, true]);
   eq('mes: se actualiza al render, al scrollear y al resize', [/actualizarGrillaMesHeader\(\);\n\}/.test(grab('renderGrilla')), /addEventListener\('scroll'[\s\S]*?actualizarGrillaMesHeader/.test(grab('initGrillaScroll')), /addEventListener\('resize', actualizarGrillaMesHeader\)/.test(grab('initGrillaScroll'))], [true, true, true]);
   eq('mes: th de fechas con data-fecha', /<th data-fecha="\$\{f\}"/.test(grab('renderGrilla')), true);
 }
@@ -305,10 +305,9 @@ for (const D of [7, 14, 30]) {
   const orden = ['grillaFechaInput', 'grillaHoy()', 'grillaNavegar(-1)', 'grillaNavegar(1)', 'grillaNavegar(-7)', 'grillaNavegar(7)', 'grillaNavegarMes(-1)', 'grillaNavegarMes(1)', 'grillaDiasSel', 'grillaMeses'].map(x => nav.indexOf(x));
   eq('nav: orden fecha · Hoy · pares día/7/mes · días · meses', orden.every((x, i) => x > 0 && (i === 0 || x > orden[i - 1])), true);
   const f1 = nav.slice(nav.indexOf('grilla-nav-fila"'), nav.indexOf('grilla-nav-fila2'));
+  eq('rango: eliminado (ni elemento, ni CSS, ni escritura en renderGrilla)', [/grillaRangoLabel|grilla-rango\b|grilla-titulo-centro/.test(html), /Label de rango/.test(src)], [false, false]);
+  eq('rango: fmt de renderGrilla sigue (lo usa el tooltip de las barras)', /const fmt = f =>/.test(grab('renderGrilla')) && /fmt\(res\.entrada/.test(grab('renderGrilla')), true);
   eq('nav: renglón 1 = fecha + saltos + días; renglón 2 = solo los meses', [f1.includes('grillaFechaInput'), f1.includes('grillaDiasSel'), !f1.includes('grillaMeses'), /<div class="grilla-nav-fila2">\s*<div id="grillaMeses" class="grilla-meses"><\/div>\s*<\/div>/.test(nav)], [true, true, true, true]);
-  eq('rango: fuera de la nav, en el título debajo del mes', [nav.includes('grillaRangoLabel'), /<div id="grillaMesHeader" class="grilla-mes-header" hidden><\/div>\s*<span id="grillaRangoLabel" class="grilla-rango"><\/span>/.test(html)], [false, true]);
-  eq('rango: se oculta con el mes fuera de la grilla (CSS hermano)', /\.grilla-mes-header\[hidden\] \+ \.grilla-rango \{ display: none; \}|\.grilla-mes-header\[hidden\], \.grilla-mes-header\[hidden\] \+ \.grilla-rango \{ display: none; \}/.test(html), true);
-  eq('rango: renderGrilla lo sigue escribiendo igual (cálculo intacto)', /document\.getElementById\('grillaRangoLabel'\)\.textContent =\s*`\$\{fmt\(fechas\[0\]\)\} — \$\{fmt\(fechas\[fechas\.length-1\]\)\}`/.test(grab('renderGrilla')), true);
   eq('nav: pares agrupados (3 .grilla-par de 2 botones)', (nav.match(/<span class="grilla-par">\s*<button[^>]*>[^<]*<\/button>\s*<button[^>]*>[^<]*<\/button>\s*<\/span>/g) || []).length, 3);
   eq('nav: renglón 1 en grid izq/centro/der', /\.grilla-nav-fila \{ display: grid; grid-template-columns: 1fr auto 1fr;/.test(html), true);
   eq('nav: 12 meses', /grillaMesesProximos\(today\(\), 12\)/.test(grab('renderGrillaNav')), true);
