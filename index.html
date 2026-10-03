@@ -447,6 +447,12 @@ td.acciones .btn:last-child { margin-right: 0; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .grilla-scroll:focus { outline: none; }
+/* Arrastre con el mouse (initGrillaDrag): mano abierta en reposo, cerrada arrastrando.
+   Las barras de reserva conservan el puntero de "clickeable". Sin selección de texto
+   dentro de la grilla (si no, arrastrar selecciona nombres); el resto de la página igual. */
+.grilla-scroll { cursor: grab; user-select: none; -webkit-user-select: none; }
+.grilla-scroll .grilla-track .grilla-cell { cursor: grab; }
+.grilla-scroll.grilla-arrastrando, .grilla-scroll.grilla-arrastrando * { cursor: grabbing !important; }
 .grilla-scroll:focus-visible { outline: 1px solid var(--border2); outline-offset: 2px; }
 .grilla-nav { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
 .grilla-nav-fila { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; }
@@ -7526,6 +7532,77 @@ function initGrillaScroll() {
   });
 }
 initGrillaScroll();
+
+// ---- Arrastrar la grilla con el mouse (como un mapa) ----
+// Umbral click-vs-arrastre: menos de 5px entre pointerdown y pointerup es un CLICK y pasa
+// normal (editReserva, selección de rango); 5px o más es ARRASTRE y el click que el
+// navegador dispara después se cancela.
+const GRILLA_DRAG_UMBRAL = 5;
+function grillaEsArrastre(dx, dy, umbral = GRILLA_DRAG_UMBRAL) {
+  return Math.hypot(dx, dy) >= umbral;
+}
+// Solo mouse, botón principal. Touch/lápiz: scroll nativo del navegador, sin intervenir.
+// Mover el contenido sigue la misma regla que la rueda: si al contenedor le queda lugar,
+// px; si no (la grilla entra entera o se llegó al borde), corre la fecha día a día.
+// setPointerCapture recién al pasar el umbral: capturar en el pointerdown redirigiría el
+// click al contenedor y los onclick de celdas y barras dejarían de andar.
+function initGrillaDrag() {
+  const sc = document.getElementById('grillaScroll');
+  if (!sc || sc.dataset.dragInit) return;
+  sc.dataset.dragInit = '1';
+  let p = null;            // { id, x0, y0, x, arrastrando }
+  let anularClick = false;
+  let acc = 0, pendiente = 0, raf = 0;
+  const mover = (delta) => {
+    if (grillaHayLugar(sc.scrollLeft, sc.scrollWidth - sc.clientWidth, delta)) { sc.scrollLeft += delta; acc = 0; return; }
+    const r = grillaWheelDias(acc, delta, grillaAnchoColumna(sc), false);
+    acc = r.acc;
+    if (!r.dias) return;
+    pendiente += r.dias;
+    if (!raf) raf = requestAnimationFrame(() => { raf = 0; const n = pendiente; pendiente = 0; if (n) grillaNavegar(n); });
+  };
+  sc.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'mouse' || e.button !== 0) return;
+    if (e.clientY > sc.getBoundingClientRect().top + sc.clientHeight) return; // barra de scroll nativa
+    p = { id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, arrastrando: false };
+    acc = 0;
+  });
+  sc.addEventListener('pointermove', (e) => {
+    if (!p || e.pointerId !== p.id) return;
+    if (!p.arrastrando) {
+      if (!grillaEsArrastre(e.clientX - p.x0, e.clientY - p.y0)) return;
+      p.arrastrando = true;
+      try { sc.setPointerCapture(p.id); } catch (_) {}
+      sc.classList.add('grilla-arrastrando');
+      window.getSelection()?.removeAllRanges();
+    }
+    e.preventDefault();
+    mover(p.x - e.clientX); // puntero a la izquierda → contenido a la izquierda → avanza
+    p.x = e.clientX;
+  });
+  const fin = (e) => {
+    if (!p || e.pointerId !== p.id) return;
+    if (p.arrastrando) {
+      anularClick = true;
+      // Si el click no llega (soltó fuera de la grilla), no dejar el flag armado para
+      // el próximo click legítimo.
+      setTimeout(() => { anularClick = false; }, 0);
+      try { sc.releasePointerCapture(p.id); } catch (_) {}
+      sc.classList.remove('grilla-arrastrando');
+    }
+    p = null;
+  };
+  sc.addEventListener('pointerup', fin);
+  sc.addEventListener('pointercancel', fin);
+  // Captura: corre antes que los onclick de celdas/barras y los frena.
+  sc.addEventListener('click', (e) => {
+    if (!anularClick) return;
+    anularClick = false;
+    e.stopPropagation();
+    e.preventDefault();
+  }, true);
+}
+initGrillaDrag();
 
 // ---- Carga unificada desde la grilla: selección de rango por 2 clicks ----
 // Estado de la selección tentativa (1er click). Se limpia al 2º click o al cambiar de fila.
