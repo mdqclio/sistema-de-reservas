@@ -39,6 +39,7 @@ const env = {
   getHuespedNombre: (id, r) => r.guestName, getReservas: () => RESERVAS,
   writeCheckinToken: async (t, d) => { TOKENS[t] = d; }, writeReserva: () => {}, writeMovimiento: () => {},
   nuevoMovimientoId: () => 'M1', today: () => '2026-10-01', calcularPrecioReserva: () => ({ total: 0 }),
+  cajaPorDefecto: () => 'caja-franco',
   ESTADO_RESERVA: { CONFIRMADA: 'confirmada', CHECKIN: 'checkin', CHECKOUT: 'checkout', CANCELADA: 'cancelada' },
 };
 const names = ['nightsBetween', 'totalReserva', 'saldoReserva', 'datosTokenReserva', 'escribirTokenReserva', 'refrescarTokenReserva', 'aplicarPagoReserva'];

@@ -288,5 +288,103 @@ eq('4k sin id NO se revierte', puedeRevertirMovimiento({ tipo: 'ingreso' }), fal
   eq('5l savePago sigue registrando el cobro (flujo de cobro intacto)', /writeMovimiento|aplicarPagoReserva/.test(grab('savePago')), true);
 }
 
+// ── Cajas por ubicación (feat/cajas) ────────────────────────────────────────
+{
+  const cst = (n) => { const m = src.match(new RegExp('\\nconst ' + n + ' = [^\\n]*')); if (!m) throw new Error('const ' + n); return m[0]; };
+  const seedConst = src.match(/\nconst CAJAS_SEED = \{[\s\S]*?\n\};/)[0];
+  const helpers = ['cajaDeMovimiento', 'esTransferencia', 'signoEnCaja', 'cajasOrdenadas', 'nombreCaja', 'cajaPorDefecto', 'saldosPorCaja',
+    'resumenCajaDia', 'resumenPorCategoria', 'validarTransferencia', 'armarTransferencia', 'movimientosDeCaja', 'puedeBorrarCaja', 'normalizarCajaCampo'];
+  let CAJAS_LIVE = [];
+  const K = new Function('colCajas',
+    ['CAJA_PRINCIPAL', 'TIPOS_CAJA', 'MONEDAS_CAJA', 'CAJA_POR_METODO', 'TIPO_TRANSFERENCIA', 'redondeo2'].map(cst).join('') + seedConst +
+    grab('getCajas') + helpers.map(grab).join('\n') + '\nreturn { CAJAS_SEED, getCajas, ' + helpers.join(', ') + ' };')({ list: () => CAJAS_LIVE });
+  const CAJAS = Object.values(K.CAJAS_SEED);
+  const J = JSON.stringify;
+
+  // Seed
+  eq('6a seed: Franco, Jesús, Banco, Mercado Pago (en orden)', K.cajasOrdenadas(CAJAS).map(c => c.nombre), ['Franco (efectivo)', 'Jesús (efectivo)', 'Banco', 'Mercado Pago']);
+  eq('6b seed: tipos', K.cajasOrdenadas(CAJAS).map(c => c.tipo), ['efectivo', 'efectivo', 'banco', 'digital']);
+  eq('6c seed con flag propio (_migrado/cajas_seed), no pisa cajas existentes', [/_migrado\/cajas_seed/.test(src), /if \(!actual\[id\]\) faltan\[id\] = c;/.test(src)], [true, true]);
+  eq('6d sin nodo cargado: getCajas cae al seed', K.getCajas().length, 4);
+
+  // Movimiento sin caja → principal
+  eq('6e movimiento SIN campo caja se lee como de la principal (Franco)', K.cajaDeMovimiento({ tipo: 'ingreso', monto: 10 }), 'caja-franco');
+  eq('6f movimiento con caja → esa caja', K.cajaDeMovimiento({ caja: 'caja-jesus' }), 'caja-jesus');
+
+  // Saldos por caja y moneda
+  const MOVS = [
+    { id: 'v1', tipo: 'ingreso', moneda: 'ARS', monto: 100000, fecha: '2026-09-01' },                    // viejo sin caja → Franco
+    { id: 'j1', tipo: 'ingreso', moneda: 'ARS', monto: 340000, fecha: '2026-10-01', caja: 'caja-jesus' },
+    { id: 'j2', tipo: 'ingreso', moneda: 'USD', monto: 200, fecha: '2026-10-01', caja: 'caja-jesus' },
+    { id: 'j3', tipo: 'egreso', moneda: 'ARS', monto: 15000, fecha: '2026-10-02', caja: 'caja-jesus' },  // insumos
+    { id: 'b1', tipo: 'ingreso', moneda: 'ARS', monto: 50000, fecha: '2026-10-02', caja: 'caja-banco' },
+    { id: 'd1', tipo: 'devolucion', moneda: 'ARS', monto: 5000, fecha: '2026-10-02', caja: 'caja-banco' },
+  ];
+  let sal = K.saldosPorCaja(MOVS, CAJAS);
+  eq('6g saldo Jesús: $325.000 y US$ 200, separados', sal['caja-jesus'], { ARS: 325000, USD: 200 });
+  eq('6h saldo Franco incluye el movimiento viejo sin caja', sal['caja-franco'], { ARS: 100000 });
+  eq('6i saldo Banco: ingreso − devolución', sal['caja-banco'], { ARS: 45000 });
+  eq('6j pesos y dólares nunca se suman (no hay clave total)', Object.keys(sal['caja-jesus']).sort(), ['ARS', 'USD']);
+  eq('6k caja sin movimientos → vacío (saldo 0)', sal['caja-mp'], {});
+
+  // Transferencias
+  const t = { origen: 'caja-jesus', destino: 'caja-franco', moneda: 'ARS', monto: 300000, fecha: '2026-10-03', concepto: 'retiro' };
+  eq('6l validar: transferencia OK', K.validarTransferencia(t, CAJAS), '');
+  eq('6m validar: misma caja → error', K.validarTransferencia({ ...t, destino: 'caja-jesus' }, CAJAS) !== '', true);
+  eq('6n validar: monedas distintas → error', /monedas distintas/.test(K.validarTransferencia({ ...t, monedaDestino: 'USD' }, CAJAS)), true);
+  eq('6o validar: monto 0 / negativo → error', [K.validarTransferencia({ ...t, monto: 0 }, CAJAS) !== '', K.validarTransferencia({ ...t, monto: -5 }, CAJAS) !== ''], [true, true]);
+  eq('6p validar: caja inactiva → error', K.validarTransferencia(t, CAJAS.map(c => c.id === 'caja-jesus' ? { ...c, activa: false } : c)) !== '', true);
+  const [ts, te] = K.armarTransferencia(t, { transferenciaId: 'T1', salida: 'tS', entrada: 'tE' }, CAJAS);
+  eq('6q armar: dos movimientos vinculados, mismo monto y moneda', [ts.transferenciaId, te.transferenciaId, ts.monto, te.monto, ts.moneda, te.moneda], ['T1', 'T1', 300000, 300000, 'ARS', 'ARS']);
+  eq('6r armar: salida en origen, entrada en destino, tipo transferencia', [ts.caja, ts.direccion, te.caja, te.direccion, ts.tipo, te.tipo], ['caja-jesus', 'salida', 'caja-franco', 'entrada', 'transferencia', 'transferencia']);
+  const CON = [...MOVS, ts, te];
+  sal = K.saldosPorCaja(CON, CAJAS);
+  eq('6s transferencia mueve saldo: Jesús $25.000 · Franco $400.000', [sal['caja-jesus'].ARS, sal['caja-franco'].ARS], [25000, 400000]);
+  const totalARS = x => Object.values(x).reduce((a, c) => a + (c.ARS || 0), 0);
+  eq('6t transferencia no cambia el total de plata (suma de todas las cajas)', totalARS(K.saldosPorCaja(CON, CAJAS)), totalARS(K.saldosPorCaja(MOVS, CAJAS)));
+
+  // Transferencias fuera de ingresos / egresos
+  const ingARS = ms => ms.filter(m => m.tipo === 'ingreso' && m.moneda === 'ARS').reduce((a, b) => a + Number(b.monto), 0);
+  const egARS = ms => ms.filter(m => (m.tipo === 'egreso' || m.tipo === 'devolucion') && m.moneda === 'ARS').reduce((a, b) => a + Number(b.monto), 0);
+  eq('6u totales de Contabilidad (filtro por tipo): transferencia NO suma ingresos ni egresos', [ingARS(CON), egARS(CON)], [ingARS(MOVS), egARS(MOVS)]);
+  eq('6v resumen por categoría: sin transferencias', Object.keys(K.resumenPorCategoria(CON)).includes('Transferencia entre cajas'), false);
+  const rj = K.resumenCajaDia(CON, 'caja-jesus', '2026-10-03'), rf = K.resumenCajaDia(CON, 'caja-franco', '2026-10-03');
+  eq('6w cierre del día: transferencia fuera de ingresos/egresos, va aparte', [rj.ARS.ingresos, rj.ARS.egresos, rj.ARS.transfSalida, rj.ARS.neto, rf.ARS.ingresos, rf.ARS.transfEntrada, rf.ARS.neto], [0, 0, 300000, -300000, 0, 300000, 300000]);
+  const r2 = K.resumenCajaDia(MOVS, 'caja-banco', '2026-10-02');
+  eq('6x cierre del día: solo la caja pedida, egresos incluyen devoluciones', [r2.ARS.ingresos, r2.ARS.egresos, r2.ARS.neto], [50000, 5000, 45000]);
+  eq('6y cierre del día: movimiento viejo sin caja cae en la principal', K.resumenCajaDia(MOVS, 'caja-franco', '2026-09-01').ARS.ingresos, 100000);
+  eq('6z una transferencia no se revierte (se corrige con otra)', puedeRevertirMovimiento(ts), false);
+  // Barrido estático: ningún total suma "todo lo que no es ingreso" como egreso.
+  eq('6aa sin sumas por descarte de tipo (else / !== ingreso) fuera de signoEnCaja', /else porCat\[k\]\.eg|\.tipo ?!== ?'ingreso'/.test(src.replace(grab('resumenPorCategoria'), '')), false);
+  eq('6ab facturación: solo tipo ingreso (transferencias afuera)', /m\.tipo === 'ingreso' && !m\.facturado/.test(src), true);
+
+  // Saldo inicial
+  const CI = CAJAS.map(c => c.id === 'caja-franco' ? { ...c, saldoInicial: { ARS: 80000, USD: 50, desde: '2026-10-01' } } : c);
+  eq('6ac saldo inicial: parte de lo contado e ignora lo anterior a la fecha', K.saldosPorCaja(MOVS, CI)['caja-franco'], { ARS: 80000, USD: 50 });
+
+  // Defaults por método, borrado, validación de campos
+  eq('6ad caja por defecto según método', ['efectivo', 'transferencia', 'mercadopago', 'tarjeta', 'raro'].map(m => K.cajaPorDefecto(m, CAJAS)), ['caja-franco', 'caja-banco', 'caja-mp', 'caja-banco', 'caja-franco']);
+  eq('6ae caja por defecto inactiva → principal', K.cajaPorDefecto('mercadopago', CAJAS.map(c => c.id === 'caja-mp' ? { ...c, activa: false } : c)), 'caja-franco');
+  eq('6af borrar: con movimientos no; sin movimientos sí; principal nunca', [K.puedeBorrarCaja('caja-jesus', MOVS), K.puedeBorrarCaja('caja-mp', MOVS), K.puedeBorrarCaja('caja-franco', [])], [false, true, false]);
+  eq('6ag campos: nombre vacío / tipo raro inválidos; orden entero', [K.normalizarCajaCampo('nombre', '  '), K.normalizarCajaCampo('tipo', 'cripto'), K.normalizarCajaCampo('orden', '3'), K.normalizarCajaCampo('orden', '2.5')], [undefined, undefined, 3, undefined]);
+
+  // writeMovimiento: caja solo en movimientos NUEVOS; los existentes no se tocan
+  {
+    const SETS = [];
+    const cacheW = { movimientos: { viejo: { id: 'viejo', tipo: 'ingreso', monto: 1, metodo: 'efectivo' } } };
+    const wm = new Function('cache', 'ensureMovimientosObj', 'pendingMovimientos', 'set', 'ref', 'db', 'cajaPorDefecto',
+      src.match(/\nasync function writeMovimiento\b[\s\S]*?\n\}/)[0] + '\nreturn writeMovimiento;')(
+      cacheW, () => {}, new Set(), async (r, v) => SETS.push([r, v]), (d, path) => path, null, (m) => K.cajaPorDefecto(m, CAJAS));
+    await wm({ id: 'nuevo', tipo: 'ingreso', monto: 5, metodo: 'transferencia' });
+    await wm({ ...cacheW.movimientos.viejo, facturado: true, nroComprobante: '0001' }); // reescritura (conciliar factura)
+    await wm({ id: 'nuevo2', tipo: 'ingreso', monto: 5, metodo: 'efectivo', caja: 'caja-jesus' });
+    eq('6ah writeMovimiento: nuevo sin caja → default por método', SETS[0][1].caja, 'caja-banco');
+    eq('6ai writeMovimiento: reescritura de uno existente sin caja NO le agrega caja', 'caja' in SETS[1][1], false);
+    eq('6aj writeMovimiento: caja explícita se respeta', SETS[2][1].caja, 'caja-jesus');
+  }
+  eq('6ak reversa: misma caja que el original', /caja: cajaDeMovimiento\(orig\)/.test(src), true);
+  eq('6al cierre por caja: guarda caja y no toca cierres viejos (solo write de uno nuevo)', [/caja: cajaVista,/.test(grab('cerrarCaja')), /colCierres\.(remove|write\(\{\s*\.\.\.)/.test(src)], [true, false]);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
